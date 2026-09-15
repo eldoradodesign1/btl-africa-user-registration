@@ -5,7 +5,7 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   supervisor: "Superviseur",
   sub_admin: "Sous-administrateur",
   admin: "Administrateur",
-  super_admin: "Super-administrateur",
+  super_admin: "support-it",
 };
 
 export const CATEGORY_LABELS: Record<UserCategory, string> = {
