@@ -1,0 +1,27 @@
+{
+  "name": "BTL Africa — Nouvel utilisateur",
+  "short_name": "BTL Africa",
+  "description": "Création sécurisée d’utilisateurs pour BTL Africa Privilege Tracker.",
+  "lang": "fr",
+  "dir": "ltr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "theme_color": "#071015",
+  "background_color": "#071015",
+  "icons": [
+    {
+      "src": "./icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
