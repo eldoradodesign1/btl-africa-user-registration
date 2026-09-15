@@ -30,6 +30,9 @@ jobs:
       - run: pnpm install --frozen-lockfile || pnpm install --no-frozen-lockfile
 
       - run: pnpm exec vite build
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
 
       - uses: actions/configure-pages@v5
 
