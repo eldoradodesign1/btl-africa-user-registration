@@ -1,0 +1,10 @@
+{
+  "id": "6a3ecb0e-f3b2-4fd8-9f12-bb9dc2b2fa8d",
+  "full_name": "Grâce Mbuyi",
+  "phone": "0812345678",
+  "password_hash": "<valeur conforme au mécanisme existant>",
+  "role": "agent",
+  "user_category": "hostess",
+  "supervisor_id": "b7d7aef4-2e2b-4a7e-9f12-1d5ce8481b0a",
+  "permanent_shop_id": null
+}
