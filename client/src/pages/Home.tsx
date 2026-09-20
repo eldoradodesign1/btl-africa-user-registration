@@ -44,6 +44,7 @@ import {
   type UserRecord,
   type UserRole,
 } from "@/lib/supabase";
+import { CopyablePhone } from "@/components/CopyablePhone";
 
 type PhoneState = "idle" | "checking" | "valid" | "invalid" | "duplicate" | "error";
 type ToastState = { kind: "success" | "error" | "info"; title: string; message: string; action?: () => void } | null;
@@ -135,19 +136,6 @@ function CustomSelect<T extends string>({
 
 function UserRoleBadge({ role }: { role: UserRole }) {
   return <span className={`role-badge role-${role}`}>{ROLE_LABELS[role]}</span>;
-}
-
-function copyPhone(value: string) {
-  navigator.clipboard.writeText(value).catch(() => {
-    const textarea = document.createElement("textarea");
-    textarea.value = value;
-    textarea.style.position = "fixed";
-    textarea.style.opacity = "0";
-    document.body.appendChild(textarea);
-    textarea.select();
-    document.execCommand("copy");
-    document.body.removeChild(textarea);
-  });
 }
 
 function Home({ onUserCreated, onNavigateDashboard }: { onUserCreated?: (user: UserRecord) => void; onNavigateDashboard?: () => void }) {
@@ -427,7 +415,7 @@ function Home({ onUserCreated, onNavigateDashboard }: { onUserCreated?: (user: U
                     <Search size={16} />
                     <select value={form.supervisorId} onChange={(event) => updateForm("supervisorId", event.target.value)} disabled={loadingSupervisors || supervisorError}>
                       <option value="">Aucun rattachement</option>
-                      {supervisorOptions.map((user) => <option value={user.id} key={user.id}>{user.full_name} · {user.phone}</option>)}
+                      {supervisorOptions.map((user) => <option value={user.id} key={user.id}>{user.full_name}</option>)}
                     </select>
                     {loadingSupervisors ? <LoaderCircle className="spin" size={15} /> : <ChevronDown size={15} />}
                   </div>
@@ -487,7 +475,7 @@ function Home({ onUserCreated, onNavigateDashboard }: { onUserCreated?: (user: U
                 <p>La création est bloquée pour protéger l’utilisateur existant.</p>
                 <div className="existing-user">
                   <div className="avatar">{existingUser.full_name.slice(0, 1).toUpperCase()}</div>
-                  <div><strong>{existingUser.full_name}</strong><span className="copyable-phone" role="button" tabIndex={0} title="Cliquer pour copier" onClick={() => copyPhone(existingUser.phone)} onKeyDown={(event) => event.key === "Enter" && copyPhone(existingUser.phone)}>{formatPhoneForDisplay(existingUser.phone)}</span></div>
+                  <div><strong>{existingUser.full_name}</strong><CopyablePhone value={existingUser.phone}>{formatPhoneForDisplay(existingUser.phone)}</CopyablePhone></div>
                   <UserRoleBadge role={existingUser.role} />
                 </div>
                 <div className="existing-meta"><span>Catégorie</span><strong>{categoryShortLabel(existingUser.user_category)}</strong></div>
@@ -513,14 +501,14 @@ function Home({ onUserCreated, onNavigateDashboard }: { onUserCreated?: (user: U
                 <div className="card-kicker success-kicker">Création confirmée</div>
                 <h2>Accès enregistré.</h2>
                 <p>Le profil est disponible dans la liste locale, sans rechargement.</p>
-                <div className="summary-grid"><div><span>Nom</span><strong>{successSummary.full_name}</strong></div><div><span>MSISDN</span><strong className="copyable-phone" role="button" tabIndex={0} title="Cliquer pour copier" onClick={() => copyPhone(successSummary.phone)} onKeyDown={(event) => event.key === "Enter" && copyPhone(successSummary.phone)}>{successSummary.phone}</strong></div><div><span>Rôle</span><strong>{ROLE_LABELS[successSummary.role]}</strong></div><div><span>Campagne</span><strong>{categoryShortLabel(successSummary.user_category)}</strong></div></div>
+                <div className="summary-grid"><div><span>Nom</span><strong>{successSummary.full_name}</strong></div><div><span>MSISDN</span><CopyablePhone value={successSummary.phone}>{successSummary.phone}</CopyablePhone></div><div><span>Rôle</span><strong>{ROLE_LABELS[successSummary.role]}</strong></div><div><span>Campagne</span><strong>{categoryShortLabel(successSummary.user_category)}</strong></div></div>
               </section>
             )}
 
             <section className="side-card activity-card">
               <div className="activity-heading"><div><div className="card-kicker"><UsersRound size={15} /> Activité locale</div><h2>Derniers accès</h2></div><span className="activity-count">{recentUsers.length}</span></div>
               <div className="activity-list">
-                {recentUsers.slice(0, 3).map((user) => <div className="activity-item" key={user.id}><div className="avatar small">{user.full_name.slice(0, 1).toUpperCase()}</div><div><strong>{user.full_name}</strong><span className="copyable-phone" role="button" tabIndex={0} title="Cliquer pour copier" onClick={() => copyPhone(user.phone)} onKeyDown={(event) => event.key === "Enter" && copyPhone(user.phone)}>{user.phone}</span></div><UserRoleBadge role={user.role} /></div>)}
+                {recentUsers.slice(0, 3).map((user) => <div className="activity-item" key={user.id}><div className="avatar small">{user.full_name.slice(0, 1).toUpperCase()}</div><div><strong>{user.full_name}</strong><CopyablePhone value={user.phone}>{user.phone}</CopyablePhone></div><UserRoleBadge role={user.role} /></div>)}
               </div>
               <div className="activity-footer"><span><span className={`tiny-dot ${isSupabaseConfigured() ? "live" : ""}`} />{isSupabaseConfigured() ? "Synchronisé avec Supabase" : "Données simulées uniquement"}</span><CircleHelp size={14} /></div>
             </section>

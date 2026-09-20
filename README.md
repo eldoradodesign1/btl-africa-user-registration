@@ -36,6 +36,12 @@ Après configuration, le dashboard demande une connexion **par MSISDN et mot de 
 
 Le rôle `super_admin` est le seul autorisé à ouvrir le formulaire **Nouvel utilisateur**. Les rôles `agent`, `supervisor`, `sub_admin` et `admin` peuvent se connecter au dashboard, rechercher, filtrer, actualiser et exporter les données, mais restent en **lecture seule**. Les politiques RLS du projet doivent autoriser l’utilisateur authentifié à sélectionner les colonnes nécessaires et doivent réserver l’insertion à la logique d’administration autorisée.
 
+## Création de compte et approbation
+
+L’écran de connexion propose désormais deux options : **Se connecter** et **Créer un compte**. Le signup crée exclusivement une demande d’accès de rôle `agent` dans `public.user_registration_requests`; il ne crée jamais directement une ligne dans `public.users`. La demande reste `pending` jusqu’à l’action d’un `super_admin`, puis l’approbation crée l’agent dans `public.users`. Les agents pending ne sont donc pas renvoyés par la liste principale et ne peuvent pas apparaître dans les listes opérationnelles avant validation.
+
+La migration à exécuter dans le projet Supabase est [`supabase/migrations/202609210001_registration_requests.sql`](supabase/migrations/202609210001_registration_requests.sql). Elle crée la table, son index anti-doublon sur les demandes pending et quatre fonctions RPC `SECURITY DEFINER` : création de demande publique, lecture super_admin, approbation et rejet. Le projet utilise une authentification métier basée sur `public.users.password_hash` et non Supabase Auth; les RPC reviewer valident donc explicitement l’UUID et le rôle `super_admin` avant toute lecture ou mutation.
+
 **Ne renseignez jamais une clé `service_role` dans une variable `VITE_*` ou dans le frontend.** Si une opération d’administration exige des privilèges élevés, utilisez une RPC ou une Edge Function Supabase sécurisée, puis appelez-la depuis le frontend avec la clé publishable/anon et des politiques RLS adaptées.
 
 Sans ces variables, le formulaire affiche **Mode démo actif** avec un petit jeu de données en mémoire pour tester l’interface. Le dashboard, lui, masque ces données et demande d’abord une configuration Supabase réelle. Aucun mot de passe n’est stocké dans `localStorage` ou l’URL ; la connexion reste en mémoire jusqu’à la fermeture ou la déconnexion.
@@ -88,3 +94,5 @@ pnpm build
 ```
 
 Le bouton **Créer l’utilisateur** est désactivé tant que le nom, le MSISDN ou le contrôle anti-doublon n’est pas valide. L’accès au formulaire est en plus réservé au profil `super_admin`. Le formulaire reste utilisable au clavier et sur mobile.
+
+Toutes les occurrences de téléphone rendues dans l’interface utilisent maintenant le bouton `CopyablePhone`; un clic copie le numéro brut dans le presse-papier, avec un fallback compatible lorsque l’API Clipboard n’est pas disponible. Les modales du dashboard sont rendues dans `document.body` via un portal, avec une hauteur indépendante du contenu de la page et un scroll interne uniquement lorsque nécessaire.

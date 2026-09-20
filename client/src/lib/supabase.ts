@@ -3,6 +3,7 @@ import { isValidMsisdn, normalizePhone } from "./phone";
 
 export type UserRole = "agent" | "supervisor" | "sub_admin" | "admin" | "super_admin";
 export type UserCategory = "hostess" | "brand_ambassador" | "brand_ambassador_youth" | "operations";
+export type RegistrationRequestStatus = "pending" | "approved" | "rejected";
 
 export type UserRecord = {
   id: string;
@@ -16,6 +17,18 @@ export type UserRecord = {
 };
 
 export type UserInsert = Omit<UserRecord, "password_hash"> & { password_hash: string };
+export type RegistrationRequest = {
+  id: string;
+  full_name: string;
+  phone: string;
+  role: "agent";
+  user_category: UserCategory | null;
+  status: RegistrationRequestStatus;
+  created_at: string;
+  reviewed_at: string | null;
+  reviewed_by: string | null;
+  review_note: string | null;
+};
 export type SupabaseConnection = { url: string; publishableKey: string };
 export type AdminContext = { profile: UserRecord };
 
@@ -88,6 +101,16 @@ function phoneCandidates(phone: string): string[] {
   return Array.from(new Set([normalized, `+243${normalized.slice(1)}`]));
 }
 
+function assertSuperAdmin(): UserRecord {
+  if (!activeProfile) throw new Error("Connexion administrateur requise avant cette opération.");
+  if (activeProfile.role !== "super_admin") throw new Error("Cette opération est réservée au super_admin.");
+  return activeProfile;
+}
+
+function mapRequest(data: unknown): RegistrationRequest {
+  return data as RegistrationRequest;
+}
+
 export async function getAdminContext(): Promise<AdminContext | null> {
   return activeProfile ? { profile: activeProfile } : null;
 }
@@ -146,6 +169,48 @@ export async function insertUser(payload: UserInsert): Promise<UserRecord> {
   return { ...data, password_hash: null } as UserRecord;
 }
 
+export async function createRegistrationRequest(input: { fullName: string; phone: string; password: string; category: UserCategory }): Promise<RegistrationRequest> {
+  if (!supabaseClient) throw new Error("Configurez Supabase avant de créer une demande.");
+  const normalizedPhone = normalizePhone(input.phone);
+  if (!isValidMsisdn(normalizedPhone)) throw new Error("Le MSISDN fourni est invalide.");
+  const id = crypto.randomUUID();
+  const { data, error } = await supabaseClient.rpc("create_registration_request", {
+    p_request_id: id,
+    p_full_name: input.fullName.trim(),
+    p_phone: normalizedPhone,
+    p_password_hash: input.password,
+    p_user_category: input.category,
+  });
+  if (error) throw error;
+  const request = Array.isArray(data) ? data[0] : data;
+  return request ? mapRequest(request) : { id, full_name: input.fullName.trim(), phone: normalizedPhone, role: "agent", user_category: input.category, status: "pending", created_at: new Date().toISOString(), reviewed_at: null, reviewed_by: null, review_note: null };
+}
+
+export async function loadPendingRegistrationRequests(): Promise<RegistrationRequest[]> {
+  const reviewer = assertSuperAdmin();
+  if (!supabaseClient) return [];
+  const { data, error } = await supabaseClient.rpc("list_pending_registration_requests", { p_reviewer_id: reviewer.id });
+  if (error) throw error;
+  return (data || []).map(mapRequest);
+}
+
+export async function approveRegistrationRequest(requestId: string): Promise<UserRecord> {
+  const reviewer = assertSuperAdmin();
+  if (!supabaseClient) throw new Error("Configurez Supabase avant d’approuver une demande.");
+  const { data, error } = await supabaseClient.rpc("approve_registration_request", { p_request_id: requestId, p_reviewer_id: reviewer.id });
+  if (error) throw error;
+  const approved = Array.isArray(data) ? data[0] : data;
+  if (!approved) throw new Error("La demande n’a pas pu être approuvée.");
+  return { ...approved, password_hash: null } as UserRecord;
+}
+
+export async function rejectRegistrationRequest(requestId: string, note = "Demande rejetée par le super_admin."): Promise<void> {
+  const reviewer = assertSuperAdmin();
+  if (!supabaseClient) throw new Error("Configurez Supabase avant de rejeter une demande.");
+  const { error } = await supabaseClient.rpc("reject_registration_request", { p_request_id: requestId, p_reviewer_id: reviewer.id, p_review_note: note });
+  if (error) throw error;
+}
+
 function assertManagePermission(): void {
   if (!activeProfile) throw new Error("Connexion administrateur requise avant cette opération.");
   if (!["admin", "super_admin"].includes(activeProfile.role)) throw new Error("Cette opération est réservée aux rôles admin et super_admin.");
@@ -170,4 +235,10 @@ export async function deleteUser(id: string): Promise<void> {
 export function isUniquePhoneError(error: unknown): boolean {
   const candidate = error as { code?: string; message?: string } | null;
   return candidate?.code === "23505" || Boolean(candidate?.message?.toLowerCase().includes("phone"));
+}
+
+export function isPendingRequestConflict(error: unknown): boolean {
+  const candidate = error as { code?: string; message?: string } | null;
+  const message = candidate?.message?.toLowerCase() || "";
+  return candidate?.code === "23505" && (message.includes("registration") || message.includes("pending") || message.includes("phone"));
 }

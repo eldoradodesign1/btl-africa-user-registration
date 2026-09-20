@@ -405,3 +405,57 @@ html { scrollbar-width: thin; scrollbar-color: rgba(158,233,232,.35) rgba(3,11,1
 .connection-test.success { border-color: rgba(181,239,140,.25); color: var(--lime); background: rgba(181,239,140,.05); }
 .config-disconnect { align-self: flex-start; margin-top: 1px; }
 @media (max-width: 760px) { .dashboard-insights { grid-template-columns: 1fr; } .donut-content { justify-content: center; } }
+
+/* Account registration and approval workflow */
+.auth-tabs { display: inline-flex; align-items: center; gap: 4px; margin-top: 20px; padding: 4px; border: 1px solid rgba(188,220,228,.13); border-radius: 10px; background: rgba(255,255,255,.025); }
+.auth-tabs button { min-height: 31px; padding: 0 12px; border: 0; border-radius: 7px; color: var(--muted-2); background: transparent; font-size: 10px; font-weight: 800; }
+.auth-tabs button:hover, .auth-tabs button.is-active { color: #071015; background: var(--cyan); }
+.signup-card { display: grid; gap: 16px; margin-top: 12px; padding: 18px; border: 1px solid rgba(158,233,232,.16); border-radius: 13px; background: rgba(255,255,255,.025); }
+.signup-heading { display: flex; align-items: flex-start; gap: 10px; }
+.signup-heading strong, .signup-heading span { display: block; }
+.signup-heading strong { color: #d1e1e3; font-size: 11px; }
+.signup-heading span { margin-top: 4px; color: var(--muted-2); font-size: 9px; }
+.signup-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.signup-fields label, .signup-category { display: flex; flex-direction: column; gap: 6px; color: var(--muted); font-size: 9px; }
+.signup-fields input { height: 39px; min-width: 0; padding: 0 11px; border: 1px solid rgba(188,220,228,.16); border-radius: 8px; outline: 0; color: var(--text); background: rgba(3,11,14,.35); font-size: 10px; }
+.signup-fields input:focus { border-color: rgba(158,233,232,.65); box-shadow: 0 0 0 3px rgba(91,208,209,.08); }
+.signup-category > .custom-select { min-height: 39px; padding: 10px; border: 1px solid rgba(188,220,228,.16); border-radius: 8px; background: rgba(3,11,14,.35); }
+.signup-submit { justify-self: end; }
+.signup-success { display: flex; align-items: center; gap: 11px; }
+.signup-success > div:nth-child(2) { flex: 1; }
+.signup-success strong, .signup-success span { display: block; }
+.signup-success strong { color: #d7e9dc; font-size: 11px; }
+.signup-success span { margin-top: 5px; color: var(--muted); font-size: 10px; line-height: 1.5; }
+.signup-success .button { flex: none; }
+.pending-panel { margin-top: 20px; padding: 17px; border: 1px solid rgba(245,205,120,.22); border-radius: 13px; background: rgba(245,205,120,.045); }
+.pending-heading { display: flex; align-items: flex-start; gap: 10px; }
+.pending-heading > div:first-child { flex: 1; }
+.pending-heading h3 { margin-top: 8px; color: #e2eeee; font-size: 14px; letter-spacing: -.03em; }
+.pending-heading p { margin-top: 5px; color: var(--muted); font-size: 10px; }
+.pending-count { display: grid; place-items: center; min-width: 26px; height: 26px; border-radius: 8px; color: #071015; background: var(--amber); font-family: "DM Mono", monospace; font-size: 10px; }
+.pending-list { display: grid; gap: 7px; margin-top: 15px; }
+.pending-item { display: flex; align-items: center; gap: 9px; padding: 10px; border: 1px solid rgba(245,205,120,.13); border-radius: 9px; background: rgba(3,11,14,.22); }
+.pending-identity { min-width: 0; flex: 1; }
+.pending-identity strong, .pending-identity small { display: block; }
+.pending-identity strong { color: #d6e3e4; font-size: 10px; }
+.pending-identity small { margin-top: 4px; color: var(--muted-2); font-size: 8px; }
+.pending-identity .copyable-phone { display: inline-flex; margin-top: 4px; color: var(--cyan); font-family: "DM Mono", monospace; font-size: 9px; }
+.pending-item .role-badge { color: var(--amber); background: rgba(245,205,120,.08); }
+.pending-actions { display: flex; gap: 5px; }
+.icon-action.approve:hover { border-color: rgba(181,239,140,.55); color: var(--lime); background: rgba(181,239,140,.08); }
+.pending-empty { display: flex; align-items: center; gap: 7px; margin-top: 15px; color: var(--lime); font-size: 10px; }
+
+/* Modals are portaled to document.body, so centering is relative to the viewport, not page content. */
+.modal-layer { position: fixed; z-index: 100; inset: 0; display: grid; place-items: center; overflow-y: auto; padding: 20px; overscroll-behavior: contain; }
+.modal-card { max-height: calc(100dvh - 40px); overflow-y: auto; overscroll-behavior: contain; }
+.modal-card .copyable-phone { color: var(--cyan); font-family: "DM Mono", monospace; font-size: 10px; }
+.summary-grid .copyable-phone { display: block; margin-top: 5px; color: #d9e8dc; font-size: 10px; }
+@media (max-width: 680px) {
+  .signup-fields { grid-template-columns: 1fr; }
+  .signup-submit { width: 100%; }
+  .signup-success { align-items: flex-start; flex-wrap: wrap; }
+  .signup-success .button { margin-left: 42px; }
+  .pending-item { align-items: flex-start; flex-wrap: wrap; }
+  .pending-item .role-badge { margin-left: auto; }
+  .pending-actions { margin-left: 37px; }
+}
