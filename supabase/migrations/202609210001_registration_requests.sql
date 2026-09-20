@@ -11,9 +11,13 @@ create table if not exists public.user_registration_requests (
   status text not null default 'pending' check (status in ('pending', 'approved', 'rejected')),
   created_at timestamptz not null default now(),
   reviewed_at timestamptz,
-  reviewed_by uuid references public.users(id),
+  reviewed_by text references public.users(id),
   review_note text
 );
+
+-- The existing project stores public.users.id as text.
+alter table public.user_registration_requests
+  alter column reviewed_by type text using reviewed_by::text;
 
 create index if not exists user_registration_requests_status_created_at_idx
   on public.user_registration_requests (status, created_at desc);
@@ -28,8 +32,11 @@ revoke all on table public.user_registration_requests from anon, authenticated;
 
 drop function if exists public.create_registration_request(uuid, text, text, text, text);
 drop function if exists public.list_pending_registration_requests(uuid);
+drop function if exists public.list_pending_registration_requests(text);
 drop function if exists public.approve_registration_request(uuid, uuid);
+drop function if exists public.approve_registration_request(uuid, text);
 drop function if exists public.reject_registration_request(uuid, uuid, text);
+drop function if exists public.reject_registration_request(uuid, text, text);
 
 do $$
 begin
@@ -42,7 +49,7 @@ begin
     ) returns table (
       id uuid, full_name text, phone text, role text, user_category text,
       status text, created_at timestamptz, reviewed_at timestamptz,
-      reviewed_by uuid, review_note text
+      reviewed_by text, review_note text
     )
     language plpgsql
     security definer
@@ -83,11 +90,11 @@ $$;
 
 do $$
 begin
-  create function public.list_pending_registration_requests(p_reviewer_id uuid)
+  create function public.list_pending_registration_requests(p_reviewer_id text)
     returns table (
       id uuid, full_name text, phone text, role text, user_category text,
       status text, created_at timestamptz, reviewed_at timestamptz,
-      reviewed_by uuid, review_note text
+      reviewed_by text, review_note text
     )
     language plpgsql
     security definer
@@ -110,7 +117,7 @@ $$;
 
 do $$
 begin
-  create function public.approve_registration_request(p_request_id uuid, p_reviewer_id uuid)
+  create function public.approve_registration_request(p_request_id uuid, p_reviewer_id text)
     returns jsonb
     language plpgsql
     security definer
@@ -135,7 +142,7 @@ begin
       end if;
 
       insert into public.users (id, full_name, phone, password_hash, role, user_category, supervisor_id, permanent_shop_id)
-      values (request_row.id, request_row.full_name, request_row.phone, request_row.password_hash, 'agent', request_row.user_category, null, null)
+      values (request_row.id::text, request_row.full_name, request_row.phone, request_row.password_hash, 'agent', request_row.user_category, null, null)
       returning * into approved_user;
 
       update public.user_registration_requests
@@ -158,7 +165,7 @@ $$;
 
 do $$
 begin
-  create function public.reject_registration_request(p_request_id uuid, p_reviewer_id uuid, p_review_note text default null)
+  create function public.reject_registration_request(p_request_id uuid, p_reviewer_id text, p_review_note text default null)
     returns void
     language plpgsql
     security definer
@@ -183,6 +190,6 @@ grant execute on function public.create_registration_request(uuid, text, text, t
 -- The existing application uses its own users/password_hash session rather than
 -- Supabase Auth, so the browser calls these RPCs as anon. Each reviewer-facing
 -- function validates the supplied user id and role inside SECURITY DEFINER.
-grant execute on function public.list_pending_registration_requests(uuid) to anon, authenticated;
-grant execute on function public.approve_registration_request(uuid, uuid) to anon, authenticated;
-grant execute on function public.reject_registration_request(uuid, uuid, text) to anon, authenticated;
+grant execute on function public.list_pending_registration_requests(text) to anon, authenticated;
+grant execute on function public.approve_registration_request(uuid, text) to anon, authenticated;
+grant execute on function public.reject_registration_request(uuid, text, text) to anon, authenticated;

@@ -71,9 +71,9 @@ Exemple de payload strict, limité aux colonnes autorisées :
 
 L’interface normalise toujours le téléphone au format local `0XXXXXXXXX` avant la recherche et l’insertion. « Aucun shop » est transformé en `null`, jamais enregistré comme une chaîne.
 
-## UUID utilisateurs
+## Identifiants utilisateurs
 
-Le champ `public.users.id` est un **UUID PostgreSQL**, pas un nombre et pas un identifiant séquentiel. Le frontend utilise `crypto.randomUUID()` uniquement lorsque l’architecture client-insert est autorisée. Une RPC ou une Edge Function peut être préférée afin de laisser PostgreSQL générer l’identifiant avec `gen_random_uuid()`. Aucun UUID réel n’est hardcodé dans l’application métier et le code ne suppose jamais que les UUID sont séquentiels.
+Dans le projet Supabase cible, le champ `public.users.id` est de type **text**. Les demandes d’inscription utilisent un UUID interne, converti explicitement en texte uniquement au moment de l’approbation afin de rester compatible avec le schéma existant. Aucun identifiant réel n’est hardcodé dans l’application métier et le code ne suppose jamais que les identifiants sont séquentiels.
 
 ## Contrôle anti-doublon
 
