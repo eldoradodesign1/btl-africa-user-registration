@@ -1,6 +1,8 @@
 -- BTL Africa: fix creation for schemas where public.users.user_category is NOT NULL.
 -- Administrative profiles receive the technical category 'operations'.
 
+drop function if exists public.create_user_by_super_admin(text, text, text, text, text, text, text, text, text);
+
 create or replace function public.create_user_by_super_admin(
   p_id text,
   p_creator_id text,
