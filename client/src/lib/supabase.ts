@@ -155,10 +155,9 @@ export async function signInAdmin(phone: string, password: string): Promise<Admi
   if (!supabaseClient) throw new Error("Configurez Supabase avant de vous connecter.");
   let lastError: unknown = null;
   for (const candidate of phoneCandidates(phone)) {
-    const { data, error } = await supabaseClient.rpc("authenticate_user", { p_phone: candidate, p_password: password });
-    const row = Array.isArray(data) ? data[0] : data;
-    if (!error && row) {
-      const profile = { ...row, password_hash: null } as UserRecord;
+    const { data, error } = await supabaseClient.from("users").select(`${safeUserColumns}, password_hash`).eq("phone", candidate).eq("password_hash", password).maybeSingle();
+    if (!error && data) {
+      const profile = { ...data, password_hash: null } as UserRecord;
       activeProfile = profile;
       return { profile };
     }
@@ -291,11 +290,9 @@ export async function insertUser(payload: UserInsert): Promise<UserRecord> {
   }
   if (!activeProfile) throw new Error("Connexion administrateur requise avant la création.");
   if (activeProfile.role !== "super_admin") throw new Error("Seul un super_admin peut créer un utilisateur.");
-  const { data, error } = await supabaseClient.rpc("create_user_by_super_admin", { p_creator_id: activeProfile.id, p_id: payload.id, p_full_name: payload.full_name, p_phone: payload.phone, p_password: payload.password_hash, p_role: payload.role, p_user_category: payload.user_category, p_supervisor_id: payload.supervisor_id, p_permanent_shop_id: payload.permanent_shop_id });
+  const { data, error } = await supabaseClient.from("users").insert(payload).select(safeUserColumns).single();
   if (error) throw error;
-  const row = Array.isArray(data) ? data[0] : data;
-  if (!row) throw new Error("La création de l’utilisateur n’a pas été confirmée.");
-  return { ...row, password_hash: null } as UserRecord;
+  return { ...data, password_hash: null } as UserRecord;
 }
 
 export async function createRegistrationRequest(input: { fullName: string; phone: string; password: string; category: UserCategory }): Promise<RegistrationRequest> {
