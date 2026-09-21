@@ -69,19 +69,86 @@ function AttendanceCalendar({ insights }: { insights: AgentInsights }) {
   return <div className="attendance-panel custom-calendar"><div className="calendar-heading"><span><CalendarDays size={14} /> Registre de présence</span><div className="calendar-nav"><button type="button" onClick={() => moveMonth(-1)} aria-label="Mois précédent"><ChevronLeft size={14} /></button><strong>{monthDate.toLocaleDateString("fr-FR", { month: "long", year: "numeric" })}</strong><button type="button" onClick={() => moveMonth(1)} aria-label="Mois suivant"><ChevronRight size={14} /></button></div></div><div className="calendar-weekdays">{["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"].map((day) => <span key={day}>{day}</span>)}</div><div className="calendar-grid">{calendarDays.map((day, index) => { if (!day) return <span className="calendar-day is-empty" key={`empty-${index}`} />; const date = `${month.slice(0, 7)}-${String(day).padStart(2, "0")}`; const entry = presence.get(date); const inCampaign = isInCampaign(date); const state = !inCampaign ? "is-off" : !entry ? "is-absent" : entry.status === "closed" || entry.status === "présent" || entry.status === "rapport" ? "is-closed" : "is-open"; return <button type="button" className={`calendar-day ${state}`} key={date} title={`${date} · ${!inCampaign ? isPause(date) ? "Campagne en pause" : "Hors campagne" : entry ? entry.status : "Aucun travail enregistré"}`}><strong>{day}</strong>{entry && <small>{formatClock(entry.checkin_at)}</small>}</button>; })}</div><div className="calendar-legend"><span><i className="legend-dot is-off" /> Hors campagne / pause</span><span><i className="legend-dot is-closed" /> Travail clôturé</span><span><i className="legend-dot is-open" /> Travail non clôturé</span><span><i className="legend-dot is-absent" /> Non travaillé</span></div><div className="calendar-summary"><span><b>{stats.green}</b> clôturés</span><span><b>{stats.blue}</b> ouverts</span><span><b>{insights.presence.length}</b> pointages</span></div></div>;
 }
 
-function exportXls(agent: UserRecord, campaign: CampaignRecord, insights: AgentInsights) {
-  const rows = [["Agent", agent.full_name], ["Téléphone", agent.phone], ["Campagne", campaign.name], [], ["Date", insights.metricLabel], ...insights.performance.map((point) => [point.date, point.value]), [], ["Date", "Statut", "Arrivée", "Départ"], ...insights.presence.map((entry) => [entry.date, entry.status, entry.checkin_at || "", entry.checkout_at || ""])];
-  const html = `<table>${rows.map((row) => `<tr>${row.map((cell) => `<td>${String(cell ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;")}</td>`).join("")}</tr>`).join("")}</table>`;
-  const blob = new Blob([`<html><meta charset="utf-8"><body>${html}</body></html>`], { type: "application/vnd.ms-excel" });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a"); anchor.href = url; anchor.download = `${agent.full_name}-${campaign.code}-suivi.xls`; anchor.click(); URL.revokeObjectURL(url);
+function safeFilePart(value: string) {
+  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase() || "rapport";
+}
+
+function formatExportDate(value: string | null | undefined) {
+  if (!value) return "—";
+  const normalized = value.slice(0, 10);
+  const date = new Date(`${normalized}T00:00:00`);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString("fr-FR");
+}
+
+function formatExportClock(value: string | null | undefined) {
+  if (!value) return "—";
+  return formatClock(value);
+}
+
+async function exportXlsx(agent: UserRecord, campaign: CampaignRecord, insights: AgentInsights) {
+  const XLSX = await import("xlsx-js-style");
+  const closed = insights.presence.filter((entry) => ["closed", "présent", "rapport"].includes(entry.status)).length;
+  const workbook = XLSX.utils.book_new();
+  workbook.Props = { Title: `Suivi ${agent.full_name} — ${campaign.name}`, Subject: "Performance et présence", Author: "BTL Africa", Company: "BTL Africa", CreatedDate: new Date() };
+  const headerStyle = { fill: { fgColor: { rgb: "12383F" } }, font: { color: { rgb: "FFFFFF" }, bold: true, sz: 11 }, alignment: { vertical: "center" } };
+  const sectionStyle = { fill: { fgColor: { rgb: "9EE9E8" } }, font: { color: { rgb: "082126" }, bold: true }, alignment: { vertical: "center" } };
+  const labelStyle = { fill: { fgColor: { rgb: "E8F4F3" } }, font: { color: { rgb: "12383F" }, bold: true } };
+  const addSheet = (name: string, rows: (string | number)[][], widths: number[], merges: Array<{ s: { r: number; c: number }; e: { r: number; c: number } }> = []) => {
+    const sheet = XLSX.utils.aoa_to_sheet(rows);
+    sheet["!cols"] = widths.map((wch) => ({ wch }));
+    sheet["!merges"] = merges;
+    sheet["!freeze"] = { xSplit: 0, ySplit: 1 };
+    XLSX.utils.book_append_sheet(workbook, sheet, name);
+    return sheet;
+  };
+
+  const summary = addSheet("Synthèse", [
+    ["BTL AFRICA · RAPPORT DE SUIVI", "", ""],
+    ["Agent", agent.full_name, ""],
+    ["Téléphone", agent.phone, ""],
+    ["Campagne", campaign.name, campaign.code],
+    ["Période", `${formatExportDate(insights.campaignStart)} → ${formatExportDate(insights.campaignEnd)}`, ""],
+    [],
+    ["INDICATEURS CLÉS", "Valeur", ""],
+    ["Jours de performance", insights.performance.length, ""],
+    ["Pointages enregistrés", insights.presence.length, ""],
+    ["Jours clôturés", closed, ""],
+    ["Jours ouverts", Math.max(insights.presence.length - closed, 0), ""],
+    [],
+    ["LÉGENDE", "", ""],
+    ["Vert", "Travail clôturé", ""],
+    ["Bleu", "Travail non clôturé", ""],
+    ["Rouge", "Non travaillé", ""],
+    ["Gris", "Hors campagne ou pause", ""],
+  ], [28, 38, 22], [{ s: { r: 0, c: 0 }, e: { r: 0, c: 2 } }, { s: { r: 6, c: 0 }, e: { r: 6, c: 2 } }, { s: { r: 12, c: 0 }, e: { r: 12, c: 2 } }]);
+  summary["A1"].s = headerStyle;
+  ["A7", "A13"].forEach((cell) => { summary[cell].s = sectionStyle; });
+  ["A2", "A3", "A4", "A5"].forEach((cell) => { summary[cell].s = labelStyle; });
+
+  const performance = addSheet("Performances", [["PERFORMANCES", "", ""], ["Date", "Valeur", "Libellé"], ...insights.performance.map((point) => [formatExportDate(point.date), point.value, point.label])], [18, 16, 42], [{ s: { r: 0, c: 0 }, e: { r: 0, c: 2 } }]);
+  performance["A1"].s = headerStyle;
+  performance["A2"].s = sectionStyle; performance["B2"].s = sectionStyle; performance["C2"].s = sectionStyle;
+  performance["!autofilter"] = { ref: `A2:C${Math.max(insights.performance.length + 2, 2)}` };
+
+  const attendance = addSheet("Présence", [["REGISTRE DE PRÉSENCE", "", "", "", ""], ["Date", "Statut", "Arrivée", "Départ", "Note"], ...insights.presence.map((entry) => [formatExportDate(entry.date), entry.status, formatExportClock(entry.checkin_at), formatExportClock(entry.checkout_at), entry.note || "—"])], [18, 20, 14, 14, 42], [{ s: { r: 0, c: 0 }, e: { r: 0, c: 4 } }]);
+  attendance["A1"].s = headerStyle;
+  ["A2", "B2", "C2", "D2", "E2"].forEach((cell) => { attendance[cell].s = sectionStyle; });
+  attendance["!autofilter"] = { ref: `A2:E${Math.max(insights.presence.length + 2, 2)}` };
+
+  XLSX.writeFile(workbook, `${safeFilePart(agent.full_name)}-${safeFilePart(campaign.code)}-suivi.xlsx`, { bookType: "xlsx", compression: true });
+}
+
+function escapeHtml(value: unknown) {
+  return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
 }
 
 function exportPdf(agent: UserRecord, campaign: CampaignRecord, insights: AgentInsights) {
   const popup = window.open("", "_blank", "width=900,height=700");
   if (!popup) return;
-  popup.document.write(`<html><head><title>Suivi ${agent.full_name} — ${campaign.name}</title><style>body{font-family:Arial,sans-serif;color:#14252b;padding:32px}h1{font-size:22px}h2{font-size:15px;margin-top:26px;border-bottom:1px solid #d9e4e6;padding-bottom:8px}table{border-collapse:collapse;width:100%;font-size:12px}td,th{border:1px solid #d9e4e6;padding:7px;text-align:left}small{color:#60767e}</style></head><body><h1>${agent.full_name}</h1><small>${agent.phone} · ${campaign.name}</small><h2>${insights.metricLabel}</h2><table><tr><th>Date</th><th>Valeur</th></tr>${insights.performance.map((point) => `<tr><td>${point.date}</td><td>${point.label}</td></tr>`).join("")}</table><h2>Présence</h2><table><tr><th>Date</th><th>Statut</th><th>Arrivée</th><th>Départ</th></tr>${insights.presence.map((entry) => `<tr><td>${entry.date}</td><td>${entry.status}</td><td>${entry.checkin_at || "—"}</td><td>${entry.checkout_at || "—"}</td></tr>`).join("")}</table></body></html>`);
-  popup.document.close(); popup.focus(); popup.print();
+  const closed = insights.presence.filter((entry) => ["closed", "présent", "rapport"].includes(entry.status)).length;
+  popup.document.write(`<html><head><title>Suivi ${escapeHtml(agent.full_name)} — ${escapeHtml(campaign.name)}</title><style>@page{size:A4;margin:14mm}*{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;color:#17343a;margin:0;font-size:11px}header{padding:22px 24px;border-radius:14px;background:#12383f;color:#fff}header .brand{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:#9ee9e8;font-weight:700}h1{font-size:26px;margin:12px 0 5px;letter-spacing:-.04em}header p{margin:0;color:#c7e2e2;font-size:11px}.meta{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:16px 0}.meta div,.kpi{padding:12px;border:1px solid #dce9e8;border-radius:10px;background:#f7fbfa}.meta b,.kpi b{display:block;margin-bottom:5px;color:#6c8588;font-size:8px;text-transform:uppercase;letter-spacing:.08em}.meta span{font-weight:700}.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:12px 0 24px}.kpi strong{font-size:20px;color:#12383f}.section-title{display:flex;align-items:center;gap:8px;margin:22px 0 8px;padding-bottom:7px;border-bottom:2px solid #9ee9e8;color:#12383f;font-size:14px}.section-title:before{content:"";width:6px;height:6px;border-radius:50%;background:#b5ef8c}table{width:100%;border-collapse:collapse;page-break-inside:auto}thead{display:table-header-group}tr{page-break-inside:avoid}th{padding:8px 9px;background:#12383f;color:#fff;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:.05em}td{padding:8px 9px;border-bottom:1px solid #e2eded;color:#385257}tbody tr:nth-child(even){background:#f7fbfa}.footer{margin-top:25px;padding-top:9px;border-top:1px solid #dce9e8;color:#789095;font-size:9px;text-align:right}@media print{header{-webkit-print-color-adjust:exact;print-color-adjust:exact}th{ -webkit-print-color-adjust:exact;print-color-adjust:exact}}
+</style></head><body><header><div class="brand">BTL Africa · Rapport de suivi</div><h1>${escapeHtml(agent.full_name)}</h1><p>${escapeHtml(campaign.name)} · ${escapeHtml(campaign.code)}</p></header><div class="meta"><div><b>Téléphone</b><span>${escapeHtml(agent.phone)}</span></div><div><b>Période</b><span>${escapeHtml(formatExportDate(insights.campaignStart))} → ${escapeHtml(formatExportDate(insights.campaignEnd))}</span></div><div><b>Indicateur</b><span>${escapeHtml(insights.metricLabel)}</span></div></div><div class="kpis"><div class="kpi"><b>Performances</b><strong>${insights.performance.length}</strong></div><div class="kpi"><b>Pointages</b><strong>${insights.presence.length}</strong></div><div class="kpi"><b>Clôturés</b><strong>${closed}</strong></div></div><div class="section-title">${escapeHtml(insights.metricLabel)}</div><table><thead><tr><th>Date</th><th>Valeur</th><th>Détail</th></tr></thead><tbody>${insights.performance.map((point) => `<tr><td>${escapeHtml(formatExportDate(point.date))}</td><td>${escapeHtml(point.value)}</td><td>${escapeHtml(point.label)}</td></tr>`).join("") || '<tr><td colspan="3">Aucune performance enregistrée.</td></tr>'}</tbody></table><div class="section-title">Registre de présence</div><table><thead><tr><th>Date</th><th>Statut</th><th>Arrivée</th><th>Départ</th><th>Note</th></tr></thead><tbody>${insights.presence.map((entry) => `<tr><td>${escapeHtml(formatExportDate(entry.date))}</td><td>${escapeHtml(entry.status)}</td><td>${escapeHtml(formatExportClock(entry.checkin_at))}</td><td>${escapeHtml(formatExportClock(entry.checkout_at))}</td><td>${escapeHtml(entry.note || "—")}</td></tr>`).join("") || '<tr><td colspan="5">Aucun pointage enregistré.</td></tr>'}</tbody></table><div class="footer">Généré le ${escapeHtml(new Date().toLocaleString("fr-FR"))} · BTL Africa</div></body></html>`);
+  popup.document.close(); popup.focus(); window.setTimeout(() => popup.print(), 250);
 }
 
 export function AgentDetailModal({ agent, campaigns, assignments, assignmentRequests, canRequest, canExport, canEdit, onEdit, onNotice, onClose }: AgentDetailProps) {
@@ -101,12 +168,25 @@ export function AgentDetailModal({ agent, campaigns, assignments, assignmentRequ
     return () => { cancelled = true; };
   }, [agent, selectedCampaign, onNotice]);
 
+  useEffect(() => {
+    if (!canExport || !selectedCampaign || !insights) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.isContentEditable || (target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))) return;
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
+      if (event.key.toLowerCase() === "x") { event.preventDefault(); void exportXlsx(agent, selectedCampaign, insights); }
+      if (event.key.toLowerCase() === "p") { event.preventDefault(); exportPdf(agent, selectedCampaign, insights); }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [agent, canExport, insights, selectedCampaign]);
+
   async function requestAssignment(campaign: CampaignRecord) {
     setRequesting(campaign.id);
     try { await requestCampaignAssignment(agent.id, campaign.id); onNotice({ kind: "success", message: `Demande d’affectation envoyée pour ${campaign.name}.` }); } catch (error) { onNotice({ kind: "error", message: error instanceof Error ? error.message : "Demande impossible." }); } finally { setRequesting(null); }
   }
 
-  return <div className="modal-layer"><button className="modal-backdrop" type="button" aria-label="Fermer" onClick={onClose} /><div className="modal-card agent-detail-modal"><div className="modal-header"><div className="agent-detail-heading"><Avatar user={agent} size="large" /><div><div className="eyebrow"><UserCircle2 size={13} /> Fiche agent</div><h3>{agent.full_name}</h3><span>{CATEGORY_LABELS[agent.user_category || "operations"] || "Agent"}</span></div></div><div className="modal-header-actions">{canEdit && onEdit && <button type="button" className="button secondary compact" onClick={onEdit}><FilePenLine size={13} /> Modifier</button>}<button type="button" className="modal-close" onClick={onClose} aria-label="Fermer"><X size={16} /></button></div></div><div className="agent-contact"><CopyablePhone value={agent.phone} /><span className="role-badge">{ROLE_LABELS[agent.role]}</span></div><div className="detail-section"><div className="detail-section-title"><span><BriefcaseBusiness size={14} /> Campagnes d’affectation</span><small>{assigned.length} active{assigned.length > 1 ? "s" : ""}</small></div><div className="detail-campaigns">{compatible.map((campaign) => { const isAssigned = assigned.some((item) => item.id === campaign.id); const isPending = pendingIds.has(campaign.id); return <div className={`detail-campaign ${isAssigned ? "is-assigned" : "is-unassigned"}`} key={campaign.id}><button type="button" onClick={() => isAssigned && setSelectedCampaign(campaign)} disabled={!isAssigned}><span>{campaign.name}</span><small>{isAssigned ? "Affecté · voir le suivi" : isPending ? "Demande en attente" : "Non affecté"}</small></button>{!isAssigned && canRequest && !isPending && <button type="button" className="button secondary compact" onClick={() => void requestAssignment(campaign)} disabled={requesting === campaign.id}>{requesting === campaign.id ? <LoaderCircle className="spin" size={13} /> : <Users size={13} />} Demander</button>}</div>; })}</div>{!compatible.length && <div className="workspace-empty">Aucune campagne compatible disponible.</div>}</div>{selectedCampaign && <div className="detail-section"><div className="selected-campaign-title"><strong>{selectedCampaign.name}</strong><span>Suivi sélectionné</span></div>{loadingInsights ? <div className="workspace-loading"><LoaderCircle className="spin" size={18} /> Chargement du suivi…</div> : insights && <><ProgressChart insights={insights} /><AttendanceCalendar insights={insights} />{canExport && <div className="export-actions"><button type="button" className="button secondary compact" onClick={() => exportXls(agent, selectedCampaign, insights)}><FileSpreadsheet size={13} /> Exporter XLS</button><button type="button" className="button secondary compact" onClick={() => exportPdf(agent, selectedCampaign, insights)}><FileText size={13} /> Exporter PDF</button></div>}</>}</div>}</div></div>;
+  return <div className="modal-layer"><button className="modal-backdrop" type="button" aria-label="Fermer" onClick={onClose} /><div className="modal-card agent-detail-modal"><div className="modal-header"><div className="agent-detail-heading"><Avatar user={agent} size="large" /><div><div className="eyebrow"><UserCircle2 size={13} /> Fiche agent</div><h3>{agent.full_name}</h3><span>{CATEGORY_LABELS[agent.user_category || "operations"] || "Agent"}</span></div></div><div className="modal-header-actions">{canEdit && onEdit && <button type="button" className="button secondary compact" onClick={onEdit}><FilePenLine size={13} /> Modifier</button>}<button type="button" className="modal-close" onClick={onClose} aria-label="Fermer"><X size={16} /></button></div></div><div className="agent-contact"><CopyablePhone value={agent.phone} /><span className="role-badge">{ROLE_LABELS[agent.role]}</span></div><div className="detail-section"><div className="detail-section-title"><span><BriefcaseBusiness size={14} /> Campagnes d’affectation</span><small>{assigned.length} active{assigned.length > 1 ? "s" : ""}</small></div><div className="detail-campaigns">{compatible.map((campaign) => { const isAssigned = assigned.some((item) => item.id === campaign.id); const isPending = pendingIds.has(campaign.id); return <div className={`detail-campaign ${isAssigned ? "is-assigned" : "is-unassigned"}`} key={campaign.id}><button type="button" onClick={() => isAssigned && setSelectedCampaign(campaign)} disabled={!isAssigned}><span>{campaign.name}</span><small>{isAssigned ? "Affecté · voir le suivi" : isPending ? "Demande en attente" : "Non affecté"}</small></button>{!isAssigned && canRequest && !isPending && <button type="button" className="button secondary compact" onClick={() => void requestAssignment(campaign)} disabled={requesting === campaign.id}>{requesting === campaign.id ? <LoaderCircle className="spin" size={13} /> : <Users size={13} />} Demander</button>}</div>; })}</div>{!compatible.length && <div className="workspace-empty">Aucune campagne compatible disponible.</div>}</div>{selectedCampaign && <div className="detail-section"><div className="selected-campaign-title"><strong>{selectedCampaign.name}</strong><span>Suivi sélectionné</span></div>{loadingInsights ? <div className="workspace-loading"><LoaderCircle className="spin" size={18} /> Chargement du suivi…</div> : insights && <><ProgressChart insights={insights} /><AttendanceCalendar insights={insights} />{canExport && <div className="export-actions"><button type="button" className="button secondary compact" onClick={() => void exportXlsx(agent, selectedCampaign, insights)} aria-keyshortcuts="X"><FileSpreadsheet size={13} /> Exporter XLSX <kbd>X</kbd></button><button type="button" className="button secondary compact" onClick={() => exportPdf(agent, selectedCampaign, insights)} aria-keyshortcuts="P"><FileText size={13} /> Exporter PDF <kbd>P</kbd></button></div>}</>}</div>}</div></div>;
 }
 
 export function ProfileModal({ profile, onClose, onSaved }: { profile: UserRecord; onClose: () => void; onSaved: (profile: UserRecord) => void }) {

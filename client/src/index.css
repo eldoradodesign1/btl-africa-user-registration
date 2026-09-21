@@ -563,7 +563,9 @@ html { scrollbar-width: thin; scrollbar-color: rgba(158,233,232,.35) rgba(3,11,1
 .detail-campaign.is-assigned strong { color: var(--lime); }
 .selected-campaign-title { margin-bottom: 10px; }
 .selected-campaign-title strong { color: #dcebea; font-size: 11px; }
-.export-actions { display: flex; justify-content: flex-end; gap: 7px; margin-top: 12px; }
+.export-actions { display: flex; justify-content: flex-end; gap: 7px; margin-top: 12px; padding-top: 10px; border-top: 1px solid rgba(188,220,228,.1); }
+.export-actions .button { gap: 7px; }
+.export-actions kbd { min-width: 18px; padding: 2px 5px; border: 1px solid rgba(158,233,232,.35); border-radius: 4px; color: var(--cyan); background: rgba(158,233,232,.08); font-family: "DM Mono", monospace; font-size: 8px; font-weight: 700; text-align: center; }
 .profile-modal { width: min(500px, 100%); }
 .profile-photo-editor { display: flex; align-items: center; gap: 13px; padding: 9px 0; }
 .profile-photo-editor .button { position: relative; overflow: hidden; }
