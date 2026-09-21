@@ -98,7 +98,7 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
     try {
       setPendingRequests(await loadPendingRegistrationRequests());
     } catch (error) {
-      setNotice({ kind: "error", message: error instanceof Error ? error.message : "Impossible de charger les demandes d’inscription." });
+      setNotice({ kind: "error", message: readableSupabaseError(error, "Impossible de charger les demandes d’inscription.") });
     } finally {
       setLoadingRequests(false);
     }
@@ -125,12 +125,18 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
         await refreshUsers();
         if (current.profile.role === "super_admin") {
           setLoadingRequests(true);
-          try { setPendingRequests(await loadPendingRegistrationRequests()); } finally { setLoadingRequests(false); }
+          try {
+            setPendingRequests(await loadPendingRegistrationRequests());
+          } catch (error) {
+            setNotice({ kind: "error", message: readableSupabaseError(error, "Impossible de charger les demandes d’inscription.") });
+          } finally {
+            setLoadingRequests(false);
+          }
         }
       }
     } catch (error) {
       setProfile(null);
-      setNotice({ kind: "error", message: error instanceof Error ? error.message : "Session indisponible." });
+      setNotice({ kind: "error", message: readableSupabaseError(error, "Session indisponible.") });
     }
   }
 
@@ -237,7 +243,7 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
       setPendingRequests((current) => current.filter((item) => item.id !== request.id));
       setNotice({ kind: "success", message: `${request.full_name} est maintenant visible dans la liste des agents.` });
     } catch (error) {
-      setNotice({ kind: "error", message: error instanceof Error ? error.message : "Approbation impossible." });
+      setNotice({ kind: "error", message: readableSupabaseError(error, "Approbation impossible.") });
     } finally {
       setRequestActionId(null);
     }
@@ -250,7 +256,7 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
       setPendingRequests((current) => current.filter((item) => item.id !== request.id));
       setNotice({ kind: "success", message: `La demande de ${request.full_name} a été rejetée.` });
     } catch (error) {
-      setNotice({ kind: "error", message: error instanceof Error ? error.message : "Rejet impossible." });
+      setNotice({ kind: "error", message: readableSupabaseError(error, "Rejet impossible.") });
     } finally {
       setRequestActionId(null);
     }

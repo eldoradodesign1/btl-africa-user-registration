@@ -101,7 +101,7 @@ begin
     set search_path = public
     as $function$
     begin
-      if not exists (select 1 from public.users where id = p_reviewer_id and role = 'super_admin') then
+      if not exists (select 1 from public.users u where u.id = p_reviewer_id and u.role = 'super_admin') then
         raise exception 'super_admin_required' using errcode = '42501';
       end if;
       return query
@@ -127,12 +127,12 @@ begin
       request_row public.user_registration_requests;
       approved_user public.users;
     begin
-      if not exists (select 1 from public.users where id = p_reviewer_id and role = 'super_admin') then
+      if not exists (select 1 from public.users u where u.id = p_reviewer_id and u.role = 'super_admin') then
         raise exception 'super_admin_required' using errcode = '42501';
       end if;
 
-      select * into request_row from public.user_registration_requests
-      where id = p_request_id and status = 'pending'
+      select * into request_row from public.user_registration_requests r
+      where r.id = p_request_id and r.status = 'pending'
       for update;
       if not found then
         raise exception 'registration_request_not_pending' using errcode = 'P0002';
@@ -145,9 +145,9 @@ begin
       values (request_row.id::text, request_row.full_name, request_row.phone, request_row.password_hash, 'agent', request_row.user_category, null, null)
       returning * into approved_user;
 
-      update public.user_registration_requests
+      update public.user_registration_requests r
       set status = 'approved', reviewed_at = now(), reviewed_by = p_reviewer_id
-      where id = request_row.id;
+      where r.id = request_row.id;
 
       return jsonb_build_object(
         'id', approved_user.id,
@@ -172,12 +172,12 @@ begin
     set search_path = public
     as $function$
     begin
-      if not exists (select 1 from public.users where id = p_reviewer_id and role = 'super_admin') then
+      if not exists (select 1 from public.users u where u.id = p_reviewer_id and u.role = 'super_admin') then
         raise exception 'super_admin_required' using errcode = '42501';
       end if;
-      update public.user_registration_requests
+      update public.user_registration_requests r
       set status = 'rejected', reviewed_at = now(), reviewed_by = p_reviewer_id, review_note = nullif(trim(p_review_note), '')
-      where id = p_request_id and status = 'pending';
+      where r.id = p_request_id and r.status = 'pending';
       if not found then
         raise exception 'registration_request_not_pending' using errcode = 'P0002';
       end if;
