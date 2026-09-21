@@ -155,10 +155,9 @@ export async function signInAdmin(phone: string, password: string): Promise<Admi
   if (!supabaseClient) throw new Error("Configurez Supabase avant de vous connecter.");
   let lastError: unknown = null;
   for (const candidate of phoneCandidates(phone)) {
-    const { data, error } = await supabaseClient.rpc("authenticate_user", { p_phone: candidate, p_password: password });
-    const row = Array.isArray(data) ? data[0] : data;
-    if (!error && row) {
-      const profile = { ...row, password_hash: null } as UserRecord;
+    const { data, error } = await supabaseClient.from("users").select(`${safeUserColumns}, password_hash`).eq("phone", candidate).eq("password_hash", password).maybeSingle();
+    if (!error && data) {
+      const profile = { ...data, password_hash: null } as UserRecord;
       activeProfile = profile;
       return { profile };
     }

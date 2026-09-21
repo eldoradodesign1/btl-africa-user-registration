@@ -1,11 +1,16 @@
--- BTL Africa: self-service profile updates.
+-- BTL Africa: profile updates with current-password confirmation.
+-- Passwords remain stored exactly as in the existing project.
+
+-- The parameter list changes, so remove the previous five-argument signature first.
+drop function if exists public.update_my_profile(text, text, text, text, text);
 
 create or replace function public.update_my_profile(
   p_user_id text,
   p_full_name text,
   p_phone text,
   p_password text default null,
-  p_avatar_url text default null
+  p_avatar_url text default null,
+  p_current_password text default null
 )
 returns table (
   id text,
@@ -22,9 +27,16 @@ language plpgsql
 security definer
 set search_path = public
 as $function$
+declare
+  current_password text;
 begin
-  if not exists (select 1 from public.users u where u.id = p_user_id) then
-    raise exception 'user_not_found' using errcode = 'P0002';
+  select u.password_hash into current_password
+  from public.users u
+  where u.id = p_user_id
+  for update;
+
+  if current_password is null or p_current_password is null or current_password <> p_current_password then
+    raise exception 'current_password_invalid' using errcode = '42501';
   end if;
   if char_length(trim(p_full_name)) < 2 then
     raise exception 'full_name_invalid' using errcode = '22023';
@@ -43,9 +55,11 @@ begin
   end if;
 
   update public.users u
-  set full_name = trim(p_full_name), phone = p_phone,
+  set full_name = trim(p_full_name),
+      phone = p_phone,
       password_hash = coalesce(nullif(p_password, ''), u.password_hash),
-      avatar_url = p_avatar_url, profile_updated_at = now()
+      avatar_url = p_avatar_url,
+      profile_updated_at = now()
   where u.id = p_user_id;
 
   return query
@@ -55,4 +69,4 @@ begin
 end;
 $function$;
 
-grant execute on function public.update_my_profile(text, text, text, text, text) to anon, authenticated;
+grant execute on function public.update_my_profile(text, text, text, text, text, text) to anon, authenticated;
