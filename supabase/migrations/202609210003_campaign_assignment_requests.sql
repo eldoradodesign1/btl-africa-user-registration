@@ -54,7 +54,7 @@ begin
     raise exception 'campaign_not_available' using errcode = '22023';
   end if;
 
-  if campaign_type <> case when target_category = 'hostess' then 'hostess' else 'brand_ambassador' end then
+  if campaign_type <> (case when target_category = 'hostess' then 'hostess' else 'brand_ambassador' end) then
     raise exception 'campaign_category_mismatch' using errcode = '22023';
   end if;
 
