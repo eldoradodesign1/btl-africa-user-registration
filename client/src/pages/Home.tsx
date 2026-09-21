@@ -443,7 +443,7 @@ function Home({ onUserCreated, onNavigateDashboard }: { onUserCreated?: (user: U
               <label className="password-toggle">
                 <input type="checkbox" checked={form.useDefaultPassword} onChange={(event) => updateForm("useDefaultPassword", event.target.checked)} />
                 <span className="toggle-visual"><Check size={13} /></span>
-                <span><strong>Utiliser le mot de passe par défaut</strong><small>Politique {ROLE_LABELS[form.role].toLowerCase()} · valeur non affichée après création</small></span>
+                <span><strong>Utiliser le mot de passe par défaut</strong><small>{ROLE_LABELS[form.role]} : <code>{defaultPasswordForRole(form.role)}</code> · modifiable si nécessaire</small></span>
               </label>
               {!form.useDefaultPassword && (
                 <div className="field password-field">
