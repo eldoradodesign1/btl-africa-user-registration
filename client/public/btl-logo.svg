@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 64" fill="none">
+  <defs><linearGradient id="wordmark" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#e9ffff"/><stop offset=".48" stop-color="#6be0f5"/><stop offset="1" stop-color="#147ed0"/></linearGradient></defs>
+  <rect width="180" height="64" rx="14" fill="#061923"/>
+  <text x="12" y="42" fill="url(#wordmark)" font-family="Arial,Helvetica,sans-serif" font-size="37" font-weight="900" letter-spacing="-3">BTL</text>
+  <path d="M13 51h78" stroke="#b7ef72" stroke-width="3" stroke-linecap="round"/>
+  <text x="100" y="39" fill="#d9f4f6" font-family="Arial,Helvetica,sans-serif" font-size="12" font-weight="700" letter-spacing="2">AFRICA</text>
+  <circle cx="164" cy="17" r="4" fill="#ff795c"/>
+</svg>

@@ -726,3 +726,19 @@ html { scrollbar-width: thin; scrollbar-color: rgba(158,233,232,.35) rgba(3,11,1
 .user-card-actions .row-actions { margin-left: auto; }
 @media (max-width: 1120px) { .users-card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 760px) { .users-card-grid { grid-template-columns: 1fr; height: auto; max-height: 56vh; } .view-toggle { margin-left: auto; } }
+
+/* BTL Africa wordmark and persistent profile photos */
+.btl-logo { width: 142px; height: 39px; display: block; flex: none; overflow: visible; }
+.btl-logo.is-compact { width: 112px; height: 31px; }
+.brand-lockup > .btl-logo { margin-right: 1px; }
+.session-chip { padding-left: 5px; }
+.session-chip .profile-avatar.small, .session-chip > .avatar.small { width: 22px; height: 22px; border-radius: 7px; font-size: 9px; }
+.profile-photo-preview { position: relative; flex: none; }
+.profile-photo-preview .profile-avatar.large, .profile-photo-preview > .avatar:not(.small) { width: 64px; height: 64px; border-radius: 17px; }
+.profile-photo-remove { position: absolute; top: -6px; right: -6px; display: grid; place-items: center; width: 21px; height: 21px; padding: 0; border: 1px solid rgba(255,154,138,.38); border-radius: 50%; color: #ffd5ce; background: #182e36; }
+.profile-photo-remove:hover { color: #fff; border-color: rgba(255,154,138,.75); background: rgba(255,111,96,.25); }
+.profile-photo-actions { display: grid; gap: 6px; }
+.profile-photo-actions small { color: var(--muted-2); font-size: 8px; }
+.profile-photo-actions .button { width: max-content; }
+.simulation-user-option .profile-avatar.small, .simulation-user-option > .avatar.small, .simulation-user-select .profile-avatar.small, .simulation-user-select > .avatar.small { width: 27px; height: 27px; border-radius: 8px; }
+@media (max-width: 680px) { .btl-logo { width: 120px; height: 34px; } .brand-lockup > div:last-child { display: none; } }

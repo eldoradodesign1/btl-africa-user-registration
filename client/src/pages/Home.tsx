@@ -45,6 +45,7 @@ import {
   type UserRole,
 } from "@/lib/supabase";
 import { CopyablePhone } from "@/components/CopyablePhone";
+import BrandLogo from "@/components/BrandLogo";
 
 type PhoneState = "idle" | "checking" | "valid" | "invalid" | "duplicate" | "error";
 type ToastState = { kind: "success" | "error" | "info"; title: string; message: string; action?: () => void } | null;
@@ -341,7 +342,7 @@ function Home({ onUserCreated, onNavigateDashboard }: { onUserCreated?: (user: U
       <div className="ambient ambient-two" />
       <header className="topbar">
         <div className="brand-lockup">
-          <div className="brand-mark"><ShieldCheck size={18} /></div>
+          <BrandLogo />
           <div>
             <span className="brand-name">BTL Africa</span>
             <span className="brand-context">Privilege Tracker · Administration</span>

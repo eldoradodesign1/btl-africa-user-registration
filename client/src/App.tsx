@@ -2,6 +2,7 @@ import { useState } from "react";
 import { ShieldCheck } from "lucide-react";
 import AdminDashboard from "./pages/AdminDashboard";
 import Home from "./pages/Home";
+import BrandLogo from "@/components/BrandLogo";
 import { isSupabaseConfigured } from "@/lib/supabase";
 
 export default function App() {
@@ -15,7 +16,7 @@ export default function App() {
   return view === "dashboard" ? (
     <div className="app-shell dashboard-shell">
       <header className="topbar">
-        <div className="brand-lockup"><div className="brand-mark">BTL</div><div><span className="brand-name">BTL Africa</span><span className="brand-context">Privilege Tracker · Administration</span></div></div>
+        <div className="brand-lockup"><BrandLogo /><div><span className="brand-name">BTL Africa</span><span className="brand-context">Privilege Tracker · Administration</span></div></div>
         <div className="topbar-actions"><span className="admin-entry-label"><ShieldCheck size={13} /> Accès sécurisé</span></div>
       </header>
       <main className="page-content dashboard-page"><AdminDashboard onConnectionChanged={handleConnectionChanged} onRequestCreate={() => setView("create")} /></main>

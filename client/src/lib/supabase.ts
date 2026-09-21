@@ -67,12 +67,13 @@ export type SupabaseConnection = { url: string; publishableKey: string };
 export type AdminContext = { profile: UserRecord };
 
 const runtimeKey = "btl-supabase-connection";
+const profileKey = "btl-active-profile";
 const envUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const envKey = (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY) as string | undefined;
 
 function readRuntimeConnection(): SupabaseConnection | null {
   try {
-    const raw = sessionStorage.getItem(runtimeKey);
+    const raw = localStorage.getItem(runtimeKey) || sessionStorage.getItem(runtimeKey);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<SupabaseConnection>;
     return parsed.url && parsed.publishableKey ? { url: parsed.url, publishableKey: parsed.publishableKey } : null;
@@ -87,7 +88,15 @@ function createConfiguredClient(connection: SupabaseConnection): SupabaseClient 
 
 let activeConnection: SupabaseConnection | null = readRuntimeConnection() || (envUrl && envKey ? { url: envUrl, publishableKey: envKey } : null);
 let supabaseClient: SupabaseClient | null = activeConnection ? createConfiguredClient(activeConnection) : null;
-let activeProfile: UserRecord | null = null;
+function readStoredProfile(): UserRecord | null {
+  try {
+    const raw = localStorage.getItem(profileKey);
+    return raw ? JSON.parse(raw) as UserRecord : null;
+  } catch {
+    return null;
+  }
+}
+let activeProfile: UserRecord | null = readStoredProfile();
 
 export function getSupabaseConnection(): SupabaseConnection | null { return activeConnection; }
 export function isSupabaseConfigured(): boolean { return Boolean(activeConnection && supabaseClient); }
@@ -100,7 +109,9 @@ export function configureSupabase(url: string, publishableKey: string): Supabase
   activeConnection = { url: normalizedUrl, publishableKey: normalizedKey };
   supabaseClient = createConfiguredClient(activeConnection);
   activeProfile = null;
+  localStorage.setItem(runtimeKey, JSON.stringify(activeConnection));
   sessionStorage.setItem(runtimeKey, JSON.stringify(activeConnection));
+  localStorage.removeItem(profileKey);
   return activeConnection;
 }
 
@@ -108,6 +119,8 @@ export function clearSupabaseConnection(): void {
   activeConnection = null;
   supabaseClient = null;
   activeProfile = null;
+  localStorage.removeItem(profileKey);
+  localStorage.removeItem(runtimeKey);
   sessionStorage.removeItem(runtimeKey);
 }
 
@@ -159,6 +172,7 @@ export async function signInAdmin(phone: string, password: string): Promise<Admi
     if (!error && data) {
       const profile = { ...data, password_hash: null } as UserRecord;
       activeProfile = profile;
+      localStorage.setItem(profileKey, JSON.stringify(profile));
       return { profile };
     }
     lastError = error;
@@ -167,7 +181,7 @@ export async function signInAdmin(phone: string, password: string): Promise<Admi
   throw new Error("MSISDN ou mot de passe incorrect.");
 }
 
-export async function signOutAdmin(): Promise<void> { activeProfile = null; }
+export async function signOutAdmin(): Promise<void> { activeProfile = null; localStorage.removeItem(profileKey); }
 
 export async function loadUsers(): Promise<UserRecord[]> {
   if (!supabaseClient) return getDemoUsers();
@@ -260,16 +274,17 @@ export async function reviewCampaignAssignmentRequest(requestId: string, approve
   return request as CampaignAssignmentRequest;
 }
 
-export async function updateMyProfile(input: { fullName: string; phone: string; currentPassword: string; password?: string; avatarUrl?: string | null }): Promise<UserRecord> {
+export async function updateMyProfile(input: { fullName: string; phone: string; currentPassword: string; password?: string; avatarUrl?: string | null; avatarChanged?: boolean }): Promise<UserRecord> {
   if (!activeProfile || !supabaseClient) throw new Error("Connexion requise avant de modifier votre profil.");
   const normalizedPhone = normalizePhone(input.phone);
   if (!isValidMsisdn(normalizedPhone)) throw new Error("Le MSISDN fourni est invalide.");
   if (!input.currentPassword) throw new Error("Le mot de passe actuel est requis pour confirmer cette modification.");
-  const { data, error } = await supabaseClient.rpc("update_my_profile", { p_user_id: activeProfile.id, p_full_name: input.fullName.trim(), p_phone: normalizedPhone, p_password: input.password || null, p_avatar_url: input.avatarUrl ?? activeProfile.avatar_url, p_current_password: input.currentPassword });
+  const { data, error } = await supabaseClient.rpc("update_my_profile", { p_user_id: activeProfile.id, p_full_name: input.fullName.trim(), p_phone: normalizedPhone, p_password: input.password || null, p_avatar_url: input.avatarChanged ? input.avatarUrl ?? null : activeProfile.avatar_url, p_current_password: input.currentPassword });
   if (error) throw error;
   const row = Array.isArray(data) ? data[0] : data;
   if (!row) throw new Error("Le profil n’a pas pu être mis à jour.");
   activeProfile = { ...activeProfile, ...row, password_hash: null } as UserRecord;
+  localStorage.setItem(profileKey, JSON.stringify(activeProfile));
   return activeProfile;
 }
 
