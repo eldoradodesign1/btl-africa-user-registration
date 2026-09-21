@@ -70,8 +70,8 @@ begin
       if p_user_category not in ('hostess', 'brand_ambassador', 'brand_ambassador_youth', 'operations') then
         raise exception 'category_invalid' using errcode = '22023';
       end if;
-      if exists (select 1 from public.users where phone = p_phone)
-        or exists (select 1 from public.user_registration_requests where phone = p_phone and status = 'pending') then
+      if exists (select 1 from public.users u where u.phone = p_phone)
+        or exists (select 1 from public.user_registration_requests r where r.phone = p_phone and r.status = 'pending') then
         raise exception 'phone_already_registered' using errcode = '23505';
       end if;
 
@@ -137,7 +137,7 @@ begin
       if not found then
         raise exception 'registration_request_not_pending' using errcode = 'P0002';
       end if;
-      if exists (select 1 from public.users where phone = request_row.phone) then
+      if exists (select 1 from public.users u where u.phone = request_row.phone) then
         raise exception 'phone_already_registered' using errcode = '23505';
       end if;
 
