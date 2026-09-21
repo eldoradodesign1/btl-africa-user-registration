@@ -303,7 +303,7 @@ function Home({ onUserCreated, onNavigateDashboard }: { onUserCreated?: (user: U
         phone: normalizedPhone,
         password: form.useDefaultPassword ? defaultPasswordForRole(form.role) : form.password,
         role: form.role,
-        category: form.role === "agent" ? form.category : null,
+        category: form.role === "agent" ? form.category : "operations",
         supervisorId: form.supervisorId || null,
         permanentShopId: showShop ? form.permanentShopId || null : null,
       });
