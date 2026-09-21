@@ -14,9 +14,11 @@ export type UserRecord = {
   user_category: UserCategory | null;
   supervisor_id: string | null;
   permanent_shop_id: string | null;
+  avatar_url: string | null;
+  profile_updated_at: string | null;
 };
 
-export type UserInsert = Omit<UserRecord, "password_hash"> & { password_hash: string };
+export type UserInsert = Omit<UserRecord, "password_hash" | "avatar_url" | "profile_updated_at"> & { password_hash: string; avatar_url?: string | null; profile_updated_at?: string | null };
 export type CampaignRecord = {
   id: string;
   code: string;
@@ -34,6 +36,20 @@ export type CampaignAssignment = {
   assigned_at: string;
   assigned_by: string | null;
 };
+export type CampaignAssignmentRequest = {
+  id: string;
+  user_id: string;
+  campaign_id: string;
+  status: "pending" | "approved" | "rejected";
+  requested_at: string;
+  reviewed_at: string | null;
+  reviewed_by: string | null;
+  review_note: string | null;
+};
+export type CampaignRun = { id: string; campaign_id: string; name: string; starts_on: string; ends_on: string | null; status: string };
+export type PerformancePoint = { date: string; value: number; label: string };
+export type PresenceRecord = { date: string; status: string; checkin_at: string | null; checkout_at: string | null; note: string | null };
+export type AgentInsights = { performance: PerformancePoint[]; presence: PresenceRecord[]; metricLabel: string };
 export type RegistrationRequest = {
   id: string;
   full_name: string;
@@ -104,11 +120,11 @@ export async function testSupabaseConnection(url: string, publishableKey: string
 }
 
 const demoUsers: UserRecord[] = [
-  { id: "b7d7aef4-2e2b-4a7e-9f12-1d5ce8481b0a", full_name: "Patrick Kabeya", phone: "0812345678", password_hash: null, role: "supervisor", user_category: null, supervisor_id: null, permanent_shop_id: null },
-  { id: "e6a5f5f0-3f88-4fd9-a3a5-11e8c18d8a5c", full_name: "Grâce Mbuyi", phone: "0998765432", password_hash: null, role: "admin", user_category: null, supervisor_id: null, permanent_shop_id: null },
+  { id: "b7d7aef4-2e2b-4a7e-9f12-1d5ce8481b0a", full_name: "Patrick Kabeya", phone: "0812345678", password_hash: null, role: "supervisor", user_category: null, supervisor_id: null, permanent_shop_id: null, avatar_url: null, profile_updated_at: null },
+  { id: "e6a5f5f0-3f88-4fd9-a3a5-11e8c18d8a5c", full_name: "Grâce Mbuyi", phone: "0998765432", password_hash: null, role: "admin", user_category: null, supervisor_id: null, permanent_shop_id: null, avatar_url: null, profile_updated_at: null },
 ];
 let demoUsersCache = [...demoUsers];
-const safeUserColumns = "id, full_name, phone, role, user_category, supervisor_id, permanent_shop_id";
+const safeUserColumns = "id, full_name, phone, role, user_category, supervisor_id, permanent_shop_id, avatar_url, profile_updated_at";
 const safeCampaignColumns = "id, code, name, campaign_type, status, starts_on, ends_on";
 const safeAssignmentColumns = "id, user_id, campaign_id, is_active, assigned_at, assigned_by";
 
@@ -180,6 +196,72 @@ export async function loadSupervisors(): Promise<UserRecord[]> {
   return (data || []).map((user) => ({ ...user, password_hash: null })) as UserRecord[];
 }
 
+export async function loadAgentInsights(user: UserRecord, campaign: CampaignRecord): Promise<AgentInsights> {
+  if (!supabaseClient) return { performance: [], presence: [], metricLabel: "Performance" };
+  if (user.user_category === "hostess") {
+    const { data, error } = await supabaseClient.from("daily_reports").select("date, amount, priv, roam, bund, arrival_time, departure_time, pointage_photo, comment").eq("agent_id", user.id).order("date");
+    if (error) throw error;
+    const rows = (data || []) as Array<{ date: string; amount: number | null; priv: number | null; roam: number | null; bund: number | null; arrival_time: string | null; departure_time: string | null; pointage_photo: string | null; comment: string | null }>;
+    return {
+      metricLabel: "Activations",
+      performance: rows.map((row) => ({ date: row.date, value: Number(row.amount ?? ((row.priv || 0) + (row.roam || 0) + (row.bund || 0))), label: `${Number(row.amount ?? ((row.priv || 0) + (row.roam || 0) + (row.bund || 0)))} activations` })),
+      presence: rows.map((row) => ({ date: row.date, status: row.arrival_time || row.departure_time || row.pointage_photo ? "présent" : "rapport", checkin_at: row.arrival_time, checkout_at: row.departure_time, note: row.comment })),
+    };
+  }
+
+  const { data: runsData, error: runsError } = await supabaseClient.from("campaign_runs").select("id").eq("campaign_id", campaign.id);
+  if (runsError) throw runsError;
+  const runIds = ((runsData || []) as Array<{ id: string }>).map((run) => run.id);
+  if (!runIds.length) return { performance: [], presence: [], metricLabel: "Heures terrain" };
+  const { data, error } = await supabaseClient.from("ba_daily_attendance").select("activity_date, status, checkin_at, checkout_at, closing_comment").eq("ba_id", user.id).in("campaign_run_id", runIds).order("activity_date");
+  if (error) throw error;
+  const rows = (data || []) as Array<{ activity_date: string; status: string; checkin_at: string | null; checkout_at: string | null; closing_comment: string | null }>;
+  return {
+    metricLabel: "Heures terrain",
+    performance: rows.map((row) => { const hours = row.checkin_at && row.checkout_at ? Math.max(0, (new Date(row.checkout_at).getTime() - new Date(row.checkin_at).getTime()) / 3600000) : row.status === "closed" ? 1 : 0; return { date: row.activity_date, value: Number(hours.toFixed(1)), label: `${Number(hours.toFixed(1))} h` }; }),
+    presence: rows.map((row) => ({ date: row.activity_date, status: row.status, checkin_at: row.checkin_at, checkout_at: row.checkout_at, note: row.closing_comment })),
+  };
+}
+
+export async function requestCampaignAssignment(userId: string, campaignId: string): Promise<CampaignAssignmentRequest> {
+  if (!supabaseClient) throw new Error("Configurez Supabase avant de demander une affectation.");
+  const { data, error } = await supabaseClient.rpc("request_campaign_assignment", { p_user_id: userId, p_campaign_id: campaignId });
+  if (error) throw error;
+  const request = Array.isArray(data) ? data[0] : data;
+  if (!request) throw new Error("La demande d’affectation n’a pas été créée.");
+  return request as CampaignAssignmentRequest;
+}
+
+export async function loadCampaignAssignmentRequests(): Promise<CampaignAssignmentRequest[]> {
+  const manager = assertCampaignManager();
+  if (!supabaseClient) return [];
+  const { data, error } = await supabaseClient.rpc("list_campaign_assignment_requests", { p_manager_id: manager.id });
+  if (error) throw error;
+  return (data || []) as CampaignAssignmentRequest[];
+}
+
+export async function reviewCampaignAssignmentRequest(requestId: string, approve: boolean, note = ""): Promise<CampaignAssignmentRequest> {
+  const manager = assertCampaignManager();
+  if (!supabaseClient) throw new Error("Configurez Supabase avant de traiter la demande.");
+  const { data, error } = await supabaseClient.rpc("review_campaign_assignment_request", { p_request_id: requestId, p_manager_id: manager.id, p_approve: approve, p_review_note: note || null });
+  if (error) throw error;
+  const request = Array.isArray(data) ? data[0] : data;
+  if (!request) throw new Error("La demande n’a pas pu être traitée.");
+  return request as CampaignAssignmentRequest;
+}
+
+export async function updateMyProfile(input: { fullName: string; phone: string; password?: string; avatarUrl?: string | null }): Promise<UserRecord> {
+  if (!activeProfile || !supabaseClient) throw new Error("Connexion requise avant de modifier votre profil.");
+  const normalizedPhone = normalizePhone(input.phone);
+  if (!isValidMsisdn(normalizedPhone)) throw new Error("Le MSISDN fourni est invalide.");
+  const { data, error } = await supabaseClient.rpc("update_my_profile", { p_user_id: activeProfile.id, p_full_name: input.fullName.trim(), p_phone: normalizedPhone, p_password: input.password || null, p_avatar_url: input.avatarUrl ?? activeProfile.avatar_url });
+  if (error) throw error;
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row) throw new Error("Le profil n’a pas pu être mis à jour.");
+  activeProfile = { ...activeProfile, ...row, password_hash: null } as UserRecord;
+  return activeProfile;
+}
+
 export async function findExistingUser(normalizedPhone: string): Promise<UserRecord | null> {
   if (!supabaseClient) return demoUsersCache.find((user) => user.phone === normalizedPhone) || null;
   const { data, error } = await supabaseClient.from("users").select(safeUserColumns).eq("phone", normalizedPhone).maybeSingle();
@@ -191,7 +273,7 @@ export async function insertUser(payload: UserInsert): Promise<UserRecord> {
   if (!supabaseClient) {
     const duplicate = demoUsersCache.find((user) => user.phone === payload.phone);
     if (duplicate) { const error = new Error("duplicate key value violates unique constraint users_phone_key"); Object.assign(error, { code: "23505" }); throw error; }
-    const created: UserRecord = { ...payload, password_hash: null };
+    const created: UserRecord = { ...payload, password_hash: null, avatar_url: payload.avatar_url || null, profile_updated_at: payload.profile_updated_at || null };
     demoUsersCache = [created, ...demoUsersCache];
     return created;
   }

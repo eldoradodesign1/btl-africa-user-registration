@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState, type CSSProperties, type FormEvent } from "react";
 import { createPortal } from "react-dom";
-import { AlertCircle, BriefcaseBusiness, CheckCircle2, ChevronDown, Clock3, Database, Download, Filter, LoaderCircle, LogIn, LogOut, PieChart, RefreshCw, Search, ServerCog, ShieldCheck, Trash2, UserCheck, UserPlus, UserRoundPlus, X, XCircle } from "lucide-react";
+import { AlertCircle, BriefcaseBusiness, CheckCircle2, ChevronDown, Clock3, Database, Download, FilePenLine, Filter, LoaderCircle, LogIn, LogOut, PieChart, RefreshCw, Search, ServerCog, ShieldCheck, Trash2, UserCheck, UserPlus, UserCircle2, UserRoundPlus, X, XCircle } from "lucide-react";
 import { CopyablePhone } from "@/components/CopyablePhone";
+import RoleWorkspace, { AgentDetailModal, ProfileModal } from "@/components/RoleWorkspace";
 import { CATEGORY_LABELS, CATEGORY_OPTIONS, ROLE_LABELS, ROLE_OPTIONS, categoryShortLabel } from "@/lib/user-form";
 import { isValidMsisdn, normalizePhone } from "@/lib/phone";
 import {
@@ -16,15 +17,19 @@ import {
   isSupabaseConfigured,
   loadCampaignAssignments,
   loadCampaigns,
+  loadCampaignAssignmentRequests,
   loadPendingRegistrationRequests,
+  loadSupervisors,
   loadUsers,
   rejectRegistrationRequest,
+  reviewCampaignAssignmentRequest,
   signInAdmin,
   signOutAdmin,
   setUserCampaignAssignments,
   testSupabaseConnection,
   updateUser,
   type CampaignAssignment,
+  type CampaignAssignmentRequest,
   type CampaignRecord,
   type RegistrationRequest,
   type UserCategory,
@@ -72,8 +77,10 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
   const [configured, setConfigured] = useState(isSupabaseConfigured());
   const [profile, setProfile] = useState<UserRecord | null>(null);
   const [users, setUsers] = useState<UserRecord[]>([]);
+  const [superiors, setSuperiors] = useState<UserRecord[]>([]);
   const [campaigns, setCampaigns] = useState<CampaignRecord[]>([]);
   const [campaignAssignments, setCampaignAssignments] = useState<CampaignAssignment[]>([]);
+  const [assignmentRequests, setAssignmentRequests] = useState<CampaignAssignmentRequest[]>([]);
   const [pendingRequests, setPendingRequests] = useState<RegistrationRequest[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingRequests, setLoadingRequests] = useState(false);
@@ -92,7 +99,9 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
   const [connectionTest, setConnectionTest] = useState<Notice>(null);
   const [testingConnection, setTestingConnection] = useState(false);
   const [editDraft, setEditDraft] = useState<EditDraft | null>(null);
+  const [selectedAgentProfile, setSelectedAgentProfile] = useState<UserRecord | null>(null);
   const [campaignDraft, setCampaignDraft] = useState<UserRecord | null>(null);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [campaignSelection, setCampaignSelection] = useState<string[]>([]);
   const [deleteCandidate, setDeleteCandidate] = useState<UserRecord | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
@@ -114,13 +123,15 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
     }
   }
 
-  async function refreshUsers() {
+  async function refreshUsers(currentProfile: UserRecord | null = profile) {
     setLoading(true);
     try {
-      const [nextUsers, nextCampaigns, nextAssignments] = await Promise.all([loadUsers(), loadCampaigns(), loadCampaignAssignments()]);
+      const [nextUsers, nextSuperiors, nextCampaigns, nextAssignments, nextRequests] = await Promise.all([loadUsers(), loadSupervisors(), loadCampaigns(), loadCampaignAssignments(), currentProfile && ["admin", "super_admin", "supervisor"].includes(currentProfile.role) ? loadCampaignAssignmentRequests() : Promise.resolve([])]);
       setUsers(nextUsers);
+      setSuperiors(nextSuperiors);
       setCampaigns(nextCampaigns);
       setCampaignAssignments(nextAssignments);
+      setAssignmentRequests(nextRequests as CampaignAssignmentRequest[]);
       setNotice(null);
     } catch (error) {
       setNotice({ kind: "error", message: readableSupabaseError(error, "Impossible de charger les utilisateurs, campagnes ou affectations. Vérifiez les politiques RLS.") });
@@ -135,7 +146,7 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
       const current = await getAdminContext();
       setProfile(current?.profile || null);
       if (current) {
-        await refreshUsers();
+        await refreshUsers(current.profile);
         if (current.profile.role === "super_admin") {
           setLoadingRequests(true);
           try {
@@ -192,7 +203,7 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
       setProfile(current.profile);
       setPhone("");
       setPassword("");
-      await refreshUsers();
+      await refreshUsers(current.profile);
       if (current.profile.role === "super_admin") {
         setLoadingRequests(true);
         try { setPendingRequests(await loadPendingRegistrationRequests()); } finally { setLoadingRequests(false); }
@@ -234,7 +245,18 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
     await signOutAdmin();
     setProfile(null);
     setUsers([]);
+    setSuperiors([]);
+    setCampaigns([]);
+    setCampaignAssignments([]);
+    setAssignmentRequests([]);
     setPendingRequests([]);
+  }
+
+  function handleProfileSaved(updated: UserRecord) {
+    setProfile(updated);
+    setUsers((current) => current.map((user) => user.id === updated.id ? updated : user));
+    setSuperiors((current) => current.map((user) => user.id === updated.id ? updated : user));
+    setNotice({ kind: "success", message: "Votre profil a été mis à jour." });
   }
 
   function handleDisconnect() {
@@ -242,6 +264,10 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
     setConfigured(false);
     setProfile(null);
     setUsers([]);
+    setSuperiors([]);
+    setCampaigns([]);
+    setCampaignAssignments([]);
+    setAssignmentRequests([]);
     setPendingRequests([]);
     setShowConfig(true);
     setSetupKey("");
@@ -275,6 +301,19 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
     }
   }
 
+  async function handleCampaignRequestReview(request: CampaignAssignmentRequest, approve: boolean) {
+    setRequestActionId(request.id);
+    try {
+      await reviewCampaignAssignmentRequest(request.id, approve);
+      await refreshUsers(profile);
+      setNotice({ kind: "success", message: approve ? "Demande d’affectation approuvée." : "Demande d’affectation rejetée." });
+    } catch (error) {
+      setNotice({ kind: "error", message: readableSupabaseError(error, "Impossible de traiter la demande d’affectation.") });
+    } finally {
+      setRequestActionId(null);
+    }
+  }
+
   const filteredUsers = useMemo(() => {
     const query = search.trim().toLowerCase();
     const normalizedQuery = normalizePhone(search);
@@ -300,6 +339,11 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
   function beginEdit(user: UserRecord) {
     if (!canManage) return;
     setEditDraft({ id: user.id, full_name: user.full_name, phone: user.phone, role: user.role, user_category: user.user_category, supervisor_id: user.supervisor_id, permanent_shop_id: user.permanent_shop_id });
+  }
+
+  function handleUserRowClick(user: UserRecord) {
+    if (user.role === "agent") setSelectedAgentProfile(user);
+    else beginEdit(user);
   }
 
   function beginCampaignAssignment(user: UserRecord) {
@@ -355,8 +399,12 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
     }
   }
 
+  if (profile && (profile.role === "agent" || profile.role === "supervisor")) {
+    return <section className="admin-dashboard glass-card role-dashboard"><div className="dashboard-header"><div className="dashboard-title"><div className="heading-icon"><ServerCog size={19} /></div><div><div className="eyebrow"><ShieldCheck size={13} /> Console sécurisée</div><h2>Tableau de bord</h2></div></div><div className="dashboard-actions"><span className="session-chip"><span className="session-dot" />{profile.full_name} · {ROLE_LABELS[profile.role]}</span><button className="icon-button" type="button" onClick={() => void handleLogout()} aria-label="Se déconnecter" title="Se déconnecter"><LogOut size={15} /></button></div></div>{notice && <div className={`dashboard-notice ${notice.kind}`}><span>{notice.kind === "success" ? <CheckCircle2 size={15} /> : <AlertCircle size={15} />}</span>{notice.message}<button type="button" onClick={() => setNotice(null)} aria-label="Fermer"><X size={14} /></button></div>}<RoleWorkspace profile={profile} users={users} superiors={superiors} campaigns={campaigns} assignments={campaignAssignments} assignmentRequests={assignmentRequests} onNotice={(next) => setNotice(next)} onProfileUpdated={handleProfileSaved} onProfileOpen={() => setProfileOpen(true)} onRequestReviewed={() => void refreshUsers(profile)} />{profileOpen && <ProfileModal profile={profile} onClose={() => setProfileOpen(false)} onSaved={handleProfileSaved} />}</section>;
+  }
+
   return <section className="admin-dashboard glass-card">
-    <div className="dashboard-header"><div className="dashboard-title"><div className="heading-icon"><ServerCog size={19} /></div><div><div className="eyebrow"><ShieldCheck size={13} /> Console sécurisée</div><h2>Tableau de bord administrateur</h2></div></div><div className="dashboard-actions">{profile && <span className="session-chip"><span className="session-dot" />{profile.full_name} · {profile.role === "super_admin" ? "Super-administrateur" : ROLE_LABELS[profile.role]}</span>}{profile && <button className="icon-button" type="button" onClick={() => void handleLogout()} aria-label="Se déconnecter" title="Se déconnecter"><LogOut size={15} /></button>}{profile?.role === "super_admin" && <button className="icon-button primary-icon" type="button" onClick={onRequestCreate} aria-label="Nouvel utilisateur" title="Nouvel utilisateur"><UserPlus size={16} /></button>}{configured && profile?.role === "super_admin" && <button className="icon-button" type="button" onClick={() => setShowConfig(true)} aria-label="Configurer la base de données" title="Configurer la base de données"><Database size={16} /></button>}</div></div>
+    <div className="dashboard-header"><div className="dashboard-title"><div className="heading-icon"><ServerCog size={19} /></div><div><div className="eyebrow"><ShieldCheck size={13} /> Console sécurisée</div><h2>Tableau de bord administrateur</h2></div></div><div className="dashboard-actions">{profile && <span className="session-chip"><span className="session-dot" />{profile.full_name} · {profile.role === "super_admin" ? "Super-administrateur" : ROLE_LABELS[profile.role]}</span>}{profile && <button className="icon-button" type="button" onClick={() => setProfileOpen(true)} aria-label="Ouvrir mon profil" title="Mon profil"><UserCircle2 size={15} /></button>}{profile && <button className="icon-button" type="button" onClick={() => void handleLogout()} aria-label="Se déconnecter" title="Se déconnecter"><LogOut size={15} /></button>}{profile?.role === "super_admin" && <button className="icon-button primary-icon" type="button" onClick={onRequestCreate} aria-label="Nouvel utilisateur" title="Nouvel utilisateur"><UserPlus size={16} /></button>}{configured && profile?.role === "super_admin" && <button className="icon-button" type="button" onClick={() => setShowConfig(true)} aria-label="Configurer la base de données" title="Configurer la base de données"><Database size={16} /></button>}</div></div>
     {notice && <div className={`dashboard-notice ${notice.kind}`}><span>{notice.kind === "success" ? <CheckCircle2 size={15} /> : <AlertCircle size={15} />}</span>{notice.message}<button type="button" onClick={() => setNotice(null)} aria-label="Fermer"><X size={14} /></button></div>}
     {!configured && !showConfig && <div className="dashboard-empty"><ServerCog size={27} /><strong>Connectez votre projet Supabase</strong><button className="button primary compact" type="button" onClick={() => setShowConfig(true)}><Database size={14} /> Configurer</button></div>}
     {configured && !isAuthenticated && !showConfig && <>
@@ -365,15 +413,18 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
     </>}
     {configured && isAuthenticated && <>{isReadOnly && <div className="readonly-banner"><ShieldCheck size={15} /><span><strong>Lecture seule</strong> · {ROLE_LABELS[profile!.role]}</span></div>}
       {profile?.role === "super_admin" && <section className="pending-panel"><div className="pending-heading"><div><div className="card-kicker"><Clock3 size={14} /> Validation requise</div><h3>Demandes d’inscription</h3><p>Les agents restent absents des listes tant qu’ils ne sont pas approuvés.</p></div><span className="pending-count">{pendingRequests.length}</span><button type="button" className="icon-button" onClick={() => void refreshRequests()} disabled={loadingRequests} aria-label="Actualiser les demandes" title="Actualiser les demandes">{loadingRequests ? <LoaderCircle className="spin" size={14} /> : <RefreshCw size={14} />}</button></div>{pendingRequests.length ? <div className="pending-list">{pendingRequests.map((request) => <div className="pending-item" key={request.id}><div className="avatar small">{request.full_name.slice(0, 1).toUpperCase()}</div><div className="pending-identity"><strong>{request.full_name}</strong><CopyablePhone value={request.phone} /> <small>{categoryShortLabel(request.user_category)} · {new Date(request.created_at).toLocaleDateString("fr-FR")}</small></div><span className="role-badge">En attente</span><div className="pending-actions"><button type="button" className="icon-action approve" onClick={() => void handleApprove(request)} disabled={requestActionId === request.id} aria-label={`Approuver ${request.full_name}`} title="Approuver">{requestActionId === request.id ? <LoaderCircle className="spin" size={14} /> : <CheckCircle2 size={14} />}</button><button type="button" className="icon-action delete" onClick={() => void handleReject(request)} disabled={requestActionId === request.id} aria-label={`Rejeter ${request.full_name}`} title="Rejeter"><XCircle size={14} /></button></div></div>)}</div> : <div className="pending-empty"><CheckCircle2 size={16} /> Aucune demande en attente.</div>}</section>}
+      {canManageCampaigns && assignmentRequests.length > 0 && <section className="pending-panel campaign-request-panel"><div className="pending-heading"><div><div className="card-kicker"><BriefcaseBusiness size={14} /> Affectations à valider</div><h3>Demandes de campagne</h3><p>Les agents ont demandé à rejoindre une campagne.</p></div><span className="pending-count">{assignmentRequests.length}</span></div><div className="pending-list">{assignmentRequests.map((request) => { const agent = users.find((user) => user.id === request.user_id); const campaign = campaigns.find((item) => item.id === request.campaign_id); if (!agent || !campaign) return null; return <div className="pending-item" key={request.id}><div className="avatar small">{agent.full_name.slice(0, 1).toUpperCase()}</div><div className="pending-identity"><strong>{agent.full_name}</strong><small>{campaign.name} · {new Date(request.requested_at).toLocaleDateString("fr-FR")}</small></div><div className="pending-actions"><button type="button" className="icon-action approve" onClick={() => void handleCampaignRequestReview(request, true)} disabled={requestActionId === request.id} aria-label="Approuver"><CheckCircle2 size={14} /></button><button type="button" className="icon-action delete" onClick={() => void handleCampaignRequestReview(request, false)} disabled={requestActionId === request.id} aria-label="Rejeter"><XCircle size={14} /></button></div></div>; })}</div></section>}
       <div className="dashboard-toolbar"><div className="history-search"><Search size={16} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Rechercher un MSISDN ou un nom…" aria-label="Rechercher dans l’historique" /></div><div className="filter-control"><Filter size={14} /><CustomSelect value={roleFilter} onChange={setRoleFilter} ariaLabel="Filtrer par rôle" placeholder="Tous les rôles" options={[{ value: "all", label: "Tous les rôles" }, ...ROLE_OPTIONS.map((role) => ({ value: role, label: ROLE_LABELS[role] }))]} /></div><div className="filter-control"><CustomSelect value={categoryFilter} onChange={setCategoryFilter} ariaLabel="Filtrer par catégorie" placeholder="Toutes les catégories" options={[{ value: "all", label: "Toutes les catégories" }, ...CATEGORY_OPTIONS.map((category) => ({ value: category, label: categoryShortLabel(category) }))]} /></div><button className="icon-button" type="button" onClick={() => void refreshUsers()} disabled={loading} aria-label="Actualiser" title="Actualiser">{loading ? <LoaderCircle className="spin" size={15} /> : <RefreshCw size={15} />}</button><button className="icon-button primary-icon" type="button" onClick={exportCsv} disabled={!filteredUsers.length} aria-label="Exporter CSV" title="Exporter CSV"><Download size={15} /></button></div>
       <div className="dashboard-stats"><span><strong>{filteredUsers.length}</strong> résultat{filteredUsers.length > 1 ? "s" : ""}</span><span><strong>{users.length}</strong> utilisateur{users.length > 1 ? "s" : ""}</span><span className="secure-label"><ShieldCheck size={13} /> Sans password_hash</span></div>
       <div className="dashboard-insights"><div className="donut-card"><div className="donut-heading"><span><PieChart size={14} /> Répartition campagne</span><small>{users.length} total</small></div><div className="donut-content"><div className="donut" style={{ "--donut": donutGradient } as CSSProperties}><div><strong>{users.length}</strong><small>profils</small></div></div><div className="donut-legend">{categoryStats.length ? categoryStats.map((item, index) => <div key={item.category}><i style={{ background: ["#9ee9e8", "#b5ef8c", "#d3b5ff", "#ffca8a"][index % 4] }} /> <span>{categoryShortLabel(item.category)}</span><b>{item.count}</b></div>) : <span className="muted-note">Aucune catégorie renseignée</span>}</div></div></div><div className="role-summary"><div className="donut-heading"><span><ShieldCheck size={14} /> Rôles actifs</span><small>{users.length} profils</small></div>{ROLE_OPTIONS.map((role) => { const count = users.filter((user) => user.role === role).length; return count ? <div className="role-line" key={role}><span>{ROLE_LABELS[role]}</span><b>{count}</b><div><i style={{ width: `${Math.max(8, (count / Math.max(users.length, 1)) * 100)}%` }} /></div></div> : null; })}</div><div className="donut-card campaign-donut-card"><div className="donut-heading"><span><BriefcaseBusiness size={14} /> Effectifs par campagne</span><small>{campaignStats.reduce((sum, item) => sum + item.count, 0)} affectations</small></div><div className="donut-content"><div className="donut" style={{ "--donut": campaignDonutGradient } as CSSProperties}><div><strong>{campaignStats.reduce((sum, item) => sum + item.count, 0)}</strong><small>affectés</small></div></div><div className="donut-legend">{campaignStats.length ? campaignStats.map((item, index) => <div key={item.campaign.id}><i style={{ background: ["#9ee9e8", "#b5ef8c", "#d3b5ff", "#ffca8a", "#f5cd78", "#ff9a8a"][index % 6] }} /> <span title={item.campaign.name}>{item.campaign.name}</span><b>{item.count}</b></div>) : <span className="muted-note">Aucune affectation</span>}</div></div></div></div>
-      <div className="users-table-wrap"><table className="users-table"><thead><tr><th>Utilisateur</th><th>MSISDN</th><th>Rôle</th><th>Catégorie</th><th>Campagnes</th><th>Superviseur</th><th>Shop</th>{(canManage || canManageCampaigns) && <th aria-label="Actions" />}</tr></thead><tbody>{filteredUsers.map((user) => { const userCampaigns = campaignAssignments.filter((assignment) => assignment.user_id === user.id).map((assignment) => campaigns.find((campaign) => campaign.id === assignment.campaign_id)).filter((campaign): campaign is CampaignRecord => Boolean(campaign)); const canAssign = canManageCampaigns && user.role === "agent" && ["hostess", "brand_ambassador", "brand_ambassador_youth"].includes(user.user_category || ""); return <tr key={user.id} className={canManage ? "row-clickable" : ""} onClick={() => beginEdit(user)}><td><div className="table-user"><div className="avatar small">{user.full_name.slice(0, 1).toUpperCase()}</div><div><strong>{user.full_name}</strong><small>{user.id}</small></div></div></td><td><CopyablePhone value={user.phone} className="mono-value" /></td><td><span className={`role-badge role-${user.role}`}>{ROLE_LABELS[user.role]}</span></td><td>{user.user_category ? CATEGORY_LABELS[user.user_category].split(" — ")[0] : "—"}</td><td><div className="campaign-pills">{userCampaigns.length ? userCampaigns.map((campaign) => <span className="campaign-pill" key={campaign.id} title={campaign.name}>{campaign.name}</span>) : <span className="muted-note">Aucune</span>}</div></td><td>{user.supervisor_id ? <span className="mono-value">{user.supervisor_id.slice(0, 8)}…</span> : "—"}</td><td>{user.permanent_shop_id || "—"}</td>{(canManage || canManageCampaigns) && <td><div className="row-actions">{canAssign && <button type="button" className="icon-action campaign-action" aria-label={`Affecter ${user.full_name} à une campagne`} title="Affecter aux campagnes" onClick={(event) => { event.stopPropagation(); beginCampaignAssignment(user); }}><BriefcaseBusiness size={14} /></button>}{canManage && <button type="button" className="icon-action delete" aria-label={`Supprimer ${user.full_name}`} title="Supprimer" onClick={(event) => { event.stopPropagation(); setDeleteCandidate(user); }}><Trash2 size={14} /></button>}</div></td>}</tr>; })}</tbody></table>{!filteredUsers.length && <div className="table-empty"><Search size={22} /><strong>Aucun utilisateur trouvé</strong><span>Essayez un MSISDN ou élargissez vos filtres.</span></div>}</div>
+      <div className="users-table-wrap"><table className="users-table"><thead><tr><th>Utilisateur</th><th>MSISDN</th><th>Rôle</th><th>Catégorie</th><th>Campagnes</th><th>Superviseur</th><th>Shop</th>{(canManage || canManageCampaigns) && <th aria-label="Actions" />}</tr></thead><tbody>{filteredUsers.map((user) => { const userCampaigns = campaignAssignments.filter((assignment) => assignment.user_id === user.id).map((assignment) => campaigns.find((campaign) => campaign.id === assignment.campaign_id)).filter((campaign): campaign is CampaignRecord => Boolean(campaign)); const canAssign = canManageCampaigns && user.role === "agent" && ["hostess", "brand_ambassador", "brand_ambassador_youth"].includes(user.user_category || ""); return <tr key={user.id} className={canManage ? "row-clickable" : ""} onClick={() => handleUserRowClick(user)}><td><div className="table-user"><div className="avatar small">{user.full_name.slice(0, 1).toUpperCase()}</div><div><strong>{user.full_name}</strong><small>{user.id}</small></div></div></td><td><CopyablePhone value={user.phone} className="mono-value" /></td><td><span className={`role-badge role-${user.role}`}>{ROLE_LABELS[user.role]}</span></td><td>{user.user_category ? CATEGORY_LABELS[user.user_category].split(" — ")[0] : "—"}</td><td><div className="campaign-pills">{userCampaigns.length ? userCampaigns.map((campaign) => <span className="campaign-pill" key={campaign.id} title={campaign.name}>{campaign.name}</span>) : <span className="muted-note">Aucune</span>}</div></td><td>{user.supervisor_id ? <span className="mono-value">{user.supervisor_id.slice(0, 8)}…</span> : "—"}</td><td>{user.permanent_shop_id || "—"}</td>{(canManage || canManageCampaigns) && <td><div className="row-actions">{canAssign && <button type="button" className="icon-action campaign-action" aria-label={`Affecter ${user.full_name} à une campagne`} title="Affecter aux campagnes" onClick={(event) => { event.stopPropagation(); beginCampaignAssignment(user); }}><BriefcaseBusiness size={14} /></button>}{canManage && <button type="button" className="icon-action edit" aria-label={`Modifier ${user.full_name}`} title="Modifier" onClick={(event) => { event.stopPropagation(); beginEdit(user); }}><FilePenLine size={14} /></button>}{canManage && <button type="button" className="icon-action delete" aria-label={`Supprimer ${user.full_name}`} title="Supprimer" onClick={(event) => { event.stopPropagation(); setDeleteCandidate(user); }}><Trash2 size={14} /></button>}</div></td>}</tr>; })}</tbody></table>{!filteredUsers.length && <div className="table-empty"><Search size={22} /><strong>Aucun utilisateur trouvé</strong><span>Essayez un MSISDN ou élargissez vos filtres.</span></div>}</div>
     </>}
     {showConfig && <ModalLayer><button className="modal-backdrop" type="button" aria-label="Fermer" onClick={() => configured && setShowConfig(false)} /><form className="modal-card config-modal" onSubmit={handleSetup}><div className="modal-header"><div><div className="eyebrow"><Database size={13} /> Connexion</div><h3>Base Supabase</h3></div>{configured && <button type="button" className="modal-close" onClick={() => setShowConfig(false)} aria-label="Fermer"><X size={16} /></button>}</div><label>URL du projet<input value={setupUrl} onChange={(event) => setSetupUrl(event.target.value)} placeholder="https://votre-projet.supabase.co" required /></label><label>Clé publishable<input value={setupKey} onChange={(event) => setSetupKey(event.target.value)} placeholder="Clé publishable / anon" type="password" autoComplete="off" required /></label>{connectionTest && <div className={`connection-test ${connectionTest.kind}`}><span>{connectionTest.kind === "success" ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}</span>{connectionTest.message}</div>}<div className="modal-actions"><button type="button" className="button secondary" onClick={() => void handleTestConnection()} disabled={testingConnection}>{testingConnection ? <LoaderCircle className="spin" size={14} /> : <Database size={14} />} Tester</button><button type="submit" className="button primary" disabled={testingConnection}><CheckCircle2 size={14} /> Enregistrer</button></div>{configured && <button type="button" className="text-button danger config-disconnect" onClick={handleDisconnect}>Déconnecter ce projet</button>}</form></ModalLayer>}
     {deleteCandidate && <ModalLayer><button className="modal-backdrop" type="button" aria-label="Fermer" onClick={() => setDeleteCandidate(null)} /><div className="modal-card confirm-card"><div className="danger-icon"><Trash2 size={19} /></div><h3>Supprimer cet utilisateur ?</h3><p><strong>{deleteCandidate.full_name}</strong> · <CopyablePhone value={deleteCandidate.phone} />La ligne sera supprimée définitivement de <code>public.users</code>.</p><div className="modal-actions"><button type="button" className="button secondary" onClick={() => setDeleteCandidate(null)}>Annuler</button><button type="button" className="button danger-button" onClick={() => void confirmDelete()} disabled={actionLoading}>{actionLoading ? <LoaderCircle className="spin" size={14} /> : <Trash2 size={14} />} Confirmer</button></div></div></ModalLayer>}
     {campaignDraft && <ModalLayer><button className="modal-backdrop" type="button" aria-label="Fermer" onClick={() => setCampaignDraft(null)} /><form className="modal-card campaign-modal" onSubmit={saveCampaignAssignment}><div className="modal-header"><div><div className="eyebrow"><BriefcaseBusiness size={13} /> Affectation</div><h3>Campagnes de {campaignDraft.full_name}</h3></div><button type="button" className="modal-close" onClick={() => setCampaignDraft(null)} aria-label="Fermer"><X size={16} /></button></div><p className="modal-helper">Sélectionnez une ou plusieurs campagnes. Les campagnes non sélectionnées seront désactivées pour cet agent.</p><div className="campaign-options">{campaigns.filter((campaign) => (campaign.status === "active" || campaign.status === "draft") && campaign.campaign_type === (campaignDraft.user_category === "hostess" ? "hostess" : "brand_ambassador")).map((campaign) => { const selected = campaignSelection.includes(campaign.id); return <button type="button" className={`campaign-option ${selected ? "is-selected" : ""}`} aria-pressed={selected} key={campaign.id} onClick={() => setCampaignSelection((current) => selected ? current.filter((id) => id !== campaign.id) : [...current, campaign.id])}><span className="campaign-option-mark">{selected ? <CheckCircle2 size={15} /> : <span />}</span><span><strong>{campaign.name}</strong><small>{campaign.campaign_type === "hostess" ? "Hôtesse" : "Brand Ambassador"} · {campaign.status === "active" ? "Active" : "Brouillon"}</small></span></button>; })}</div>{!campaigns.length && <div className="table-empty"><BriefcaseBusiness size={20} /><strong>Aucune campagne disponible</strong></div>}<div className="modal-actions"><button type="button" className="button secondary" onClick={() => setCampaignDraft(null)}>Annuler</button><button type="submit" className="button primary" disabled={actionLoading}>{actionLoading ? <LoaderCircle className="spin" size={14} /> : <CheckCircle2 size={14} />} Enregistrer</button></div></form></ModalLayer>}
     {editDraft && <ModalLayer><button className="modal-backdrop" type="button" aria-label="Fermer" onClick={() => setEditDraft(null)} /><form className="modal-card edit-modal" onSubmit={saveEdit}><div className="modal-header"><div><div className="eyebrow"><ShieldCheck size={13} /> Modification</div><h3>Modifier l’utilisateur</h3></div><button type="button" className="modal-close" onClick={() => setEditDraft(null)} aria-label="Fermer"><X size={16} /></button></div><label>Nom complet<input value={editDraft.full_name} onChange={(event) => setEditDraft((draft) => draft ? { ...draft, full_name: event.target.value } : draft)} required /></label><label>MSISDN<input value={editDraft.phone} onChange={(event) => setEditDraft((draft) => draft ? { ...draft, phone: event.target.value } : draft)} type="tel" inputMode="tel" required /></label><div className="filter-control"><CustomSelect value={editDraft.role} onChange={(value) => setEditDraft((draft) => draft ? { ...draft, role: value as UserRole } : draft)} ariaLabel="Rôle" placeholder="Rôle" options={ROLE_OPTIONS.map((role) => ({ value: role, label: ROLE_LABELS[role] }))} /></div><div className="filter-control"><CustomSelect value={editDraft.user_category || ""} onChange={(value) => setEditDraft((draft) => draft ? { ...draft, user_category: (value || null) as UserCategory | null } : draft)} ariaLabel="Catégorie" placeholder="Catégorie" options={[{ value: "", label: "Aucune catégorie" }, ...CATEGORY_OPTIONS.map((category) => ({ value: category, label: CATEGORY_LABELS[category] }))]} /></div><label>Superviseur (ID, optionnel)<input value={editDraft.supervisor_id || ""} onChange={(event) => setEditDraft((draft) => draft ? { ...draft, supervisor_id: event.target.value || null } : draft)} placeholder="Aucun" /></label><label>Shop permanent (optionnel)<input value={editDraft.permanent_shop_id || ""} onChange={(event) => setEditDraft((draft) => draft ? { ...draft, permanent_shop_id: event.target.value || null } : draft)} placeholder="Aucun shop" /></label><div className="modal-actions"><button type="button" className="button secondary" onClick={() => setEditDraft(null)}>Annuler</button><button type="submit" className="button primary" disabled={actionLoading}>{actionLoading ? <LoaderCircle className="spin" size={14} /> : <CheckCircle2 size={14} />} Enregistrer</button></div></form></ModalLayer>}
+    {selectedAgentProfile && <AgentDetailModal agent={selectedAgentProfile} campaigns={campaigns} assignments={campaignAssignments} assignmentRequests={assignmentRequests} canRequest={false} canExport onNotice={(next) => setNotice(next)} onClose={() => setSelectedAgentProfile(null)} />}
+    {profileOpen && profile && <ProfileModal profile={profile} onClose={() => setProfileOpen(false)} onSaved={handleProfileSaved} />}
   </section>;
 }
 
