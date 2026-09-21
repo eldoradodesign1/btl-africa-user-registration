@@ -572,3 +572,40 @@ html { scrollbar-width: thin; scrollbar-color: rgba(158,233,232,.35) rgba(3,11,1
 .profile-modal label small { color: var(--muted-2); font-size: 8px; }
 .profile-modal label > input:not([type="file"]) { height: 38px; padding: 0 10px; border: 1px solid rgba(188,220,228,.15); border-radius: 8px; outline: 0; color: var(--text); background: rgba(3,11,14,.4); font-size: 10px; }
 @media (max-width: 760px) { .workspace-grid { grid-template-columns: 1fr; } .workspace-hero { align-items: flex-start; flex-direction: column; } .agent-campaign-item { grid-template-columns: 1fr; } .campaign-request-button { justify-self: start; } .attendance-row { grid-template-columns: 7px 1fr auto; } .attendance-row span:nth-child(3) { grid-column: 2 / -1; } }
+
+/* Final viewport and calendar refinements */
+.modal-layer { position: fixed; inset: 0; width: 100vw; height: 100dvh; display: grid; place-items: center; overflow: hidden; padding: 16px; }
+.modal-card { max-height: calc(100dvh - 32px); margin: 0; }
+.users-table-wrap { height: clamp(300px, 52vh, 560px); max-height: none; overflow: auto; }
+.agents-card .agent-list { max-height: clamp(280px, 52vh, 560px); overflow-y: auto; padding-right: 4px; overscroll-behavior: contain; }
+.custom-calendar { min-width: 0; }
+.calendar-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: #cfe2e4; font-size: 10px; }
+.calendar-heading > span { display: inline-flex; align-items: center; gap: 7px; }
+.calendar-heading svg { color: var(--cyan); }
+.calendar-nav { display: flex; align-items: center; gap: 6px; }
+.calendar-nav strong { min-width: 105px; color: var(--muted); font-family: "DM Mono", monospace; font-size: 8px; font-weight: 400; text-align: center; text-transform: capitalize; }
+.calendar-nav button { display: grid; place-items: center; width: 25px; height: 25px; border: 1px solid rgba(188,220,228,.14); border-radius: 6px; color: var(--muted); background: rgba(255,255,255,.025); }
+.calendar-nav button:hover { color: var(--cyan); border-color: rgba(158,233,232,.35); }
+.calendar-weekdays, .calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.calendar-weekdays { margin-top: 14px; color: var(--muted-2); font-family: "DM Mono", monospace; font-size: 7px; text-align: center; text-transform: uppercase; }
+.calendar-grid { margin-top: 6px; }
+.calendar-day { min-height: 40px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; border: 1px solid transparent; border-radius: 7px; color: #cfe1e3; background: rgba(255,255,255,.025); }
+.calendar-day strong { font-size: 10px; font-weight: 700; }
+.calendar-day small { color: inherit; font-family: "DM Mono", monospace; font-size: 7px; }
+.calendar-day.is-empty { pointer-events: none; background: transparent; }
+.calendar-day.is-off { color: #52646a; border-color: rgba(188,220,228,.05); background: rgba(188,220,228,.035); }
+.calendar-day.is-absent { color: #ffc1b5; border-color: rgba(255,154,138,.24); background: rgba(255,154,138,.10); }
+.calendar-day.is-open { color: #bceeed; border-color: rgba(91,208,209,.32); background: rgba(91,208,209,.14); }
+.calendar-day.is-closed { color: #d5f4bd; border-color: rgba(181,239,140,.32); background: rgba(181,239,140,.15); }
+.calendar-day:not(.is-empty):hover { transform: translateY(-1px); filter: brightness(1.12); }
+.calendar-legend { display: flex; flex-wrap: wrap; gap: 8px 12px; margin-top: 13px; color: var(--muted-2); font-size: 8px; }
+.calendar-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.legend-dot { width: 7px; height: 7px; display: inline-block; border-radius: 50%; }
+.legend-dot.is-off { background: #52646a; }
+.legend-dot.is-closed { background: var(--lime); }
+.legend-dot.is-open { background: var(--cyan-strong); }
+.legend-dot.is-absent { background: var(--red); }
+.calendar-summary { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 12px; padding-top: 10px; border-top: 1px solid rgba(188,220,228,.08); color: var(--muted-2); font-family: "DM Mono", monospace; font-size: 8px; }
+.calendar-summary b { color: #dbeceb; font-weight: 500; }
+@media (max-width: 560px) { .calendar-day { min-height: 34px; } .calendar-day small { display: none; } .calendar-heading { align-items: flex-start; flex-direction: column; } .calendar-nav { align-self: stretch; justify-content: space-between; } .calendar-nav strong { flex: 1; } }
+.icon-action.profile-action:hover { border-color: rgba(211,181,255,.52); color: #d3b5ff; background: rgba(211,181,255,.10); }

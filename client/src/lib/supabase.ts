@@ -47,9 +47,10 @@ export type CampaignAssignmentRequest = {
   review_note: string | null;
 };
 export type CampaignRun = { id: string; campaign_id: string; name: string; starts_on: string; ends_on: string | null; status: string };
+export type CampaignPause = { starts_on: string; ends_on: string; reason: string | null };
 export type PerformancePoint = { date: string; value: number; label: string };
 export type PresenceRecord = { date: string; status: string; checkin_at: string | null; checkout_at: string | null; note: string | null };
-export type AgentInsights = { performance: PerformancePoint[]; presence: PresenceRecord[]; metricLabel: string };
+export type AgentInsights = { performance: PerformancePoint[]; presence: PresenceRecord[]; metricLabel: string; campaignStart: string | null; campaignEnd: string | null; pauses: CampaignPause[] };
 export type RegistrationRequest = {
   id: string;
   full_name: string;
@@ -197,7 +198,10 @@ export async function loadSupervisors(): Promise<UserRecord[]> {
 }
 
 export async function loadAgentInsights(user: UserRecord, campaign: CampaignRecord): Promise<AgentInsights> {
-  if (!supabaseClient) return { performance: [], presence: [], metricLabel: "Performance" };
+  if (!supabaseClient) return { performance: [], presence: [], metricLabel: "Performance", campaignStart: campaign.starts_on, campaignEnd: campaign.ends_on, pauses: [] };
+  const { data: pausesData, error: pausesError } = await supabaseClient.from("campaign_pauses").select("starts_on, ends_on, reason").eq("campaign_id", campaign.id).order("starts_on");
+  if (pausesError) throw pausesError;
+  const pauses = (pausesData || []) as CampaignPause[];
   if (user.user_category === "hostess") {
     const { data, error } = await supabaseClient.from("daily_reports").select("date, amount, priv, roam, bund, arrival_time, departure_time, pointage_photo, comment").eq("agent_id", user.id).order("date");
     if (error) throw error;
@@ -206,13 +210,16 @@ export async function loadAgentInsights(user: UserRecord, campaign: CampaignReco
       metricLabel: "Activations",
       performance: rows.map((row) => ({ date: row.date, value: Number(row.amount ?? ((row.priv || 0) + (row.roam || 0) + (row.bund || 0))), label: `${Number(row.amount ?? ((row.priv || 0) + (row.roam || 0) + (row.bund || 0)))} activations` })),
       presence: rows.map((row) => ({ date: row.date, status: row.arrival_time || row.departure_time || row.pointage_photo ? "présent" : "rapport", checkin_at: row.arrival_time, checkout_at: row.departure_time, note: row.comment })),
+      campaignStart: campaign.starts_on,
+      campaignEnd: campaign.ends_on,
+      pauses,
     };
   }
 
   const { data: runsData, error: runsError } = await supabaseClient.from("campaign_runs").select("id").eq("campaign_id", campaign.id);
   if (runsError) throw runsError;
   const runIds = ((runsData || []) as Array<{ id: string }>).map((run) => run.id);
-  if (!runIds.length) return { performance: [], presence: [], metricLabel: "Heures terrain" };
+  if (!runIds.length) return { performance: [], presence: [], metricLabel: "Heures terrain", campaignStart: campaign.starts_on, campaignEnd: campaign.ends_on, pauses };
   const { data, error } = await supabaseClient.from("ba_daily_attendance").select("activity_date, status, checkin_at, checkout_at, closing_comment").eq("ba_id", user.id).in("campaign_run_id", runIds).order("activity_date");
   if (error) throw error;
   const rows = (data || []) as Array<{ activity_date: string; status: string; checkin_at: string | null; checkout_at: string | null; closing_comment: string | null }>;
@@ -220,6 +227,9 @@ export async function loadAgentInsights(user: UserRecord, campaign: CampaignReco
     metricLabel: "Heures terrain",
     performance: rows.map((row) => { const hours = row.checkin_at && row.checkout_at ? Math.max(0, (new Date(row.checkout_at).getTime() - new Date(row.checkin_at).getTime()) / 3600000) : row.status === "closed" ? 1 : 0; return { date: row.activity_date, value: Number(hours.toFixed(1)), label: `${Number(hours.toFixed(1))} h` }; }),
     presence: rows.map((row) => ({ date: row.activity_date, status: row.status, checkin_at: row.checkin_at, checkout_at: row.checkout_at, note: row.closing_comment })),
+    campaignStart: campaign.starts_on,
+    campaignEnd: campaign.ends_on,
+    pauses,
   };
 }
 
