@@ -18,6 +18,7 @@ type RoleWorkspaceProps = {
   onProfileUpdated: (profile: UserRecord) => void;
   onProfileOpen: () => void;
   onRequestReviewed: () => void;
+  simulation?: boolean;
 };
 
 type AgentDetailProps = {
@@ -207,7 +208,7 @@ export function ProfileModal({ profile, onClose, onSaved }: { profile: UserRecor
   return <div className="modal-layer"><button className="modal-backdrop" type="button" aria-label="Fermer" onClick={onClose} /><form className="modal-card profile-modal" onSubmit={save}><div className="modal-header"><div><div className="eyebrow"><UserCircle2 size={13} /> Mon profil</div><h3>Informations personnelles</h3></div><button type="button" className="modal-close" onClick={onClose} aria-label="Fermer"><X size={16} /></button></div><div className="profile-photo-editor">{avatarUrl ? <img className="profile-avatar large" src={avatarUrl} alt="Aperçu" /> : <Avatar user={profile} size="large" />}<label className="button secondary compact"><Download size={13} /> Choisir une photo<input type="file" accept="image/*" onChange={choosePhoto} hidden /></label></div><label>Nom complet<input value={fullName} onChange={(event) => setFullName(event.target.value)} required /></label><label>Numéro de téléphone<input value={phone} onChange={(event) => setPhone(event.target.value)} type="tel" required /></label><label>Mot de passe actuel <small>Requis pour confirmer la modification</small><input value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} type="password" autoComplete="current-password" required /></label><label>Nouveau mot de passe <small>Laisser vide pour conserver l’actuel</small><input value={password} onChange={(event) => setPassword(event.target.value)} type="password" minLength={6} autoComplete="new-password" /></label>{error && <div className="connection-test">{error}</div>}<div className="modal-actions"><button type="button" className="button secondary" onClick={onClose}>Annuler</button><button type="submit" className="button primary" disabled={saving}>{saving ? <LoaderCircle className="spin" size={14} /> : <LockKeyhole size={14} />} Enregistrer</button></div></form></div>;
 }
 
-export default function RoleWorkspace({ profile, users, superiors, campaigns, assignments, assignmentRequests, onNotice, onProfileUpdated, onProfileOpen, onRequestReviewed }: RoleWorkspaceProps) {
+export default function RoleWorkspace({ profile, users, superiors, campaigns, assignments, assignmentRequests, onNotice, onProfileUpdated, onProfileOpen, onRequestReviewed, simulation = false }: RoleWorkspaceProps) {
   const [selectedAgent, setSelectedAgent] = useState<UserRecord | null>(null);
   const isAgent = profile.role === "agent";
   const agents = users.filter((user) => user.role === "agent");
@@ -222,11 +223,13 @@ export default function RoleWorkspace({ profile, users, superiors, campaigns, as
   const requestIds = new Set(assignmentRequests.filter((request) => request.user_id === profile.id && request.status === "pending").map((request) => request.campaign_id));
 
   async function requestAssignment(campaign: CampaignRecord) {
+    if (simulation) { onNotice({ kind: "error", message: "La simulation est en lecture seule. Quittez-la pour demander une affectation." }); return; }
     setRequestingCampaign(campaign.id);
     try { await requestCampaignAssignment(profile.id, campaign.id); onNotice({ kind: "success", message: `Demande envoyée pour ${campaign.name}.` }); } catch (error) { onNotice({ kind: "error", message: error instanceof Error ? error.message : "Demande impossible." }); } finally { setRequestingCampaign(null); }
   }
 
   async function reviewRequest(request: CampaignAssignmentRequest, approve: boolean) {
+    if (simulation) { onNotice({ kind: "error", message: "La simulation est en lecture seule. Quittez-la pour traiter une demande." }); return; }
     setReviewingRequest(request.id);
     try { await reviewCampaignAssignmentRequest(request.id, approve); onRequestReviewed(); onNotice({ kind: "success", message: approve ? "Demande approuvée." : "Demande rejetée." }); } catch (error) { onNotice({ kind: "error", message: error instanceof Error ? error.message : "Impossible de traiter la demande." }); } finally { setReviewingRequest(null); }
   }

@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { AlertCircle, BriefcaseBusiness, CheckCircle2, ChevronDown, Clock3, Database, Download, FilePenLine, Filter, LoaderCircle, LogIn, LogOut, PieChart, RefreshCw, Search, ServerCog, ShieldCheck, Trash2, UserCheck, UserPlus, UserCircle2, UserRoundPlus, X, XCircle } from "lucide-react";
 import { CopyablePhone } from "@/components/CopyablePhone";
 import RoleWorkspace, { AgentDetailModal, ProfileModal } from "@/components/RoleWorkspace";
+import SimulationBar from "@/components/SimulationBar";
 import { CATEGORY_LABELS, CATEGORY_OPTIONS, ROLE_LABELS, ROLE_OPTIONS, categoryShortLabel } from "@/lib/user-form";
 import { isValidMsisdn, normalizePhone } from "@/lib/phone";
 import {
@@ -106,10 +107,14 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
   const [deleteCandidate, setDeleteCandidate] = useState<UserRecord | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [requestActionId, setRequestActionId] = useState<string | null>(null);
+  const [simulatedUser, setSimulatedUser] = useState<UserRecord | null>(null);
   const isAuthenticated = Boolean(profile);
-  const canManage = profile?.role === "admin" || profile?.role === "super_admin";
-  const canManageCampaigns = profile?.role === "admin" || profile?.role === "super_admin" || profile?.role === "supervisor";
-  const isReadOnly = Boolean(profile && !canManage && !canManageCampaigns);
+  const isSimulation = Boolean(profile?.role === "super_admin" && simulatedUser && simulatedUser.id !== profile.id);
+  const effectiveProfile = simulatedUser || profile;
+  const canManage = effectiveProfile?.role === "admin" || effectiveProfile?.role === "super_admin";
+  const canManageCampaigns = effectiveProfile?.role === "admin" || effectiveProfile?.role === "super_admin" || effectiveProfile?.role === "supervisor" || effectiveProfile?.role === "sub_admin";
+  const isReadOnly = Boolean(effectiveProfile && !canManage && !canManageCampaigns);
+  const simulationControl = profile?.role === "super_admin" && effectiveProfile ? <SimulationBar masterUser={profile} effectiveUser={effectiveProfile} users={users} onSelectUser={handleSimulationSelect} onExit={handleSimulationExit} /> : null;
 
   async function refreshRequests() {
     if (profile?.role !== "super_admin") return;
@@ -165,6 +170,10 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
   }
 
   useEffect(() => { void refreshSession(); }, []);
+
+  useEffect(() => {
+    if (simulatedUser && !users.some((user) => user.id === simulatedUser.id)) setSimulatedUser(null);
+  }, [simulatedUser, users]);
 
   async function handleSetup(event: FormEvent) {
     event.preventDefault();
@@ -244,12 +253,32 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
   async function handleLogout() {
     await signOutAdmin();
     setProfile(null);
+    setSimulatedUser(null);
     setUsers([]);
     setSuperiors([]);
     setCampaigns([]);
     setCampaignAssignments([]);
     setAssignmentRequests([]);
     setPendingRequests([]);
+  }
+
+  function handleSimulationSelect(user: UserRecord) {
+    if (profile?.role !== "super_admin") return;
+    setSelectedAgentProfile(null);
+    setEditDraft(null);
+    setCampaignDraft(null);
+    setProfileOpen(false);
+    setSimulatedUser(user.id === profile.id ? null : user);
+    setNotice({ kind: "success", message: user.id === profile.id ? "Compte superadmin restauré." : `Simulation active : ${user.full_name}.` });
+  }
+
+  function handleSimulationExit() {
+    setSelectedAgentProfile(null);
+    setEditDraft(null);
+    setCampaignDraft(null);
+    setProfileOpen(false);
+    setSimulatedUser(null);
+    setNotice({ kind: "success", message: "Vous êtes revenu au compte superadmin réel." });
   }
 
   function handleProfileSaved(updated: UserRecord) {
@@ -302,6 +331,7 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
   }
 
   async function handleCampaignRequestReview(request: CampaignAssignmentRequest, approve: boolean) {
+    if (isSimulation) { setNotice({ kind: "error", message: "La simulation est en lecture seule. Quittez-la pour traiter une demande." }); return; }
     setRequestActionId(request.id);
     try {
       await reviewCampaignAssignmentRequest(request.id, approve);
@@ -338,6 +368,7 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
 
   function beginEdit(user: UserRecord) {
     if (!canManage) return;
+    if (isSimulation) { setNotice({ kind: "error", message: "La simulation est en lecture seule. Quittez-la pour modifier les données." }); return; }
     setEditDraft({ id: user.id, full_name: user.full_name, phone: user.phone, role: user.role, user_category: user.user_category, supervisor_id: user.supervisor_id, permanent_shop_id: user.permanent_shop_id });
   }
 
@@ -348,6 +379,7 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
 
   function beginCampaignAssignment(user: UserRecord) {
     if (!canManageCampaigns || user.role !== "agent") return;
+    if (isSimulation) { setNotice({ kind: "error", message: "La simulation est en lecture seule. Quittez-la pour gérer les affectations." }); return; }
     setCampaignDraft(user);
     setCampaignSelection(campaignAssignments.filter((assignment) => assignment.user_id === user.id).map((assignment) => assignment.campaign_id));
   }
@@ -399,12 +431,12 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
     }
   }
 
-  if (profile && (profile.role === "agent" || profile.role === "supervisor")) {
-    return <section className="admin-dashboard glass-card role-dashboard"><div className="dashboard-header"><div className="dashboard-title"><div className="heading-icon"><ServerCog size={19} /></div><div><div className="eyebrow"><ShieldCheck size={13} /> Console sécurisée</div><h2>Tableau de bord</h2></div></div><div className="dashboard-actions"><span className="session-chip"><span className="session-dot" />{profile.full_name} · {ROLE_LABELS[profile.role]}</span><button className="icon-button" type="button" onClick={() => void handleLogout()} aria-label="Se déconnecter" title="Se déconnecter"><LogOut size={15} /></button></div></div>{notice && <div className={`dashboard-notice ${notice.kind}`}><span>{notice.kind === "success" ? <CheckCircle2 size={15} /> : <AlertCircle size={15} />}</span>{notice.message}<button type="button" onClick={() => setNotice(null)} aria-label="Fermer"><X size={14} /></button></div>}<RoleWorkspace profile={profile} users={users} superiors={superiors} campaigns={campaigns} assignments={campaignAssignments} assignmentRequests={assignmentRequests} onNotice={(next) => setNotice(next)} onProfileUpdated={handleProfileSaved} onProfileOpen={() => setProfileOpen(true)} onRequestReviewed={() => void refreshUsers(profile)} />{profileOpen && <ProfileModal profile={profile} onClose={() => setProfileOpen(false)} onSaved={handleProfileSaved} />}</section>;
+  if (effectiveProfile && (effectiveProfile.role === "agent" || effectiveProfile.role === "supervisor" || effectiveProfile.role === "sub_admin")) {
+    return <section className="admin-dashboard glass-card role-dashboard">{simulationControl}<div className="dashboard-header"><div className="dashboard-title"><div className="heading-icon"><ServerCog size={19} /></div><div><div className="eyebrow"><ShieldCheck size={13} /> Console sécurisée</div><h2>Tableau de bord</h2></div></div><div className="dashboard-actions"><span className="session-chip"><span className="session-dot" />{effectiveProfile.full_name} · {ROLE_LABELS[effectiveProfile.role]}</span><button className="icon-button" type="button" onClick={() => void handleLogout()} aria-label="Se déconnecter" title="Se déconnecter"><LogOut size={15} /></button></div></div>{notice && <div className={`dashboard-notice ${notice.kind}`}><span>{notice.kind === "success" ? <CheckCircle2 size={15} /> : <AlertCircle size={15} />}</span>{notice.message}<button type="button" onClick={() => setNotice(null)} aria-label="Fermer"><X size={14} /></button></div>}<RoleWorkspace profile={effectiveProfile} users={users} superiors={superiors} campaigns={campaigns} assignments={campaignAssignments} assignmentRequests={assignmentRequests} onNotice={(next) => setNotice(next)} onProfileUpdated={handleProfileSaved} onProfileOpen={() => isSimulation ? setNotice({ kind: "error", message: "Le profil est indisponible pendant une simulation." }) : setProfileOpen(true)} onRequestReviewed={() => void refreshUsers(profile)} simulation={isSimulation} />{profileOpen && !isSimulation && profile && <ProfileModal profile={profile} onClose={() => setProfileOpen(false)} onSaved={handleProfileSaved} />}</section>;
   }
 
-  return <section className="admin-dashboard glass-card">
-    <div className="dashboard-header"><div className="dashboard-title"><div className="heading-icon"><ServerCog size={19} /></div><div><div className="eyebrow"><ShieldCheck size={13} /> Console sécurisée</div><h2>Tableau de bord administrateur</h2></div></div><div className="dashboard-actions">{profile && <span className="session-chip"><span className="session-dot" />{profile.full_name} · {profile.role === "super_admin" ? "Super-administrateur" : ROLE_LABELS[profile.role]}</span>}{profile && <button className="icon-button" type="button" onClick={() => setProfileOpen(true)} aria-label="Ouvrir mon profil" title="Mon profil"><UserCircle2 size={15} /></button>}{profile && <button className="icon-button" type="button" onClick={() => void handleLogout()} aria-label="Se déconnecter" title="Se déconnecter"><LogOut size={15} /></button>}{profile?.role === "super_admin" && <button className="icon-button primary-icon" type="button" onClick={onRequestCreate} aria-label="Nouvel utilisateur" title="Nouvel utilisateur"><UserPlus size={16} /></button>}{configured && profile?.role === "super_admin" && <button className="icon-button" type="button" onClick={() => setShowConfig(true)} aria-label="Configurer la base de données" title="Configurer la base de données"><Database size={16} /></button>}</div></div>
+  return <section className="admin-dashboard glass-card">{simulationControl}
+    <div className="dashboard-header"><div className="dashboard-title"><div className="heading-icon"><ServerCog size={19} /></div><div><div className="eyebrow"><ShieldCheck size={13} /> Console sécurisée</div><h2>Tableau de bord administrateur</h2></div></div><div className="dashboard-actions">{effectiveProfile && <span className="session-chip"><span className="session-dot" />{effectiveProfile.full_name} · {effectiveProfile.role === "super_admin" ? "Super-administrateur" : ROLE_LABELS[effectiveProfile.role]}</span>}{profile && <button className="icon-button" type="button" onClick={() => isSimulation ? setNotice({ kind: "error", message: "Le profil est indisponible pendant une simulation." }) : setProfileOpen(true)} aria-label="Ouvrir mon profil" title="Mon profil"><UserCircle2 size={15} /></button>}{profile && <button className="icon-button" type="button" onClick={() => void handleLogout()} aria-label="Se déconnecter" title="Se déconnecter"><LogOut size={15} /></button>}{profile?.role === "super_admin" && !isSimulation && <button className="icon-button primary-icon" type="button" onClick={onRequestCreate} aria-label="Nouvel utilisateur" title="Nouvel utilisateur"><UserPlus size={16} /></button>}{configured && profile?.role === "super_admin" && !isSimulation && <button className="icon-button" type="button" onClick={() => setShowConfig(true)} aria-label="Configurer la base de données" title="Configurer la base de données"><Database size={16} /></button>}</div></div>
     {notice && <div className={`dashboard-notice ${notice.kind}`}><span>{notice.kind === "success" ? <CheckCircle2 size={15} /> : <AlertCircle size={15} />}</span>{notice.message}<button type="button" onClick={() => setNotice(null)} aria-label="Fermer"><X size={14} /></button></div>}
     {!configured && !showConfig && <div className="dashboard-empty"><ServerCog size={27} /><strong>Connectez votre projet Supabase</strong><button className="button primary compact" type="button" onClick={() => setShowConfig(true)}><Database size={14} /> Configurer</button></div>}
     {configured && !isAuthenticated && !showConfig && <>
@@ -412,7 +444,7 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
       {loginMode === "signin" ? <form className="admin-login" onSubmit={handleLogin}><div className="login-icon"><LogIn size={19} /></div><div className="login-copy"><strong>Connexion par MSISDN</strong><span>Les données réelles sont verrouillées jusqu’à l’identification.</span></div><input value={phone} onChange={(event) => setPhone(event.target.value)} type="tel" placeholder="081 234 5678" aria-label="MSISDN de connexion" inputMode="tel" required /><input value={password} onChange={(event) => setPassword(event.target.value)} type="password" placeholder="Mot de passe" aria-label="Mot de passe" required /><button className="button primary compact" type="submit" disabled={loading}>{loading ? <LoaderCircle className="spin" size={14} /> : <LogIn size={14} />} Se connecter</button></form> : <form className="signup-card" onSubmit={handleSignup}>{signupSuccess ? <div className="signup-success"><div className="success-icon"><Clock3 size={20} /></div><div><strong>Demande en attente de validation</strong><span>Un super_admin doit approuver votre compte avant qu’il n’apparaisse dans les listes d’agents.</span></div><button type="button" className="button secondary compact" onClick={() => { setSignupSuccess(false); setLoginMode("signin"); }}>Retour à la connexion</button></div> : <><div className="signup-heading"><div className="login-icon"><UserRoundPlus size={19} /></div><div><strong>Créer un accès agent</strong><span>Votre compte sera visible uniquement après approbation.</span></div></div><div className="signup-fields"><label>Nom complet<input value={signup.fullName} onChange={(event) => setSignup((current) => ({ ...current, fullName: event.target.value }))} placeholder="Ex. Grâce Mbuyi" autoComplete="name" required /></label><label>MSISDN<input value={signup.phone} onChange={(event) => setSignup((current) => ({ ...current, phone: event.target.value }))} placeholder="081 234 5678" type="tel" inputMode="tel" autoComplete="tel" required /></label><label className="password-toggle signup-password-toggle"><input type="checkbox" checked={signup.useDefaultPassword} onChange={(event) => setSignup((current) => ({ ...current, useDefaultPassword: event.target.checked, password: "", confirmPassword: "" }))} /><span className="toggle-visual"><CheckCircle2 size={12} /></span><span><strong>Utiliser le mot de passe par défaut</strong><small>Agent : <code>password</code></small></span></label>{!signup.useDefaultPassword && <><label>Mot de passe<input value={signup.password} onChange={(event) => setSignup((current) => ({ ...current, password: event.target.value }))} placeholder="Au moins 6 caractères" type="password" autoComplete="new-password" required /></label><label>Confirmer le mot de passe<input value={signup.confirmPassword} onChange={(event) => setSignup((current) => ({ ...current, confirmPassword: event.target.value }))} placeholder="Répétez le mot de passe" type="password" autoComplete="new-password" required /></label></>}<div className="signup-category"><span>Catégorie agent</span><CustomSelect value={signup.category} onChange={(value) => setSignup((current) => ({ ...current, category: value as UserCategory }))} ariaLabel="Catégorie agent" placeholder="Catégorie" options={CATEGORY_OPTIONS.map((category) => ({ value: category, label: categoryShortLabel(category) }))} /></div></div><button className="button primary signup-submit" type="submit" disabled={loading}>{loading ? <LoaderCircle className="spin" size={14} /> : <UserCheck size={14} />} Envoyer la demande</button></>}</form>}
     </>}
     {configured && isAuthenticated && <>{isReadOnly && <div className="readonly-banner"><ShieldCheck size={15} /><span><strong>Lecture seule</strong> · {ROLE_LABELS[profile!.role]}</span></div>}
-      {profile?.role === "super_admin" && <section className="pending-panel"><div className="pending-heading"><div><div className="card-kicker"><Clock3 size={14} /> Validation requise</div><h3>Demandes d’inscription</h3><p>Les agents restent absents des listes tant qu’ils ne sont pas approuvés.</p></div><span className="pending-count">{pendingRequests.length}</span><button type="button" className="icon-button" onClick={() => void refreshRequests()} disabled={loadingRequests} aria-label="Actualiser les demandes" title="Actualiser les demandes">{loadingRequests ? <LoaderCircle className="spin" size={14} /> : <RefreshCw size={14} />}</button></div>{pendingRequests.length ? <div className="pending-list">{pendingRequests.map((request) => <div className="pending-item" key={request.id}><div className="avatar small">{request.full_name.slice(0, 1).toUpperCase()}</div><div className="pending-identity"><strong>{request.full_name}</strong><CopyablePhone value={request.phone} /> <small>{categoryShortLabel(request.user_category)} · {new Date(request.created_at).toLocaleDateString("fr-FR")}</small></div><span className="role-badge">En attente</span><div className="pending-actions"><button type="button" className="icon-action approve" onClick={() => void handleApprove(request)} disabled={requestActionId === request.id} aria-label={`Approuver ${request.full_name}`} title="Approuver">{requestActionId === request.id ? <LoaderCircle className="spin" size={14} /> : <CheckCircle2 size={14} />}</button><button type="button" className="icon-action delete" onClick={() => void handleReject(request)} disabled={requestActionId === request.id} aria-label={`Rejeter ${request.full_name}`} title="Rejeter"><XCircle size={14} /></button></div></div>)}</div> : <div className="pending-empty"><CheckCircle2 size={16} /> Aucune demande en attente.</div>}</section>}
+      {profile?.role === "super_admin" && !isSimulation && <section className="pending-panel"><div className="pending-heading"><div><div className="card-kicker"><Clock3 size={14} /> Validation requise</div><h3>Demandes d’inscription</h3><p>Les agents restent absents des listes tant qu’ils ne sont pas approuvés.</p></div><span className="pending-count">{pendingRequests.length}</span><button type="button" className="icon-button" onClick={() => void refreshRequests()} disabled={loadingRequests} aria-label="Actualiser les demandes" title="Actualiser les demandes">{loadingRequests ? <LoaderCircle className="spin" size={14} /> : <RefreshCw size={14} />}</button></div>{pendingRequests.length ? <div className="pending-list">{pendingRequests.map((request) => <div className="pending-item" key={request.id}><div className="avatar small">{request.full_name.slice(0, 1).toUpperCase()}</div><div className="pending-identity"><strong>{request.full_name}</strong><CopyablePhone value={request.phone} /> <small>{categoryShortLabel(request.user_category)} · {new Date(request.created_at).toLocaleDateString("fr-FR")}</small></div><span className="role-badge">En attente</span><div className="pending-actions"><button type="button" className="icon-action approve" onClick={() => void handleApprove(request)} disabled={requestActionId === request.id} aria-label={`Approuver ${request.full_name}`} title="Approuver">{requestActionId === request.id ? <LoaderCircle className="spin" size={14} /> : <CheckCircle2 size={14} />}</button><button type="button" className="icon-action delete" onClick={() => void handleReject(request)} disabled={requestActionId === request.id} aria-label={`Rejeter ${request.full_name}`} title="Rejeter"><XCircle size={14} /></button></div></div>)}</div> : <div className="pending-empty"><CheckCircle2 size={16} /> Aucune demande en attente.</div>}</section>}
       {canManageCampaigns && assignmentRequests.length > 0 && <section className="pending-panel campaign-request-panel"><div className="pending-heading"><div><div className="card-kicker"><BriefcaseBusiness size={14} /> Affectations à valider</div><h3>Demandes de campagne</h3><p>Les agents ont demandé à rejoindre une campagne.</p></div><span className="pending-count">{assignmentRequests.length}</span></div><div className="pending-list">{assignmentRequests.map((request) => { const agent = users.find((user) => user.id === request.user_id); const campaign = campaigns.find((item) => item.id === request.campaign_id); if (!agent || !campaign) return null; return <div className="pending-item" key={request.id}><div className="avatar small">{agent.full_name.slice(0, 1).toUpperCase()}</div><div className="pending-identity"><strong>{agent.full_name}</strong><small>{campaign.name} · {new Date(request.requested_at).toLocaleDateString("fr-FR")}</small></div><div className="pending-actions"><button type="button" className="icon-action approve" onClick={() => void handleCampaignRequestReview(request, true)} disabled={requestActionId === request.id} aria-label="Approuver"><CheckCircle2 size={14} /></button><button type="button" className="icon-action delete" onClick={() => void handleCampaignRequestReview(request, false)} disabled={requestActionId === request.id} aria-label="Rejeter"><XCircle size={14} /></button></div></div>; })}</div></section>}
       <div className="dashboard-toolbar"><div className="history-search"><Search size={16} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Rechercher un MSISDN ou un nom…" aria-label="Rechercher dans l’historique" /></div><div className="filter-control"><Filter size={14} /><CustomSelect value={roleFilter} onChange={setRoleFilter} ariaLabel="Filtrer par rôle" placeholder="Tous les rôles" options={[{ value: "all", label: "Tous les rôles" }, ...ROLE_OPTIONS.map((role) => ({ value: role, label: ROLE_LABELS[role] }))]} /></div><div className="filter-control"><CustomSelect value={categoryFilter} onChange={setCategoryFilter} ariaLabel="Filtrer par catégorie" placeholder="Toutes les catégories" options={[{ value: "all", label: "Toutes les catégories" }, ...CATEGORY_OPTIONS.map((category) => ({ value: category, label: categoryShortLabel(category) }))]} /></div><button className="icon-button" type="button" onClick={() => void refreshUsers()} disabled={loading} aria-label="Actualiser" title="Actualiser">{loading ? <LoaderCircle className="spin" size={15} /> : <RefreshCw size={15} />}</button><button className="icon-button primary-icon" type="button" onClick={exportCsv} disabled={!filteredUsers.length} aria-label="Exporter CSV" title="Exporter CSV"><Download size={15} /></button></div>
       <div className="dashboard-stats"><span><strong>{filteredUsers.length}</strong> résultat{filteredUsers.length > 1 ? "s" : ""}</span><span><strong>{users.length}</strong> utilisateur{users.length > 1 ? "s" : ""}</span><span className="secure-label"><ShieldCheck size={13} /> Sans password_hash</span></div>
