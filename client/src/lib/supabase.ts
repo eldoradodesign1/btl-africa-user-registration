@@ -339,7 +339,7 @@ export async function rejectRegistrationRequest(requestId: string, note = "Deman
 
 function assertCampaignManager(): UserRecord {
   if (!activeProfile) throw new Error("Connexion requise avant de gérer les campagnes.");
-  if (!["admin", "super_admin", "supervisor"].includes(activeProfile.role)) throw new Error("Seuls les administrateurs et superviseurs peuvent affecter une campagne.");
+  if (!["admin", "super_admin", "sub_admin", "supervisor"].includes(activeProfile.role)) throw new Error("Seuls les administrateurs, la coordination et les superviseurs peuvent affecter une campagne.");
   return activeProfile;
 }
 

@@ -131,7 +131,7 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
   async function refreshUsers(currentProfile: UserRecord | null = profile) {
     setLoading(true);
     try {
-      const [nextUsers, nextSuperiors, nextCampaigns, nextAssignments, nextRequests] = await Promise.all([loadUsers(), loadSupervisors(), loadCampaigns(), loadCampaignAssignments(), currentProfile && ["admin", "super_admin", "supervisor"].includes(currentProfile.role) ? loadCampaignAssignmentRequests() : Promise.resolve([])]);
+      const [nextUsers, nextSuperiors, nextCampaigns, nextAssignments, nextRequests] = await Promise.all([loadUsers(), loadSupervisors(), loadCampaigns(), loadCampaignAssignments(), currentProfile && ["admin", "super_admin", "sub_admin", "supervisor"].includes(currentProfile.role) ? loadCampaignAssignmentRequests() : Promise.resolve([])]);
       setUsers(nextUsers);
       setSuperiors(nextSuperiors);
       setCampaigns(nextCampaigns);

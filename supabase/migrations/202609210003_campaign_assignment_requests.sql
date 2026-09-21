@@ -104,10 +104,13 @@ language plpgsql
 security definer
 set search_path = public
 as $function$
+declare
+  manager_role text;
 begin
+  select u.role into manager_role from public.users u where u.id = p_manager_id;
   if not exists (
     select 1 from public.users u
-    where u.id = p_manager_id and u.role in ('admin', 'super_admin', 'supervisor')
+    where u.id = p_manager_id and u.role in ('admin', 'super_admin', 'sub_admin', 'supervisor')
   ) then
     raise exception 'campaign_manager_required' using errcode = '42501';
   end if;
@@ -116,6 +119,15 @@ begin
     select r.id, r.user_id, r.campaign_id, r.status, r.requested_at, r.reviewed_at, r.reviewed_by, r.review_note
     from public.campaign_assignment_requests r
     where r.status = 'pending'
+      and (
+        manager_role in ('admin', 'super_admin', 'sub_admin')
+        or exists (
+          select 1
+          from public.users agent
+          where agent.id = r.user_id
+            and agent.supervisor_id = p_manager_id
+        )
+      )
     order by r.requested_at asc;
 end;
 $function$;
@@ -139,7 +151,7 @@ declare
   expected_campaign_type text;
 begin
   select u.role into manager_role from public.users u where u.id = p_manager_id;
-  if manager_role not in ('admin', 'super_admin', 'supervisor') then
+  if manager_role not in ('admin', 'super_admin', 'sub_admin', 'supervisor') then
     raise exception 'campaign_manager_required' using errcode = '42501';
   end if;
 
