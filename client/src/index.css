@@ -609,3 +609,4 @@ html { scrollbar-width: thin; scrollbar-color: rgba(158,233,232,.35) rgba(3,11,1
 .calendar-summary b { color: #dbeceb; font-weight: 500; }
 @media (max-width: 560px) { .calendar-day { min-height: 34px; } .calendar-day small { display: none; } .calendar-heading { align-items: flex-start; flex-direction: column; } .calendar-nav { align-self: stretch; justify-content: space-between; } .calendar-nav strong { flex: 1; } }
 .icon-action.profile-action:hover { border-color: rgba(211,181,255,.52); color: #d3b5ff; background: rgba(211,181,255,.10); }
+.modal-header-actions { display: flex; align-items: center; gap: 7px; }
