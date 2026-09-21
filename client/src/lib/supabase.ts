@@ -17,6 +17,23 @@ export type UserRecord = {
 };
 
 export type UserInsert = Omit<UserRecord, "password_hash"> & { password_hash: string };
+export type CampaignRecord = {
+  id: string;
+  code: string;
+  name: string;
+  campaign_type: string;
+  status: string;
+  starts_on: string | null;
+  ends_on: string | null;
+};
+export type CampaignAssignment = {
+  id: string;
+  user_id: string;
+  campaign_id: string;
+  is_active: boolean;
+  assigned_at: string;
+  assigned_by: string | null;
+};
 export type RegistrationRequest = {
   id: string;
   full_name: string;
@@ -92,6 +109,8 @@ const demoUsers: UserRecord[] = [
 ];
 let demoUsersCache = [...demoUsers];
 const safeUserColumns = "id, full_name, phone, role, user_category, supervisor_id, permanent_shop_id";
+const safeCampaignColumns = "id, code, name, campaign_type, status, starts_on, ends_on";
+const safeAssignmentColumns = "id, user_id, campaign_id, is_active, assigned_at, assigned_by";
 
 export function getDemoUsers(): UserRecord[] { return [...demoUsersCache]; }
 
@@ -138,6 +157,20 @@ export async function loadUsers(): Promise<UserRecord[]> {
   const { data, error } = await supabaseClient.from("users").select(safeUserColumns).order("full_name");
   if (error) throw error;
   return (data || []).map((user) => ({ ...user, password_hash: null })) as UserRecord[];
+}
+
+export async function loadCampaigns(): Promise<CampaignRecord[]> {
+  if (!supabaseClient) return [];
+  const { data, error } = await supabaseClient.from("campaigns").select(safeCampaignColumns).order("name");
+  if (error) throw error;
+  return (data || []) as CampaignRecord[];
+}
+
+export async function loadCampaignAssignments(): Promise<CampaignAssignment[]> {
+  if (!supabaseClient) return [];
+  const { data, error } = await supabaseClient.from("user_campaign_assignments").select(safeAssignmentColumns).eq("is_active", true);
+  if (error) throw error;
+  return (data || []) as CampaignAssignment[];
 }
 
 export async function loadSupervisors(): Promise<UserRecord[]> {
@@ -209,6 +242,20 @@ export async function rejectRegistrationRequest(requestId: string, note = "Deman
   if (!supabaseClient) throw new Error("Configurez Supabase avant de rejeter une demande.");
   const { error } = await supabaseClient.rpc("reject_registration_request", { p_request_id: requestId, p_reviewer_id: reviewer.id, p_review_note: note });
   if (error) throw error;
+}
+
+function assertCampaignManager(): UserRecord {
+  if (!activeProfile) throw new Error("Connexion requise avant de gérer les campagnes.");
+  if (!["admin", "super_admin", "supervisor"].includes(activeProfile.role)) throw new Error("Seuls les administrateurs et superviseurs peuvent affecter une campagne.");
+  return activeProfile;
+}
+
+export async function setUserCampaignAssignments(userId: string, campaignIds: string[]): Promise<CampaignAssignment[]> {
+  const manager = assertCampaignManager();
+  if (!supabaseClient) throw new Error("Configurez Supabase avant de gérer les campagnes.");
+  const { data, error } = await supabaseClient.rpc("set_user_campaign_assignments", { p_user_id: userId, p_campaign_ids: campaignIds, p_manager_id: manager.id });
+  if (error) throw error;
+  return (data || []) as CampaignAssignment[];
 }
 
 function assertManagePermission(): void {

@@ -3,9 +3,9 @@ import type { UserCategory, UserInsert, UserRole } from "./supabase";
 export const ROLE_LABELS: Record<UserRole, string> = {
   agent: "Agent",
   supervisor: "Superviseur",
-  sub_admin: "Sous-administrateur",
+  sub_admin: "Coordination",
   admin: "Administrateur",
-  super_admin: "support-it",
+  super_admin: "Support IT",
 };
 
 export const CATEGORY_LABELS: Record<UserCategory, string> = {
