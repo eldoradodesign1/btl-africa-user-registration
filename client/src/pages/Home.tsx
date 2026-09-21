@@ -49,6 +49,12 @@ import { CopyablePhone } from "@/components/CopyablePhone";
 type PhoneState = "idle" | "checking" | "valid" | "invalid" | "duplicate" | "error";
 type ToastState = { kind: "success" | "error" | "info"; title: string; message: string; action?: () => void } | null;
 
+function creationErrorMessage(error: unknown): string {
+  const candidate = error as { message?: string; details?: string; hint?: string; code?: string } | null;
+  const detail = [candidate?.message, candidate?.details, candidate?.hint].filter(Boolean).join(" · ");
+  return detail ? `${detail}${candidate?.code ? ` · code ${candidate.code}` : ""}` : "Le serveur n’a pas confirmé la création. Vérifiez que la migration de création superadmin a été exécutée.";
+}
+
 type FormState = {
   fullName: string;
   phone: string;
@@ -320,7 +326,7 @@ function Home({ onUserCreated, onNavigateDashboard }: { onUserCreated?: (user: U
         setPhoneState("duplicate");
         setToast({ kind: "error", title: "Numéro déjà utilisé", message: "Une autre création vient d’utiliser ce MSISDN. Aucun utilisateur n’a été écrasé." });
       } else {
-        setToast({ kind: "error", title: "Création impossible", message: "Le serveur n’a pas confirmé la création. Vérifiez votre connexion puis réessayez.", action: () => void handleSubmit() });
+        setToast({ kind: "error", title: "Création impossible", message: creationErrorMessage(error), action: () => void handleSubmit() });
       }
     } finally {
       setSubmitting(false);

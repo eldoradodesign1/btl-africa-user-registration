@@ -700,3 +700,29 @@ html { scrollbar-width: thin; scrollbar-color: rgba(158,233,232,.35) rgba(3,11,1
 .button.primary:hover:not(:disabled) { filter: brightness(1.12); transform: translateY(-1px); }
 @media (prefers-reduced-motion: reduce) { .app-shell::after { animation: none; } *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; } }
 @media (max-width: 600px) { .user-detail-meta { grid-template-columns: 1fr; } .superior-open { display: none; } }
+
+/* User list/card view switch */
+.view-toggle { display: inline-flex; align-items: center; gap: 3px; height: 39px; padding: 3px; border: 1px solid rgba(188,220,228,.14); border-radius: 9px; background: rgba(3,11,14,.3); }
+.view-toggle button { width: 31px; height: 31px; display: grid; place-items: center; border: 0; border-radius: 6px; color: var(--muted-2); background: transparent; transition: color .18s ease, background .18s ease, transform .16s var(--ease-out); }
+.view-toggle button:hover { color: var(--cyan); background: rgba(91,208,209,.08); transform: translateY(-1px); }
+.view-toggle button.is-active { color: #071015; background: var(--cyan); box-shadow: 0 3px 10px rgba(91,208,209,.18); }
+.users-card-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; height: clamp(300px, 56vh, 590px); overflow-y: auto; padding: 2px 4px 8px 2px; overscroll-behavior: contain; }
+.user-card { min-width: 0; display: flex; flex-direction: column; gap: 12px; padding: 14px; border: 1px solid rgba(188,220,228,.12); border-radius: 13px; background: linear-gradient(145deg, rgba(10, 38, 57, .62), rgba(3, 16, 26, .46)); box-shadow: inset 0 1px 0 rgba(255,255,255,.04); transition: transform .22s var(--ease-out), border-color .22s ease, box-shadow .22s ease, background .22s ease; }
+.user-card.is-clickable { cursor: pointer; }
+.user-card:hover { transform: translateY(-3px); border-color: rgba(61, 183, 236, .38); background: linear-gradient(145deg, rgba(13, 52, 76, .72), rgba(3, 20, 32, .54)); box-shadow: 0 14px 30px rgba(0, 57, 111, .20), inset 0 1px 0 rgba(255,255,255,.07); }
+.user-card-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.user-card-header .table-user { min-width: 0; flex: 1; }
+.user-card-header .role-badge { flex: none; max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.user-card-contact { display: flex; align-items: center; justify-content: space-between; gap: 7px; padding: 8px 0 10px; border-top: 1px solid rgba(188,220,228,.08); border-bottom: 1px solid rgba(188,220,228,.08); }
+.user-card-contact .copyable-phone { color: #67d8f7; font-size: 9px; }
+.user-card-contact > span:last-child { overflow: hidden; color: var(--muted-2); font-size: 8px; text-align: right; text-overflow: ellipsis; white-space: nowrap; }
+.user-card-details { display: grid; gap: 9px; min-height: 92px; }
+.user-card-details > div { min-width: 0; }
+.user-card-details small { display: block; margin-bottom: 5px; color: var(--muted-2); font-family: "DM Mono", monospace; font-size: 7px; letter-spacing: .06em; text-transform: uppercase; }
+.user-card-details strong { display: block; overflow: hidden; color: #cfe2e7; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.user-card-details .campaign-pills { max-width: none; }
+.user-card-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: auto; padding-top: 9px; border-top: 1px solid rgba(188,220,228,.08); }
+.user-card-hint { color: var(--muted-2); font-family: "DM Mono", monospace; font-size: 7px; text-transform: uppercase; }
+.user-card-actions .row-actions { margin-left: auto; }
+@media (max-width: 1120px) { .users-card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 760px) { .users-card-grid { grid-template-columns: 1fr; height: auto; max-height: 56vh; } .view-toggle { margin-left: auto; } }

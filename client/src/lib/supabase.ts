@@ -290,9 +290,21 @@ export async function insertUser(payload: UserInsert): Promise<UserRecord> {
   }
   if (!activeProfile) throw new Error("Connexion administrateur requise avant la création.");
   if (activeProfile.role !== "super_admin") throw new Error("Seul un super_admin peut créer un utilisateur.");
-  const { data, error } = await supabaseClient.from("users").insert(payload).select(safeUserColumns).single();
+  const { data, error } = await supabaseClient.rpc("create_user_by_super_admin", {
+    p_id: payload.id,
+    p_creator_id: activeProfile.id,
+    p_full_name: payload.full_name,
+    p_phone: payload.phone,
+    p_password: payload.password_hash,
+    p_role: payload.role,
+    p_user_category: payload.user_category,
+    p_supervisor_id: payload.supervisor_id,
+    p_permanent_shop_id: payload.permanent_shop_id,
+  });
   if (error) throw error;
-  return { ...data, password_hash: null } as UserRecord;
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row) throw new Error("La RPC n’a pas confirmé la création de l’utilisateur.");
+  return { ...row, password_hash: null } as UserRecord;
 }
 
 export async function createRegistrationRequest(input: { fullName: string; phone: string; password: string; category: UserCategory }): Promise<RegistrationRequest> {
