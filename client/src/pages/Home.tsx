@@ -42,7 +42,9 @@ import {
   insertUser,
   isSupabaseConfigured,
   isUniquePhoneError,
+  loadShops,
   loadSupervisors,
+  type ShopRecord,
   type UserCategory,
   type UserRecord,
   type UserRole,
@@ -90,13 +92,6 @@ const INITIAL_FORM: FormState = {
   password: "",
   permanentShopId: "",
 };
-
-const SHOP_OPTIONS = [
-  { value: "", label: "Aucun shop" },
-  { value: "KIN-GOMBE-001", label: "Kinshasa · Gombe 001" },
-  { value: "KIN-LIMETE-002", label: "Kinshasa · Limete 002" },
-  { value: "LUB-MANIKA-001", label: "Lubumbashi · Manika 001" },
-];
 
 function CustomSelect<T extends string>({
   label,
@@ -161,6 +156,7 @@ function UserRoleBadge({ role }: { role: UserRole }) {
 function Home({ onUserCreated, onNavigateDashboard }: { onUserCreated?: (user: UserRecord) => void; onNavigateDashboard?: () => void }) {
   const [form, setForm] = useState<FormState>(INITIAL_FORM);
   const [supervisors, setSupervisors] = useState<UserRecord[]>([]);
+  const [shops, setShops] = useState<ShopRecord[]>([]);
   const [recentUsers, setRecentUsers] = useState<UserRecord[]>(() => isSupabaseConfigured() ? [] : getDemoUsers());
   const [phoneState, setPhoneState] = useState<PhoneState>("idle");
   const [existingUser, setExistingUser] = useState<UserRecord | null>(null);
@@ -181,14 +177,19 @@ function Home({ onUserCreated, onNavigateDashboard }: { onUserCreated?: (user: U
     () => supervisors.filter((user) => ["supervisor", "admin", "sub_admin", "super_admin"].includes(user.role)),
     [supervisors],
   );
+  const shopOptions = useMemo(
+    () => [{ value: "", label: "Aucun shop" }, ...shops.map((shop) => ({ value: shop.id, label: shop.name }))],
+    [shops],
+  );
 
   useEffect(() => {
     let active = true;
     setLoadingSupervisors(true);
-    loadSupervisors()
-      .then((users) => {
+    Promise.all([loadSupervisors(), loadShops().catch(() => [])])
+      .then(([users, loadedShops]) => {
         if (active) {
           setSupervisors(users);
+          setShops(loadedShops);
           setSupervisorError(false);
         }
       })
@@ -466,7 +467,7 @@ function Home({ onUserCreated, onNavigateDashboard }: { onUserCreated?: (user: U
                 <div className="shop-row">
                   <div className="shop-copy"><span className="mini-label">SHOP PERMANENT</span><strong>Point de rattachement</strong><span>« Aucun shop » sera enregistré comme <code>null</code>.</span></div>
                   <select value={form.permanentShopId} onChange={(event) => updateForm("permanentShopId", event.target.value)}>
-                    {SHOP_OPTIONS.map((shop) => <option value={shop.value} key={shop.value}>{shop.label}</option>)}
+                    {shopOptions.map((shop) => <option value={shop.value} key={shop.value}>{shop.label}</option>)}
                   </select>
                 </div>
               )}

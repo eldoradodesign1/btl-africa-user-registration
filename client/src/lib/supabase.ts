@@ -32,6 +32,12 @@ export type CampaignRecord = {
   starts_on: string | null;
   ends_on: string | null;
 };
+export type ShopRecord = {
+  id: string;
+  name: string;
+  city: string | null;
+  type: string | null;
+};
 export type CampaignAssignment = {
   id: string;
   user_id: string;
@@ -184,6 +190,7 @@ const demoUsers: UserRecord[] = [
 let demoUsersCache = [...demoUsers];
 const safeUserColumns = "id, full_name, phone, whatsapp_phone, whatsapp_same_as_phone, date_of_birth, address, role, user_category, supervisor_id, permanent_shop_id, avatar_url, profile_updated_at";
 const safeCampaignColumns = "id, code, name, campaign_type, status, starts_on, ends_on";
+const safeShopColumns = "id, name, city, type";
 const safeAssignmentColumns = "id, user_id, campaign_id, is_active, assigned_at, assigned_by";
 
 export function getDemoUsers(): UserRecord[] { return [...demoUsersCache]; }
@@ -274,6 +281,13 @@ export async function loadCampaigns(): Promise<CampaignRecord[]> {
   const { data, error } = await supabaseClient.from("campaigns").select(safeCampaignColumns).order("name");
   if (error) throw error;
   return (data || []) as CampaignRecord[];
+}
+
+export async function loadShops(): Promise<ShopRecord[]> {
+  if (!supabaseClient) return [];
+  const { data, error } = await supabaseClient.from("shops").select(safeShopColumns).order("name");
+  if (error) throw error;
+  return (data || []) as ShopRecord[];
 }
 
 export async function loadCampaignAssignments(): Promise<CampaignAssignment[]> {
