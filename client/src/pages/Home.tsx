@@ -38,7 +38,6 @@ import {
 import { formatPhoneForDisplay, isValidMsisdn, normalizePhone, phoneValidationMessage } from "@/lib/phone";
 import {
   findExistingUser,
-  getDemoUsers,
   insertUser,
   isSupabaseConfigured,
   isUniquePhoneError,
@@ -157,7 +156,7 @@ function Home({ onUserCreated, onNavigateDashboard }: { onUserCreated?: (user: U
   const [form, setForm] = useState<FormState>(INITIAL_FORM);
   const [supervisors, setSupervisors] = useState<UserRecord[]>([]);
   const [shops, setShops] = useState<ShopRecord[]>([]);
-  const [recentUsers, setRecentUsers] = useState<UserRecord[]>(() => isSupabaseConfigured() ? [] : getDemoUsers());
+  const [recentUsers, setRecentUsers] = useState<UserRecord[]>([]);
   const [phoneState, setPhoneState] = useState<PhoneState>("idle");
   const [existingUser, setExistingUser] = useState<UserRecord | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -375,7 +374,7 @@ function Home({ onUserCreated, onNavigateDashboard }: { onUserCreated?: (user: U
         <div className="topbar-actions">
         <div className={`environment-chip ${isSupabaseConfigured() ? "is-live" : "is-demo"}`}>
           <span className="environment-dot" />
-          {isSupabaseConfigured() ? "Connexion Supabase active" : "Mode démo actif"}
+              {isSupabaseConfigured() ? "Connexion Supabase active" : "Connexion Supabase requise"}
         </div>
         {onNavigateDashboard && <button type="button" className="nav-action" onClick={onNavigateDashboard}><ServerCog size={14} /> Dashboard</button>}
         </div>
@@ -545,7 +544,7 @@ function Home({ onUserCreated, onNavigateDashboard }: { onUserCreated?: (user: U
               <div className="activity-list">
                 {recentUsers.slice(0, 3).map((user) => <div className="activity-item" key={user.id}><div className="avatar small">{user.full_name.slice(0, 1).toUpperCase()}</div><div><strong>{user.full_name}</strong><CopyablePhone value={user.phone}>{user.phone}</CopyablePhone></div><UserRoleBadge role={user.role} /></div>)}
               </div>
-              <div className="activity-footer"><span><span className={`tiny-dot ${isSupabaseConfigured() ? "live" : ""}`} />{isSupabaseConfigured() ? "Synchronisé avec Supabase" : "Données simulées uniquement"}</span><CircleHelp size={14} /></div>
+              <div className="activity-footer"><span><span className={`tiny-dot ${isSupabaseConfigured() ? "live" : ""}`} />{isSupabaseConfigured() ? "Synchronisé avec Supabase" : "Aucune donnée locale"}</span><CircleHelp size={14} /></div>
             </section>
           </aside>
         </div>

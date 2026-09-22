@@ -66,7 +66,7 @@ Après connexion, un agent voit ses responsables, ses campagnes et un suivi comb
 
 **Ne renseignez jamais une clé `service_role` dans une variable `VITE_*` ou dans le frontend.** Si une opération d’administration exige des privilèges élevés, utilisez une RPC ou une Edge Function Supabase sécurisée, puis appelez-la depuis le frontend avec la clé publishable/anon et des politiques RLS adaptées.
 
-Sans ces variables, le formulaire affiche **Mode démo actif** avec un petit jeu de données en mémoire pour tester l’interface. Le dashboard, lui, masque ces données et demande d’abord une configuration Supabase réelle. Aucun mot de passe n’est stocké dans `localStorage` ou l’URL ; la connexion reste en mémoire jusqu’à la fermeture ou la déconnexion.
+Sans ces variables, l’application n’affiche aucune donnée utilisateur locale et demande une configuration Supabase réelle avant toute lecture ou écriture. Aucun utilisateur fictif n’est embarqué dans le code. Aucun mot de passe n’est stocké dans `localStorage` ou l’URL ; la connexion reste en mémoire jusqu’à la fermeture ou la déconnexion.
 
 ## Dashboard et historique MSISDN
 

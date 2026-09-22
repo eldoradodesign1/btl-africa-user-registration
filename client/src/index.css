@@ -963,3 +963,8 @@ html { scrollbar-width: thin; scrollbar-color: rgba(158,233,232,.35) rgba(3,11,1
   .user-gallery-info-head .role-badge { font-size: 7px; }
   .user-gallery-contact { padding: 7px 0; }
 }
+
+.agent-supervisor-label { display: inline-flex; flex-direction: column; min-width: 0; max-width: 180px; gap: 3px; padding-left: 9px; border-left: 1px solid rgba(188,220,228,.16); }
+.agent-supervisor-label small { color: #7899a5; font-family: "DM Mono", monospace; font-size: 7px; letter-spacing: .08em; text-transform: uppercase; }
+.agent-supervisor-label strong { overflow: hidden; color: #d6eef0; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 680px) { .agent-supervisor-label { max-width: 130px; } }

@@ -183,17 +183,10 @@ export async function testSupabaseConnection(url: string, publishableKey: string
   if (![200, 206, 403].includes(response.status)) throw new Error(`Connexion refusée (${response.status}).`);
 }
 
-const demoUsers: UserRecord[] = [
-  { id: "b7d7aef4-2e2b-4a7e-9f12-1d5ce8481b0a", full_name: "Patrick Kabeya", phone: "0812345678", whatsapp_phone: null, whatsapp_same_as_phone: true, date_of_birth: null, address: null, password_hash: null, role: "supervisor", user_category: null, supervisor_id: null, permanent_shop_id: null, avatar_url: null, profile_updated_at: null },
-  { id: "e6a5f5f0-3f88-4fd9-a3a5-11e8c18d8a5c", full_name: "Grâce Mbuyi", phone: "0998765432", whatsapp_phone: null, whatsapp_same_as_phone: true, date_of_birth: null, address: null, password_hash: null, role: "admin", user_category: null, supervisor_id: null, permanent_shop_id: null, avatar_url: null, profile_updated_at: null },
-];
-let demoUsersCache = [...demoUsers];
 const safeUserColumns = "id, full_name, phone, whatsapp_phone, whatsapp_same_as_phone, date_of_birth, address, role, user_category, supervisor_id, permanent_shop_id, avatar_url, profile_updated_at";
 const safeCampaignColumns = "id, code, name, campaign_type, status, starts_on, ends_on";
 const safeShopColumns = "id, name, city, type";
 const safeAssignmentColumns = "id, user_id, campaign_id, is_active, assigned_at, assigned_by";
-
-export function getDemoUsers(): UserRecord[] { return [...demoUsersCache]; }
 
 function phoneCandidates(phone: string): string[] {
   const normalized = normalizePhone(phone);
@@ -270,7 +263,7 @@ export async function signInAdmin(phone: string, password: string): Promise<Admi
 export async function signOutAdmin(): Promise<void> { activeProfile = null; localStorage.removeItem(profileKey); }
 
 export async function loadUsers(): Promise<UserRecord[]> {
-  if (!supabaseClient) return getDemoUsers();
+  if (!supabaseClient) return [];
   const { data, error } = await supabaseClient.from("users").select(safeUserColumns).order("full_name");
   if (error) throw error;
   return (data || []).map((user) => ({ ...user, password_hash: null })) as UserRecord[];
@@ -298,7 +291,7 @@ export async function loadCampaignAssignments(): Promise<CampaignAssignment[]> {
 }
 
 export async function loadSupervisors(): Promise<UserRecord[]> {
-  if (!supabaseClient) return demoUsersCache.filter((user) => ["supervisor", "admin", "sub_admin", "super_admin"].includes(user.role));
+  if (!supabaseClient) return [];
   const { data, error } = await supabaseClient.from("users").select(safeUserColumns).in("role", ["supervisor", "admin", "sub_admin", "super_admin"]).order("full_name");
   if (error) throw error;
   return (data || []).map((user) => ({ ...user, password_hash: null })) as UserRecord[];
@@ -409,7 +402,7 @@ export async function updateMyProfile(input: { fullName: string; phone: string; 
 }
 
 export async function findExistingUser(normalizedPhone: string): Promise<UserRecord | null> {
-  if (!supabaseClient) return demoUsersCache.find((user) => user.phone === normalizedPhone) || null;
+  if (!supabaseClient) return null;
   const { data, error } = await supabaseClient.from("users").select(safeUserColumns).eq("phone", normalizedPhone).maybeSingle();
   if (error) throw error;
   return data ? ({ ...data, password_hash: null } as UserRecord) : null;
@@ -417,11 +410,7 @@ export async function findExistingUser(normalizedPhone: string): Promise<UserRec
 
 export async function insertUser(payload: UserInsert): Promise<UserRecord> {
   if (!supabaseClient) {
-    const duplicate = demoUsersCache.find((user) => user.phone === payload.phone);
-    if (duplicate) { const error = new Error("duplicate key value violates unique constraint users_phone_key"); Object.assign(error, { code: "23505" }); throw error; }
-    const created: UserRecord = { ...payload, password_hash: null, avatar_url: payload.avatar_url || null, profile_updated_at: payload.profile_updated_at || null };
-    demoUsersCache = [created, ...demoUsersCache];
-    return created;
+    throw new Error("Configurez Supabase avant de créer un utilisateur.");
   }
   if (!activeProfile) throw new Error("Connexion administrateur requise avant la création.");
   if (activeProfile.role !== "super_admin") throw new Error("Seul un super_admin peut créer un utilisateur.");
