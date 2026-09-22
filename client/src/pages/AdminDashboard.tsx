@@ -193,11 +193,8 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
   const simulationControl = profile?.role === "super_admin" && effectiveProfile ? <SimulationBar masterUser={profile} effectiveUser={effectiveProfile} users={users} onSelectUser={handleSimulationSelect} onExit={handleSimulationExit} /> : null;
   const supervisorSelectOptions = useMemo(() => superiors.filter((user) => ["supervisor", "sub_admin", "admin", "super_admin"].includes(user.role)).sort((a, b) => a.full_name.localeCompare(b.full_name)).map((user) => ({ value: user.id, label: `${user.full_name} · ${ROLE_LABELS[user.role]}` })), [superiors]);
   const shopSelectOptions = useMemo(() => {
-    const known = shops.map((shop) => ({ value: shop.id, label: shop.name }));
-    const knownIds = new Set(known.map((shop) => shop.value));
-    const legacy = users.map((user) => user.permanent_shop_id).filter((shop): shop is string => Boolean(shop)).filter((shop) => !knownIds.has(shop)).map((shop) => ({ value: shop, label: `Shop non référencé · ${shop}` }));
-    return [...known, ...legacy].sort((a, b) => a.label.localeCompare(b.label));
-  }, [shops, users]);
+    return shops.map((shop) => ({ value: shop.id, label: shop.name })).sort((a, b) => a.label.localeCompare(b.label));
+  }, [shops]);
   const campaignFilterOptions = useMemo(() => campaigns.slice().sort((a, b) => a.name.localeCompare(b.name)).map((campaign) => ({ value: campaign.id, label: campaign.name })), [campaigns]);
 
   async function refreshRequests() {
