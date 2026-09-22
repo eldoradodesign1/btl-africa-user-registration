@@ -884,3 +884,14 @@ html { scrollbar-width: thin; scrollbar-color: rgba(158,233,232,.35) rgba(3,11,1
 @media (max-width: 1180px) { .users-card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 760px) { .users-card-grid { grid-template-columns: 1fr; height: auto; max-height: 58vh; } .user-gallery-card { height: 290px; } .user-gallery-overlay { left: 14px; right: 14px; bottom: 14px; } .user-gallery-overlay strong { font-size: 16px; } .user-gallery-info { padding: 14px 13px 12px; } }
 @media (prefers-reduced-motion: reduce) { .user-gallery-track, .user-gallery-photo .profile-avatar.large, .user-gallery-photo > .avatar:not(.small) { transition-duration: .01ms; } }
+
+/* Gallery slide-back affordances: keep the portrait available after reveal. */
+.user-gallery-card.is-revealed .user-gallery-track { transform: translateX(-38%); }
+.user-gallery-card.is-revealed .user-gallery-photo { cursor: zoom-in; }
+.user-gallery-card.is-revealed .user-gallery-overlay { opacity: 0; }
+.user-gallery-card.is-revealed .user-gallery-photo-hint { top: 50%; left: 7px; right: auto; opacity: 1; transform: translateY(-50%) rotate(-90deg); transform-origin: left center; color: #d9f8ff; background: rgba(3,17,28,.62); }
+.user-gallery-info-head-actions { display: flex; align-items: flex-start; gap: 6px; flex: none; }
+.user-gallery-back { display: inline-flex; align-items: center; gap: 2px; padding: 4px 5px 4px 3px; border: 1px solid rgba(158,233,232,.2); border-radius: 6px; color: #9ee9e8; background: rgba(91,208,209,.06); font-family: "DM Mono", monospace; font-size: 7px; text-transform: uppercase; transition: border-color .18s ease, background .18s ease, transform .18s var(--ease-out); }
+.user-gallery-back:hover, .user-gallery-back:focus-visible { border-color: rgba(158,233,232,.58); background: rgba(91,208,209,.14); transform: translateX(-2px); }
+@media (max-width: 760px) { .user-gallery-card.is-revealed .user-gallery-track { transform: translateX(-38%); } .user-gallery-info-head-actions { gap: 4px; } .user-gallery-back span { display: none; } }
+.user-gallery-card.is-revealed .user-gallery-track { transform: translateX(-34%); }
