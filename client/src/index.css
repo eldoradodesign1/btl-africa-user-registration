@@ -845,3 +845,42 @@ html { scrollbar-width: thin; scrollbar-color: rgba(158,233,232,.35) rgba(3,11,1
 .campaign-filter-control .custom-select { min-width: 155px; }
 .active-filter { display: inline-flex; align-items: center; gap: 5px; color: var(--cyan); }
 @media (max-width: 900px) { .campaign-filter-control { flex: 1; } .campaign-filter-control .custom-select { min-width: 0; } }
+
+/* Interactive portrait gallery: the card reveals its information panel on demand. */
+.users-card-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; height: clamp(320px, 58vh, 620px); padding: 3px 5px 10px 2px; }
+.user-gallery-card { min-width: 0; height: 318px; overflow: hidden; border: 1px solid rgba(188,220,228,.15); border-radius: 16px; background: #071a28; box-shadow: inset 0 1px 0 rgba(255,255,255,.06), 0 12px 26px rgba(0,35,70,.13); outline: none; transition: transform .22s var(--ease-out), border-color .22s ease, box-shadow .22s ease; }
+.user-gallery-card:hover, .user-gallery-card:focus-visible { transform: translateY(-3px); border-color: rgba(61,183,236,.52); box-shadow: 0 18px 36px rgba(0,57,111,.24), inset 0 1px 0 rgba(255,255,255,.08); }
+.user-gallery-card:focus-visible { box-shadow: 0 0 0 3px rgba(91,208,209,.18), 0 18px 36px rgba(0,57,111,.24); }
+.user-gallery-track { display: flex; width: 200%; height: 100%; transition: transform .32s var(--ease-in-out); will-change: transform; }
+.user-gallery-card.is-revealed .user-gallery-track { transform: translateX(-50%); }
+.user-gallery-photo, .user-gallery-info { width: 50%; min-width: 50%; height: 100%; }
+.user-gallery-photo { position: relative; display: block; overflow: hidden; padding: 0; border: 0; color: var(--text); background: radial-gradient(circle at 50% 25%, rgba(31,160,222,.48), rgba(4,23,37,.96) 73%); cursor: zoom-in; text-align: left; }
+.user-gallery-photo .profile-avatar.large, .user-gallery-photo > .avatar:not(.small) { width: 100%; height: 100%; min-height: 100%; display: block; border: 0; border-radius: 0; object-fit: cover; object-position: center; color: #f2fbff; font-size: clamp(56px, 8vw, 108px); transition: transform .45s var(--ease-out), filter .3s ease; }
+.user-gallery-card:hover .user-gallery-photo .profile-avatar.large, .user-gallery-card:hover .user-gallery-photo > .avatar:not(.small) { transform: scale(1.035); filter: brightness(1.08); }
+.user-gallery-photo-shade { position: absolute; z-index: 1; inset: 0; pointer-events: none; background: linear-gradient(180deg, rgba(0,9,16,.08) 16%, transparent 42%, rgba(0,8,14,.82) 100%); }
+.user-gallery-overlay { position: absolute; z-index: 2; left: 17px; right: 17px; bottom: 17px; display: grid; gap: 4px; pointer-events: none; }
+.user-gallery-overlay strong { overflow: hidden; color: #f5fcff; font-size: 18px; letter-spacing: -.035em; text-overflow: ellipsis; white-space: nowrap; text-shadow: 0 2px 15px rgba(0,0,0,.55); }
+.user-gallery-overlay small { color: #b9edf6; font-family: "DM Mono", monospace; font-size: 8px; letter-spacing: .08em; text-transform: uppercase; }
+.user-gallery-photo-hint { position: absolute; z-index: 2; top: 14px; right: 14px; padding: 5px 7px; border: 1px solid rgba(255,255,255,.2); border-radius: 999px; color: rgba(241,252,255,.78); background: rgba(3,17,28,.38); backdrop-filter: blur(8px); font-family: "DM Mono", monospace; font-size: 7px; letter-spacing: .06em; opacity: 0; transform: translateY(-4px); transition: opacity .2s ease, transform .2s var(--ease-out); text-transform: uppercase; }
+.user-gallery-card:hover .user-gallery-photo-hint, .user-gallery-card:focus-within .user-gallery-photo-hint { opacity: 1; transform: translateY(0); }
+.user-gallery-info { display: flex; flex-direction: column; gap: 12px; overflow-y: auto; padding: 17px 16px 14px; color: var(--text); background: linear-gradient(145deg, rgba(10,43,65,.96), rgba(4,20,32,.98)); cursor: pointer; }
+.user-gallery-info-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.user-gallery-info-head > div { min-width: 0; }
+.user-gallery-info-head strong, .user-gallery-info-head small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.user-gallery-info-head strong { color: #eefbfc; font-size: 15px; letter-spacing: -.03em; }
+.user-gallery-info-head small { margin-top: 5px; color: #85cbd9; font-family: "DM Mono", monospace; font-size: 8px; text-transform: uppercase; }
+.user-gallery-info-head .role-badge { flex: none; max-width: 96px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.user-gallery-contact { display: flex; align-items: center; justify-content: space-between; gap: 7px; padding: 10px 0; border-top: 1px solid rgba(188,220,228,.1); border-bottom: 1px solid rgba(188,220,228,.1); }
+.user-gallery-contact .copyable-phone { color: #6bdcf8; font-size: 9px; }
+.user-gallery-contact > span:last-child { color: var(--muted-2); font-size: 8px; }
+.user-gallery-facts { display: grid; gap: 11px; min-height: 0; overflow: hidden; }
+.user-gallery-facts > div { min-width: 0; }
+.user-gallery-facts small { display: block; margin-bottom: 5px; color: #7396a4; font-family: "DM Mono", monospace; font-size: 7px; letter-spacing: .08em; text-transform: uppercase; }
+.user-gallery-facts strong { display: block; overflow: hidden; color: #d0e8ed; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.user-gallery-facts .campaign-pills { max-width: none; }
+.user-gallery-footer { display: flex; align-items: flex-end; justify-content: space-between; gap: 8px; margin-top: auto; padding-top: 10px; border-top: 1px solid rgba(188,220,228,.1); }
+.user-gallery-footer > span { color: #7da5b2; font-family: "DM Mono", monospace; font-size: 7px; line-height: 1.35; text-transform: uppercase; }
+.user-gallery-footer .row-actions { flex: none; }
+@media (max-width: 1180px) { .users-card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 760px) { .users-card-grid { grid-template-columns: 1fr; height: auto; max-height: 58vh; } .user-gallery-card { height: 290px; } .user-gallery-overlay { left: 14px; right: 14px; bottom: 14px; } .user-gallery-overlay strong { font-size: 16px; } .user-gallery-info { padding: 14px 13px 12px; } }
+@media (prefers-reduced-motion: reduce) { .user-gallery-track, .user-gallery-photo .profile-avatar.large, .user-gallery-photo > .avatar:not(.small) { transition-duration: .01ms; } }
