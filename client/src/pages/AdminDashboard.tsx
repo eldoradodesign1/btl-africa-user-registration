@@ -17,6 +17,7 @@ import {
   isPendingRequestConflict,
   isSupabaseConfigured,
   loadCampaignAssignments,
+  loadCampaignClaims,
   loadCampaigns,
   loadCampaignAssignmentRequests,
   loadPendingRegistrationRequests,
@@ -31,6 +32,7 @@ import {
   updateUser,
   type CampaignAssignment,
   type CampaignAssignmentRequest,
+  type CampaignClaim,
   type CampaignRecord,
   type RegistrationRequest,
   type UserCategory,
@@ -142,6 +144,7 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
   const [campaigns, setCampaigns] = useState<CampaignRecord[]>([]);
   const [campaignAssignments, setCampaignAssignments] = useState<CampaignAssignment[]>([]);
   const [assignmentRequests, setAssignmentRequests] = useState<CampaignAssignmentRequest[]>([]);
+  const [campaignClaims, setCampaignClaims] = useState<CampaignClaim[]>([]);
   const [pendingRequests, setPendingRequests] = useState<RegistrationRequest[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingRequests, setLoadingRequests] = useState(false);
@@ -200,12 +203,13 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
   async function refreshUsers(currentProfile: UserRecord | null = profile) {
     setLoading(true);
     try {
-      const [nextUsers, nextSuperiors, nextCampaigns, nextAssignments, nextRequests] = await Promise.all([loadUsers(), loadSupervisors(), loadCampaigns(), loadCampaignAssignments(), currentProfile && ["admin", "super_admin", "sub_admin", "supervisor"].includes(currentProfile.role) ? loadCampaignAssignmentRequests() : Promise.resolve([])]);
+      const [nextUsers, nextSuperiors, nextCampaigns, nextAssignments, nextRequests, nextClaims] = await Promise.all([loadUsers(), loadSupervisors(), loadCampaigns(), loadCampaignAssignments(), currentProfile && ["admin", "super_admin", "sub_admin", "supervisor"].includes(currentProfile.role) ? loadCampaignAssignmentRequests() : Promise.resolve([]), currentProfile && ["admin", "super_admin", "sub_admin", "supervisor"].includes(currentProfile.role) ? loadCampaignClaims().catch(() => []) : Promise.resolve([])]);
       setUsers(nextUsers);
       setSuperiors(nextSuperiors);
       setCampaigns(nextCampaigns);
       setCampaignAssignments(nextAssignments);
       setAssignmentRequests(nextRequests as CampaignAssignmentRequest[]);
+      setCampaignClaims(nextClaims as CampaignClaim[]);
       setNotice(null);
     } catch (error) {
       setNotice({ kind: "error", message: readableSupabaseError(error, "Impossible de charger les utilisateurs, campagnes ou affectations. Vérifiez les politiques RLS.") });
@@ -560,7 +564,7 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
   }
 
   if (effectiveProfile && (effectiveProfile.role === "agent" || effectiveProfile.role === "supervisor" || effectiveProfile.role === "sub_admin")) {
-    return <section className="admin-dashboard glass-card role-dashboard">{simulationControl}<div className="dashboard-header"><div className="dashboard-title"><div className="heading-icon"><ServerCog size={19} /></div><div><div className="eyebrow"><ShieldCheck size={13} /> Console sécurisée</div><h2>Tableau de bord</h2></div></div><div className="dashboard-actions"><span className="session-chip"><span className="session-dot" />{effectiveProfile.full_name} · {ROLE_LABELS[effectiveProfile.role]}</span><button className="icon-button" type="button" onClick={() => void handleLogout()} aria-label="Se déconnecter" title="Se déconnecter"><LogOut size={15} /></button></div></div>{notice && <div className={`dashboard-notice ${notice.kind}`}><span>{notice.kind === "success" ? <CheckCircle2 size={15} /> : <AlertCircle size={15} />}</span>{notice.message}<button type="button" onClick={() => setNotice(null)} aria-label="Fermer"><X size={14} /></button></div>}<RoleWorkspace profile={effectiveProfile} users={users} superiors={superiors} campaigns={campaigns} assignments={campaignAssignments} assignmentRequests={assignmentRequests} onNotice={(next) => setNotice(next)} onProfileUpdated={handleProfileSaved} onProfileOpen={() => isSimulation ? setNotice({ kind: "error", message: "Le profil est indisponible pendant une simulation." }) : setProfileOpen(true)} onRequestReviewed={() => void refreshUsers(profile)} simulation={isSimulation} />{profileOpen && !isSimulation && profile && <ProfileModal profile={profile} onClose={() => setProfileOpen(false)} onSaved={handleProfileSaved} />}{profilePhotoPreviewOpen && effectiveProfile && <ProfilePhotoPreviewModal user={effectiveProfile} onClose={() => setProfilePhotoPreviewOpen(false)} />}</section>;
+    return <section className="admin-dashboard glass-card role-dashboard">{simulationControl}<div className="dashboard-header"><div className="dashboard-title"><div className="heading-icon"><ServerCog size={19} /></div><div><div className="eyebrow"><ShieldCheck size={13} /> Console sécurisée</div><h2>Tableau de bord</h2></div></div><div className="dashboard-actions"><span className="session-chip"><span className="session-dot" />{effectiveProfile.full_name} · {ROLE_LABELS[effectiveProfile.role]}</span><button className="icon-button" type="button" onClick={() => void handleLogout()} aria-label="Se déconnecter" title="Se déconnecter"><LogOut size={15} /></button></div></div>{notice && <div className={`dashboard-notice ${notice.kind}`}><span>{notice.kind === "success" ? <CheckCircle2 size={15} /> : <AlertCircle size={15} />}</span>{notice.message}<button type="button" onClick={() => setNotice(null)} aria-label="Fermer"><X size={14} /></button></div>}<RoleWorkspace profile={effectiveProfile} users={users} superiors={superiors} campaigns={campaigns} assignments={campaignAssignments} assignmentRequests={assignmentRequests} campaignClaims={campaignClaims} onNotice={(next) => setNotice(next)} onProfileUpdated={handleProfileSaved} onProfileOpen={() => isSimulation ? setNotice({ kind: "error", message: "Le profil est indisponible pendant une simulation." }) : setProfileOpen(true)} onRequestReviewed={() => void refreshUsers(profile)} simulation={isSimulation} />{profileOpen && !isSimulation && profile && <ProfileModal profile={profile} onClose={() => setProfileOpen(false)} onSaved={handleProfileSaved} />}{profilePhotoPreviewOpen && effectiveProfile && <ProfilePhotoPreviewModal user={effectiveProfile} onClose={() => setProfilePhotoPreviewOpen(false)} />}</section>;
   }
 
   return <section className="admin-dashboard glass-card">{simulationControl}

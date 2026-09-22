@@ -50,6 +50,17 @@ export type CampaignAssignmentRequest = {
   reviewed_by: string | null;
   review_note: string | null;
 };
+export type CampaignClaim = {
+  id: string;
+  user_id: string;
+  campaign_id: string;
+  description: string;
+  status: "pending" | "acknowledged" | "resolved" | "rejected";
+  created_at: string;
+  reviewed_at: string | null;
+  reviewed_by: string | null;
+  review_note: string | null;
+};
 export type CampaignRun = { id: string; campaign_id: string; name: string; starts_on: string; ends_on: string | null; status: string };
 export type CampaignPause = { starts_on: string; ends_on: string; reason: string | null };
 export type PerformancePoint = { date: string; value: number; label: string };
@@ -322,6 +333,33 @@ export async function requestCampaignAssignment(userId: string, campaignId: stri
   const request = Array.isArray(data) ? data[0] : data;
   if (!request) throw new Error("La demande d’affectation n’a pas été créée.");
   return request as CampaignAssignmentRequest;
+}
+
+export async function createCampaignClaim(userId: string, campaignId: string, description: string): Promise<CampaignClaim> {
+  if (!supabaseClient) throw new Error("Configurez Supabase avant d’envoyer une réclamation.");
+  const { data, error } = await supabaseClient.rpc("create_campaign_claim", { p_user_id: userId, p_campaign_id: campaignId, p_description: description });
+  if (error) throw error;
+  const claim = Array.isArray(data) ? data[0] : data;
+  if (!claim) throw new Error("La réclamation n’a pas été créée.");
+  return claim as CampaignClaim;
+}
+
+export async function loadCampaignClaims(): Promise<CampaignClaim[]> {
+  const manager = assertCampaignManager();
+  if (!supabaseClient) return [];
+  const { data, error } = await supabaseClient.rpc("list_campaign_claims", { p_manager_id: manager.id });
+  if (error) throw error;
+  return (data || []) as CampaignClaim[];
+}
+
+export async function reviewCampaignClaim(claimId: string, status: Extract<CampaignClaim["status"], "acknowledged" | "resolved" | "rejected">, note = ""): Promise<CampaignClaim> {
+  const manager = assertCampaignManager();
+  if (!supabaseClient) throw new Error("Configurez Supabase avant de traiter la réclamation.");
+  const { data, error } = await supabaseClient.rpc("review_campaign_claim", { p_claim_id: claimId, p_manager_id: manager.id, p_status: status, p_review_note: note || null });
+  if (error) throw error;
+  const claim = Array.isArray(data) ? data[0] : data;
+  if (!claim) throw new Error("La réclamation n’a pas pu être traitée.");
+  return claim as CampaignClaim;
 }
 
 export async function loadCampaignAssignmentRequests(): Promise<CampaignAssignmentRequest[]> {
