@@ -706,17 +706,28 @@ html { scrollbar-width: thin; scrollbar-color: rgba(158,233,232,.35) rgba(3,11,1
 .view-toggle button { width: 31px; height: 31px; display: grid; place-items: center; border: 0; border-radius: 6px; color: var(--muted-2); background: transparent; transition: color .18s ease, background .18s ease, transform .16s var(--ease-out); }
 .view-toggle button:hover { color: var(--cyan); background: rgba(91,208,209,.08); transform: translateY(-1px); }
 .view-toggle button.is-active { color: #071015; background: var(--cyan); box-shadow: 0 3px 10px rgba(91,208,209,.18); }
-.users-card-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; height: clamp(300px, 56vh, 590px); overflow-y: auto; padding: 2px 4px 8px 2px; overscroll-behavior: contain; }
-.user-card { min-width: 0; display: flex; flex-direction: column; gap: 12px; padding: 14px; border: 1px solid rgba(188,220,228,.12); border-radius: 13px; background: linear-gradient(145deg, rgba(10, 38, 57, .62), rgba(3, 16, 26, .46)); box-shadow: inset 0 1px 0 rgba(255,255,255,.04); transition: transform .22s var(--ease-out), border-color .22s ease, box-shadow .22s ease, background .22s ease; }
+.users-card-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; height: clamp(300px, 56vh, 590px); overflow-y: auto; padding: 2px 4px 8px 2px; overscroll-behavior: contain; }
+.user-card { min-width: 0; min-height: 246px; display: grid; grid-template-columns: minmax(150px, 43%) minmax(0, 1fr); overflow: hidden; border: 1px solid rgba(188,220,228,.14); border-radius: 15px; background: linear-gradient(145deg, rgba(10, 38, 57, .72), rgba(3, 16, 26, .56)); box-shadow: inset 0 1px 0 rgba(255,255,255,.05); transition: transform .22s var(--ease-out), border-color .22s ease, box-shadow .22s ease, background .22s ease; }
 .user-card.is-clickable { cursor: pointer; }
 .user-card:hover { transform: translateY(-3px); border-color: rgba(61, 183, 236, .38); background: linear-gradient(145deg, rgba(13, 52, 76, .72), rgba(3, 20, 32, .54)); box-shadow: 0 14px 30px rgba(0, 57, 111, .20), inset 0 1px 0 rgba(255,255,255,.07); }
+.user-card-photo { position: relative; min-width: 0; min-height: 246px; overflow: hidden; background: radial-gradient(circle at 50% 28%, rgba(31, 160, 222, .42), rgba(4, 23, 37, .92) 72%); }
+.user-card-photo::after { content: ""; position: absolute; z-index: 1; inset: 42% 0 0; pointer-events: none; background: linear-gradient(180deg, transparent, rgba(2, 12, 20, .58)); }
+.user-card-photo .profile-avatar.large, .user-card-photo > .avatar:not(.small) { width: 100%; height: 100%; min-height: 246px; display: block; border: 0; border-radius: 0; object-fit: cover; object-position: center; color: #f2fbff; font-size: clamp(42px, 5vw, 70px); }
+.user-card-photo-status { position: absolute; z-index: 2; left: 11px; bottom: 11px; width: 9px; height: 9px; border: 2px solid rgba(3, 16, 26, .86); border-radius: 50%; background: var(--muted-2); box-shadow: 0 0 0 3px rgba(255,255,255,.08); }
+.user-card-photo-status.role-agent { background: var(--lime); }
+.user-card-photo-status.role-supervisor, .user-card-photo-status.role-sub_admin { background: var(--cyan); }
+.user-card-photo-status.role-admin, .user-card-photo-status.role-super_admin { background: var(--amber); }
+.user-card-content { min-width: 0; display: flex; flex-direction: column; gap: 10px; padding: 14px 13px 12px; }
 .user-card-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
-.user-card-header .table-user { min-width: 0; flex: 1; }
+.user-card-identity { min-width: 0; }
+.user-card-identity strong, .user-card-identity small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.user-card-identity strong { color: #ecf8fa; font-size: 13px; letter-spacing: -.025em; }
+.user-card-identity small { margin-top: 5px; color: var(--muted-2); font-size: 8px; }
 .user-card-header .role-badge { flex: none; max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .user-card-contact { display: flex; align-items: center; justify-content: space-between; gap: 7px; padding: 8px 0 10px; border-top: 1px solid rgba(188,220,228,.08); border-bottom: 1px solid rgba(188,220,228,.08); }
 .user-card-contact .copyable-phone { color: #67d8f7; font-size: 9px; }
 .user-card-contact > span:last-child { overflow: hidden; color: var(--muted-2); font-size: 8px; text-align: right; text-overflow: ellipsis; white-space: nowrap; }
-.user-card-details { display: grid; gap: 9px; min-height: 92px; }
+.user-card-details { display: grid; gap: 9px; min-height: 92px; overflow: hidden; }
 .user-card-details > div { min-width: 0; }
 .user-card-details small { display: block; margin-bottom: 5px; color: var(--muted-2); font-family: "DM Mono", monospace; font-size: 7px; letter-spacing: .06em; text-transform: uppercase; }
 .user-card-details strong { display: block; overflow: hidden; color: #cfe2e7; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
@@ -724,8 +735,8 @@ html { scrollbar-width: thin; scrollbar-color: rgba(158,233,232,.35) rgba(3,11,1
 .user-card-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: auto; padding-top: 9px; border-top: 1px solid rgba(188,220,228,.08); }
 .user-card-hint { color: var(--muted-2); font-family: "DM Mono", monospace; font-size: 7px; text-transform: uppercase; }
 .user-card-actions .row-actions { margin-left: auto; }
-@media (max-width: 1120px) { .users-card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 760px) { .users-card-grid { grid-template-columns: 1fr; height: auto; max-height: 56vh; } .view-toggle { margin-left: auto; } }
+@media (max-width: 1120px) { .users-card-grid { grid-template-columns: 1fr; } }
+@media (max-width: 760px) { .users-card-grid { grid-template-columns: 1fr; height: auto; max-height: 56vh; } .user-card { grid-template-columns: minmax(122px, 39%) minmax(0, 1fr); min-height: 205px; } .user-card-photo, .user-card-photo .profile-avatar.large, .user-card-photo > .avatar:not(.small) { min-height: 205px; } .user-card-content { padding: 11px 10px 10px; gap: 8px; } .user-card-identity strong { font-size: 11px; } .user-card-header .role-badge { max-width: 78px; font-size: 7px; } .user-card-hint { display: none; } .view-toggle { margin-left: auto; } }
 
 /* BTL Africa wordmark and persistent profile photos */
 .btl-logo { width: 52px; height: 45px; display: block; flex: none; object-fit: cover; border: 1px solid rgba(255,255,255,.18); border-radius: 10px; box-shadow: 0 8px 22px rgba(0, 79, 182, .25); }
