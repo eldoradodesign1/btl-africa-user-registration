@@ -3,7 +3,6 @@ import { createPortal } from "react-dom";
 import { ChevronDown, LogOut, Search, ShieldCheck, UserRound, X } from "lucide-react";
 import { ROLE_LABELS } from "@/lib/user-form";
 import type { UserRecord, UserRole } from "@/lib/supabase";
-import { Avatar } from "@/components/RoleWorkspace";
 
 type SimulationBarProps = {
   masterUser: UserRecord;
@@ -69,7 +68,7 @@ export default function SimulationBar({ masterUser, effectiveUser, users, onSele
         </div>
         <div className="simulation-search"><Search size={14} /><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Rechercher un utilisateur…" aria-label="Rechercher un utilisateur à simuler" />{query && <button type="button" onClick={() => setQuery("")} aria-label="Effacer"><X size={13} /></button>}</div>
         <div className="simulation-user-list">
-          {filteredUsers.map((user) => <button type="button" className={`simulation-user-option ${user.id === effectiveUser.id ? "is-selected" : ""}`} key={user.id} onClick={() => chooseUser(user)}><Avatar user={user} /><span><strong>{user.full_name}</strong><small>{ROLE_LABELS[user.role]} · {user.phone}</small></span>{user.id === effectiveUser.id && <span className="simulation-current">Actif</span>}</button>)}
+          {filteredUsers.map((user) => <button type="button" className={`simulation-user-option ${user.id === effectiveUser.id ? "is-selected" : ""}`} key={user.id} onClick={() => chooseUser(user)}><span className="avatar small">{user.full_name.slice(0, 1).toUpperCase()}</span><span><strong>{user.full_name}</strong><small>{ROLE_LABELS[user.role]} · {user.phone}</small></span>{user.id === effectiveUser.id && <span className="simulation-current">Actif</span>}</button>)}
           {!filteredUsers.length && <div className="simulation-empty">Aucun utilisateur trouvé.</div>}
         </div>
       </div>
@@ -80,7 +79,7 @@ export default function SimulationBar({ masterUser, effectiveUser, users, onSele
   return <>
     <div className={`simulation-bar ${isSimulating ? "is-active" : ""}`}>
       <div className="simulation-brand"><div className="simulation-brand-icon"><ShieldCheck size={15} /></div><div><span>Simulation superadmin</span><small>Compte réel · {masterUser.full_name}</small></div></div>
-      <button type="button" className="simulation-user-select" onClick={() => setPickerOpen(true)} aria-label="Choisir l’utilisateur à simuler" aria-expanded={pickerOpen}><Avatar user={effectiveUser} /><span><strong>{effectiveUser.full_name}</strong><small>{ROLE_LABELS[effectiveUser.role]}</small></span><ChevronDown size={15} /></button>
+      <button type="button" className="simulation-user-select" onClick={() => setPickerOpen(true)} aria-label="Choisir l’utilisateur à simuler" aria-expanded={pickerOpen}><span className="avatar small">{effectiveUser.full_name.slice(0, 1).toUpperCase()}</span><span><strong>{effectiveUser.full_name}</strong><small>{ROLE_LABELS[effectiveUser.role]}</small></span><ChevronDown size={15} /></button>
       <div className="simulation-shortcuts" aria-label="Raccourcis de simulation">{shortcutLabels.map(({ role, label, short }) => { const target = findShortcutUser(users, role); const active = target?.id === effectiveUser.id; return <button type="button" className={`simulation-shortcut ${active ? "is-active" : ""}`} key={role} disabled={!target} onClick={() => target && onSelectUser(target)} title={target ? `Simuler ${target.full_name}` : `Compte ${label} indisponible`} aria-label={target ? `Simuler ${target.full_name}` : `Compte ${label} indisponible`}>{short}</button>; })}</div>
       {isSimulating && <button type="button" className="simulation-exit" onClick={onExit} title="Quitter la simulation" aria-label="Quitter la simulation"><LogOut size={14} /><span>Quitter</span></button>}
     </div>

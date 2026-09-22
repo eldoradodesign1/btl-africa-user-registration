@@ -49,7 +49,31 @@ export type CampaignAssignmentRequest = {
 export type CampaignRun = { id: string; campaign_id: string; name: string; starts_on: string; ends_on: string | null; status: string };
 export type CampaignPause = { starts_on: string; ends_on: string; reason: string | null };
 export type PerformancePoint = { date: string; value: number; label: string };
-export type PresenceRecord = { date: string; status: string; checkin_at: string | null; checkout_at: string | null; note: string | null };
+export type DailyReport = {
+  source: "daily_report" | "attendance";
+  id: string | null;
+  date: string;
+  status: string | null;
+  agentName: string | null;
+  shopId: string | null;
+  shopName: string | null;
+  priv: number | null;
+  roam: number | null;
+  bund: number | null;
+  amount: number | null;
+  comment: string | null;
+  pdfUrl: string | null;
+  photos: unknown[];
+  checkinAt: string | null;
+  checkoutAt: string | null;
+  checkinPhotoPath: string | null;
+  checkoutPhotoPath: string | null;
+  checkinLatitude: number | null;
+  checkinLongitude: number | null;
+  checkoutLatitude: number | null;
+  checkoutLongitude: number | null;
+};
+export type PresenceRecord = { date: string; status: string; checkin_at: string | null; checkout_at: string | null; note: string | null; report?: DailyReport };
 export type AgentInsights = { performance: PerformancePoint[]; presence: PresenceRecord[]; metricLabel: string; campaignStart: string | null; campaignEnd: string | null; pauses: CampaignPause[] };
 export type RegistrationRequest = {
   id: string;
@@ -150,6 +174,41 @@ function phoneCandidates(phone: string): string[] {
   return Array.from(new Set([normalized, `+243${normalized.slice(1)}`]));
 }
 
+function asNumber(value: unknown): number | null {
+  return value === null || value === undefined || value === "" ? null : Number(value);
+}
+
+function asPhotos(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function mapDailyReport(row: Record<string, unknown>, source: DailyReport["source"]): DailyReport {
+  return {
+    source,
+    id: typeof row.id === "string" ? row.id : null,
+    date: String(row.date ?? row.activity_date ?? ""),
+    status: typeof row.status === "string" ? row.status : null,
+    agentName: typeof row.agent_name === "string" ? row.agent_name : null,
+    shopId: typeof row.shop_id === "string" ? row.shop_id : null,
+    shopName: typeof row.shop_name === "string" ? row.shop_name : null,
+    priv: asNumber(row.priv),
+    roam: asNumber(row.roam),
+    bund: asNumber(row.bund),
+    amount: asNumber(row.amount),
+    comment: typeof row.comment === "string" ? row.comment : typeof row.closing_comment === "string" ? row.closing_comment : null,
+    pdfUrl: typeof row.pdf_url === "string" && row.pdf_url ? row.pdf_url : null,
+    photos: asPhotos(row.photos),
+    checkinAt: typeof row.arrival_time === "string" ? row.arrival_time : typeof row.checkin_at === "string" ? row.checkin_at : null,
+    checkoutAt: typeof row.departure_time === "string" ? row.departure_time : typeof row.checkout_at === "string" ? row.checkout_at : null,
+    checkinPhotoPath: typeof row.pointage_photo === "string" && row.pointage_photo ? row.pointage_photo : typeof row.checkin_photo_path === "string" && row.checkin_photo_path ? row.checkin_photo_path : null,
+    checkoutPhotoPath: null,
+    checkinLatitude: asNumber(row.checkin_latitude),
+    checkinLongitude: asNumber(row.checkin_longitude),
+    checkoutLatitude: asNumber(row.checkout_latitude),
+    checkoutLongitude: asNumber(row.checkout_longitude),
+  };
+}
+
 function assertSuperAdmin(): UserRecord {
   if (!activeProfile) throw new Error("Connexion administrateur requise avant cette opération.");
   if (activeProfile.role !== "super_admin") throw new Error("Cette opération est réservée au super_admin.");
@@ -217,13 +276,13 @@ export async function loadAgentInsights(user: UserRecord, campaign: CampaignReco
   if (pausesError) throw pausesError;
   const pauses = (pausesData || []) as CampaignPause[];
   if (user.user_category === "hostess") {
-    const { data, error } = await supabaseClient.from("daily_reports").select("date, amount, priv, roam, bund, arrival_time, departure_time, pointage_photo, comment").eq("agent_id", user.id).order("date");
+    const { data, error } = await supabaseClient.from("daily_reports").select("id, date, agent_name, shop_id, shop_name, priv, roam, bund, amount, comment, pdf_url, photos, arrival_time, departure_time, pointage_photo").eq("agent_id", user.id).order("date");
     if (error) throw error;
-    const rows = (data || []) as Array<{ date: string; amount: number | null; priv: number | null; roam: number | null; bund: number | null; arrival_time: string | null; departure_time: string | null; pointage_photo: string | null; comment: string | null }>;
+    const rows = (data || []) as Array<Record<string, unknown>>;
     return {
       metricLabel: "Activations",
-      performance: rows.map((row) => ({ date: row.date, value: Number(row.amount ?? ((row.priv || 0) + (row.roam || 0) + (row.bund || 0))), label: `${Number(row.amount ?? ((row.priv || 0) + (row.roam || 0) + (row.bund || 0)))} activations` })),
-      presence: rows.map((row) => ({ date: row.date, status: row.arrival_time || row.departure_time || row.pointage_photo ? "présent" : "rapport", checkin_at: row.arrival_time, checkout_at: row.departure_time, note: row.comment })),
+      performance: rows.map((row) => { const amount = asNumber(row.amount) ?? ((asNumber(row.priv) || 0) + (asNumber(row.roam) || 0) + (asNumber(row.bund) || 0)); return { date: String(row.date), value: amount, label: `${amount} activations` }; }),
+      presence: rows.map((row) => { const report = mapDailyReport(row, "daily_report"); return { date: report.date, status: row.arrival_time || row.departure_time || row.pointage_photo ? "présent" : "rapport", checkin_at: typeof row.arrival_time === "string" ? row.arrival_time : null, checkout_at: typeof row.departure_time === "string" ? row.departure_time : null, note: report.comment, report }; }),
       campaignStart: campaign.starts_on,
       campaignEnd: campaign.ends_on,
       pauses,
@@ -234,13 +293,13 @@ export async function loadAgentInsights(user: UserRecord, campaign: CampaignReco
   if (runsError) throw runsError;
   const runIds = ((runsData || []) as Array<{ id: string }>).map((run) => run.id);
   if (!runIds.length) return { performance: [], presence: [], metricLabel: "Heures terrain", campaignStart: campaign.starts_on, campaignEnd: campaign.ends_on, pauses };
-  const { data, error } = await supabaseClient.from("ba_daily_attendance").select("activity_date, status, checkin_at, checkout_at, closing_comment").eq("ba_id", user.id).in("campaign_run_id", runIds).order("activity_date");
+  const { data, error } = await supabaseClient.from("ba_daily_attendance").select("id, activity_date, status, checkin_at, checkout_at, closing_comment, checkin_photo_path, checkin_latitude, checkin_longitude, checkout_latitude, checkout_longitude").eq("ba_id", user.id).in("campaign_run_id", runIds).order("activity_date");
   if (error) throw error;
-  const rows = (data || []) as Array<{ activity_date: string; status: string; checkin_at: string | null; checkout_at: string | null; closing_comment: string | null }>;
+  const rows = (data || []) as Array<Record<string, unknown>>;
   return {
     metricLabel: "Heures terrain",
-    performance: rows.map((row) => { const hours = row.checkin_at && row.checkout_at ? Math.max(0, (new Date(row.checkout_at).getTime() - new Date(row.checkin_at).getTime()) / 3600000) : row.status === "closed" ? 1 : 0; return { date: row.activity_date, value: Number(hours.toFixed(1)), label: `${Number(hours.toFixed(1))} h` }; }),
-    presence: rows.map((row) => ({ date: row.activity_date, status: row.status, checkin_at: row.checkin_at, checkout_at: row.checkout_at, note: row.closing_comment })),
+    performance: rows.map((row) => { const checkin = typeof row.checkin_at === "string" ? row.checkin_at : null; const checkout = typeof row.checkout_at === "string" ? row.checkout_at : null; const hours = checkin && checkout ? Math.max(0, (new Date(checkout).getTime() - new Date(checkin).getTime()) / 3600000) : row.status === "closed" ? 1 : 0; return { date: String(row.activity_date), value: Number(hours.toFixed(1)), label: `${Number(hours.toFixed(1))} h` }; }),
+    presence: rows.map((row) => { const report = mapDailyReport(row, "attendance"); return { date: report.date, status: String(row.status ?? "présence"), checkin_at: typeof row.checkin_at === "string" ? row.checkin_at : null, checkout_at: typeof row.checkout_at === "string" ? row.checkout_at : null, note: report.comment, report }; }),
     campaignStart: campaign.starts_on,
     campaignEnd: campaign.ends_on,
     pauses,

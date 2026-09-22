@@ -1,5 +1,5 @@
-const CACHE_NAME = "btl-africa-user-registration-v2";
-const APP_SHELL = ["./", "./index.html", "./manifest.webmanifest"];
+const CACHE_NAME = "btl-africa-user-registration-v3";
+const APP_SHELL = ["./", "./index.html", "./manifest.webmanifest", "./btl-beyond-the-line-icon-v2.webp", "./btl-beyond-the-line-v2.webp"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(

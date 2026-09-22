@@ -30,7 +30,7 @@ VITE_SUPABASE_PUBLISHABLE_KEY=<publishable-or-anon-key>
 
 `VITE_SUPABASE_ANON_KEY` est également accepté pour les projets qui utilisent encore l’ancien nom de variable. Redémarrez ensuite le serveur Vite.
 
-Vous pouvez aussi renseigner les valeurs directement dans **Dashboard → Configurer**. Cette configuration runtime est conservée uniquement dans `sessionStorage` pour l’onglet courant ; la clé est effacée quand le projet est déconnecté. La clé Supabase est toujours saisie dans un champ masqué et les clés contenant `service_role` sont refusées.
+Vous pouvez aussi renseigner les valeurs directement dans **Dashboard → Configurer**. Cette configuration runtime est conservée localement pour restaurer la connexion après rechargement ; elle est effacée quand le projet est déconnecté. La clé Supabase est toujours saisie dans un champ masqué et les clés contenant `service_role` sont refusées.
 
 Après configuration, le dashboard demande une connexion **par MSISDN et mot de passe existant** avant de lire `public.users`. Le numéro local `0812345678` est essayé avec son équivalent international `+243812345678`, puis la ligne est vérifiée avec la valeur déjà utilisée dans `password_hash`. Aucun nouveau mécanisme d’authentification n’est introduit. Le profil correspondant détermine le rôle. L’écran n’affiche pas les données fictives dans ce parcours réel.
 
@@ -54,9 +54,9 @@ La création manuelle depuis l’espace superadmin utilise désormais la RPC `cr
 
 Si le projet possède une contrainte `NOT NULL` sur `public.users.user_category`, exécutez ensuite [`supabase/migrations/202609210009_fix_user_category_for_admin_creation.sql`](supabase/migrations/202609210009_fix_user_category_for_admin_creation.sql). Les profils non agents recevront automatiquement la catégorie technique `operations`, tandis que les campagnes restent réservées aux catégories agent compatibles.
 
-La connexion métier est persistée localement sans enregistrer le mot de passe : la configuration Supabase et le profil courant sont restaurés au rechargement, puis supprimés lors de la déconnexion. Le logo BTL Africa est rendu comme un wordmark réutilisable dans les headers. Les photos de profil sont stockées dans `public.users.avatar_url`, affichées dans les fiches, les cartes, le header et la simulation, avec choix, aperçu et suppression depuis **Profil**. La migration [`supabase/migrations/202609210010_profile_avatar_columns.sql`](supabase/migrations/202609210010_profile_avatar_columns.sql) garantit la présence des colonnes nécessaires.
+La connexion métier est persistée localement sans enregistrer le mot de passe : la configuration Supabase et le profil courant sont restaurés au rechargement, puis supprimés lors de la déconnexion. Le logo officiel Beyond The Line est servi en WebP léger, avec une icône PWA versionnée pour éviter le favicon obsolète. Les photos de profil sont stockées dans `public.users.avatar_url`, affichées dans le hero et les fiches, avec choix, aperçu et suppression depuis l’icône d’édition du profil.
 
-Après connexion, un agent voit ses responsables, ses campagnes et un suivi combinant courbe de performance et registre de présence. Un superviseur voit ses responsables, ses agents et peut ouvrir la fiche d’un agent, sélectionner une campagne, approuver une demande et exporter le suivi au format XLS ou via impression PDF. Dans la console admin, le clic sur un agent ouvre cette même fiche; l’édition reste accessible par l’action crayon.
+Après connexion, un agent voit ses responsables, ses campagnes et un suivi combinant courbe de performance et registre de présence. Chaque date travaillée du calendrier est cliquable : elle ouvre le rapport journalier ou le registre de clôture, avec une alerte visuelle lorsque le commentaire n’a pas été envoyé. Un superviseur voit ses responsables, ses agents et peut ouvrir la fiche d’un agent, appeler l’agent, sélectionner une campagne, approuver une demande et exporter le suivi au format XLSX ou PDF. Dans la console admin, le clic sur un agent ouvre cette même fiche; l’édition reste accessible dans la fiche et par l’action crayon.
 
 **Ne renseignez jamais une clé `service_role` dans une variable `VITE_*` ou dans le frontend.** Si une opération d’administration exige des privilèges élevés, utilisez une RPC ou une Edge Function Supabase sécurisée, puis appelez-la depuis le frontend avec la clé publishable/anon et des politiques RLS adaptées.
 
@@ -64,11 +64,11 @@ Sans ces variables, le formulaire affiche **Mode démo actif** avec un petit jeu
 
 ## Dashboard et historique MSISDN
 
-Le dashboard permet de rechercher rapidement un nom ou un MSISDN — le format `+24381…` est normalisé avant la comparaison — puis de filtrer par rôle et catégorie. Le bouton **Actualiser** relit `public.users` sans recharger la page. L’export CSV utilise uniquement les lignes filtrées et les colonnes non sensibles (`id`, identité, téléphone, rôle, catégorie, superviseur et shop) ; `password_hash` n’est jamais sélectionné ni exporté.
+Le dashboard permet de rechercher rapidement un nom ou un MSISDN — le format `+24381…` est normalisé avant la comparaison — puis de filtrer par rôle et catégorie. Les graphiques sont placés au-dessus de la barre de filtres, qui reste juste au-dessus de la liste. La liste propose une vue table ou cartes, et le bouton **Nouvel utilisateur** est regroupé avec les contrôles de liste. L’export ouvre un aperçu proposant CSV, XLSX et PDF ; dans cet aperçu, les raccourcis `C`, `X` et `P` déclenchent directement le format correspondant.
 
 ## Schéma cible et payload
 
-La cible est exclusivement la table existante `public.users`. L’application ne crée ni ne modifie aucune autre table.
+La table principale reste `public.users`. Les parcours déjà intégrés utilisent également les tables métier existantes `campaigns`, `user_campaign_assignments`, `campaign_runs`, `campaign_pauses`, `daily_reports` et `ba_daily_attendance`, ainsi que les tables de demandes créées par les migrations indiquées plus haut. L’application ne crée pas de table métier implicite côté navigateur.
 
 Exemple de payload strict, limité aux colonnes autorisées :
 

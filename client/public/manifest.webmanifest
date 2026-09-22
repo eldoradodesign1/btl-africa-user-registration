@@ -12,15 +12,9 @@
   "background_color": "#071015",
   "icons": [
     {
-      "src": "./btl-beyond-the-line.jpg",
-      "sizes": "242x210",
-      "type": "image/jpeg",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "./btl-beyond-the-line.jpg",
-      "sizes": "242x210",
-      "type": "image/jpeg",
+      "src": "./btl-beyond-the-line-icon-v2.webp",
+      "sizes": "512x512",
+      "type": "image/webp",
       "purpose": "any maskable"
     }
   ]
