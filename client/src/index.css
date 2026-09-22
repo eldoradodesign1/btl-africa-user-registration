@@ -728,8 +728,8 @@ html { scrollbar-width: thin; scrollbar-color: rgba(158,233,232,.35) rgba(3,11,1
 @media (max-width: 760px) { .users-card-grid { grid-template-columns: 1fr; height: auto; max-height: 56vh; } .view-toggle { margin-left: auto; } }
 
 /* BTL Africa wordmark and persistent profile photos */
-.btl-logo { width: 142px; height: 39px; display: block; flex: none; overflow: visible; }
-.btl-logo.is-compact { width: 112px; height: 31px; }
+.btl-logo { width: 52px; height: 45px; display: block; flex: none; object-fit: cover; border: 1px solid rgba(255,255,255,.18); border-radius: 10px; box-shadow: 0 8px 22px rgba(0, 79, 182, .25); }
+.btl-logo.is-compact { width: 46px; height: 40px; }
 .brand-lockup > .btl-logo { margin-right: 1px; }
 .session-chip { padding-left: 5px; }
 .session-chip .profile-avatar.small, .session-chip > .avatar.small { width: 22px; height: 22px; border-radius: 7px; font-size: 9px; }
@@ -741,4 +741,4 @@ html { scrollbar-width: thin; scrollbar-color: rgba(158,233,232,.35) rgba(3,11,1
 .profile-photo-actions small { color: var(--muted-2); font-size: 8px; }
 .profile-photo-actions .button { width: max-content; }
 .simulation-user-option .profile-avatar.small, .simulation-user-option > .avatar.small, .simulation-user-select .profile-avatar.small, .simulation-user-select > .avatar.small { width: 27px; height: 27px; border-radius: 8px; }
-@media (max-width: 680px) { .btl-logo { width: 120px; height: 34px; } .brand-lockup > div:last-child { display: none; } }
+@media (max-width: 680px) { .btl-logo { width: 48px; height: 42px; } .brand-lockup > div:last-child { display: none; } }
