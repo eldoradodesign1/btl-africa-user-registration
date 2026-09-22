@@ -796,3 +796,17 @@ html { scrollbar-width: thin; scrollbar-color: rgba(158,233,232,.35) rgba(3,11,1
 .pdf-icon { color: #071015; background: var(--amber); }
 .toolbar-create-user { flex: none; white-space: nowrap; }
 @media (max-width: 680px) { .admin-profile-hero { align-items: flex-start; } .report-summary-grid, .report-detail-grid, .export-choice-grid { grid-template-columns: 1fr; } .export-preview-head, .export-preview-row { grid-template-columns: 1.2fr 1fr; } .export-preview-head span:last-child, .export-preview-row span:last-child { display: none; } .call-agent-button { margin-left: 0; } }
+
+/* Profile photo interaction refinement */
+.workspace-profile-photo-button { display: block; padding: 0; border: 0; border-radius: 19px; background: transparent; cursor: zoom-in; }
+.workspace-profile-photo-button:hover .profile-avatar.large, .workspace-profile-photo-button:focus-visible .profile-avatar.large { transform: scale(1.035); filter: brightness(1.08); }
+.workspace-profile-photo-button .profile-avatar.large, .workspace-profile-photo-button > .avatar:not(.small) { transition: transform .18s ease, filter .18s ease; }
+.workspace-profile-edit { right: -3px; bottom: -3px; width: 21px; height: 21px; padding: 0; border: 1px solid #102126; border-radius: 50%; box-shadow: 0 3px 9px rgba(0,0,0,.32); }
+.workspace-profile-edit svg { width: 11px; height: 11px; }
+.profile-photo-lightbox { z-index: 60; }
+.profile-photo-lightbox-card { position: relative; display: flex; flex-direction: column; align-items: center; gap: 8px; width: min(88vw, 520px); padding: 24px; border: 1px solid rgba(158,233,232,.24); border-radius: 20px; background: linear-gradient(145deg, rgba(13,42,49,.98), rgba(5,18,23,.98)); box-shadow: 0 26px 80px rgba(0,0,0,.55); }
+.profile-photo-lightbox-card .modal-close { position: absolute; top: 10px; right: 10px; }
+.profile-photo-lightbox-card .profile-avatar.large, .profile-photo-lightbox-card > .avatar:not(.small) { width: min(68vw, 390px); height: min(68vw, 390px); border-radius: 24px; font-size: clamp(48px, 12vw, 100px); }
+.profile-photo-lightbox-card strong { color: #e4f2f2; font-size: 14px; }
+.profile-photo-lightbox-card small { color: var(--muted); font-size: 9px; }
+@media (max-width: 680px) { .workspace-profile-photo-button .profile-avatar.large, .workspace-profile-photo-button > .avatar:not(.small), .workspace-profile-hero .profile-avatar.large, .admin-profile-photo .profile-avatar.large { width: 60px; height: 60px; border-radius: 17px; } .workspace-profile-edit { right: -2px; bottom: -2px; width: 20px; height: 20px; } .profile-photo-lightbox-card { width: min(90vw, 360px); padding: 20px 14px; } }
