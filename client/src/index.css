@@ -829,3 +829,8 @@ html { scrollbar-width: thin; scrollbar-color: rgba(158,233,232,.35) rgba(3,11,1
 .profile-extra-fields { margin-top: 12px; }
 .profile-photo-field { margin-top: 12px; max-width: 330px; }
 @media (max-width: 680px) { .profile-extra-fields { margin-top: 0; } .profile-photo-field { max-width: none; } }
+
+/* Campaign filter and filtered export scope */
+.campaign-filter-control .custom-select { min-width: 155px; }
+.active-filter { display: inline-flex; align-items: center; gap: 5px; color: var(--cyan); }
+@media (max-width: 900px) { .campaign-filter-control { flex: 1; } .campaign-filter-control .custom-select { min-width: 0; } }
