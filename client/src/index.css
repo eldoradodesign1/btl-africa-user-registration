@@ -817,3 +817,15 @@ html { scrollbar-width: thin; scrollbar-color: rgba(158,233,232,.35) rgba(3,11,1
 .modal-card { z-index: 1; max-height: calc(100dvh - 32px); min-height: 0; overflow-y: auto; overscroll-behavior: contain; margin: auto; }
 .daily-report-modal { max-height: min(760px, calc(100dvh - 32px)); }
 @media (max-width: 680px) { .modal-layer { align-items: center; padding: 10px; } .modal-card { max-height: calc(100dvh - 20px); } .daily-report-modal { max-height: calc(100dvh - 20px); } }
+
+/* Registration profile details */
+.signup-whatsapp-toggle { grid-column: 1 / -1; flex-direction: row !important; align-items: flex-start !important; margin-top: -2px; }
+.signup-address-field, .signup-photo-field { min-width: 0; }
+.signup-file-control, .file-input-control { display: inline-flex; align-items: center; gap: 8px; min-height: 39px; padding: 0 11px; border: 1px dashed rgba(158,233,232,.28); border-radius: 8px; color: var(--cyan); background: rgba(91,208,209,.04); cursor: pointer; }
+.signup-file-control:hover, .file-input-control:hover { border-color: rgba(158,233,232,.62); background: rgba(91,208,209,.09); }
+.signup-file-control input, .file-input-control input { display: none; }
+.signup-file-control > span, .file-input-control > span { color: #cfe2e4; font-size: 9px; }
+.signup-photo-field { gap: 6px !important; }
+.profile-extra-fields { margin-top: 12px; }
+.profile-photo-field { margin-top: 12px; max-width: 330px; }
+@media (max-width: 680px) { .profile-extra-fields { margin-top: 0; } .profile-photo-field { max-width: none; } }

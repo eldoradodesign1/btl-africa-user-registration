@@ -4,14 +4,17 @@ import {
   ArrowRight,
   BadgeCheck,
   BriefcaseBusiness,
+  CalendarDays,
   Check,
   CheckCircle2,
   ChevronDown,
   CircleHelp,
   Info,
+  ImagePlus,
   KeyRound,
   LoaderCircle,
   LockKeyhole,
+  MapPin,
   Phone,
   RefreshCw,
   Search,
@@ -59,6 +62,11 @@ function creationErrorMessage(error: unknown): string {
 type FormState = {
   fullName: string;
   phone: string;
+  whatsappPhone: string;
+  whatsappSameAsPhone: boolean;
+  dateOfBirth: string;
+  address: string;
+  avatarUrl: string | null;
   role: UserRole;
   category: UserCategory;
   supervisorId: string;
@@ -70,6 +78,11 @@ type FormState = {
 const INITIAL_FORM: FormState = {
   fullName: "",
   phone: "",
+  whatsappPhone: "",
+  whatsappSameAsPhone: true,
+  dateOfBirth: "",
+  address: "",
+  avatarUrl: null,
   role: "agent",
   category: "hostess",
   supervisorId: "",
@@ -271,12 +284,17 @@ function Home({ onUserCreated, onNavigateDashboard }: { onUserCreated?: (user: U
   async function handleSubmit(event?: React.FormEvent) {
     event?.preventDefault();
     const trimmedName = form.fullName.trim();
+    const normalizedWhatsappPhone = form.whatsappSameAsPhone ? normalizedPhone : normalizePhone(form.whatsappPhone);
     if (!trimmedName) {
       setToast({ kind: "error", title: "Nom requis", message: "Le nom complet est obligatoire." });
       return;
     }
     if (trimmedName.length < 2 || !isPhoneValid) {
       setToast({ kind: "error", title: "Vérifiez les champs", message: "Corrigez les champs signalés avant de continuer." });
+      return;
+    }
+    if (!form.whatsappSameAsPhone && !isValidMsisdn(normalizedWhatsappPhone)) {
+      setToast({ kind: "error", title: "WhatsApp invalide", message: "Renseignez un numéro WhatsApp valide ou cochez l’option d’utilisation du numéro M-Pesa." });
       return;
     }
     if (phoneState === "checking") {
@@ -302,6 +320,11 @@ function Home({ onUserCreated, onNavigateDashboard }: { onUserCreated?: (user: U
         id: crypto.randomUUID(),
         fullName: trimmedName,
         phone: normalizedPhone,
+        whatsappPhone: normalizedWhatsappPhone,
+        whatsappSameAsPhone: form.whatsappSameAsPhone,
+        dateOfBirth: form.dateOfBirth || null,
+        address: form.address.trim() || null,
+        avatarUrl: form.avatarUrl,
         password: form.useDefaultPassword ? defaultPasswordForRole(form.role) : form.password,
         role: form.role,
         category: form.role === "agent" ? form.category : "operations",
@@ -410,6 +433,10 @@ function Home({ onUserCreated, onNavigateDashboard }: { onUserCreated?: (user: U
                   {phoneState === "idle" && <span className="field-hint">Formats acceptés : 081…, +24381… ou 24381…</span>}
                 </div>
               </div>
+              <label className="password-toggle signup-whatsapp-toggle"><input type="checkbox" checked={form.whatsappSameAsPhone} onChange={(event) => updateForm("whatsappSameAsPhone", event.target.checked)} /><span className="toggle-visual"><Check size={13} /></span><span><strong>WhatsApp</strong><small>Utiliser le numéro M-Pesa</small></span></label>
+              {!form.whatsappSameAsPhone && <div className="field-grid two-columns"><div className="field"><label htmlFor="whatsappPhone">Numéro WhatsApp <b>*</b></label><input id="whatsappPhone" value={form.whatsappPhone} onChange={(event) => updateForm("whatsappPhone", event.target.value)} placeholder="081 234 5678" type="tel" inputMode="tel" autoComplete="tel" /></div></div>}
+              <div className="field-grid two-columns profile-extra-fields"><div className="field"><label htmlFor="dateOfBirth">Date de naissance</label><div className="input-wrap"><CalendarDays size={17} /><input id="dateOfBirth" value={form.dateOfBirth} onChange={(event) => updateForm("dateOfBirth", event.target.value)} type="date" /></div></div><div className="field"><label htmlFor="address">Adresse</label><div className="input-wrap"><MapPin size={17} /><input id="address" value={form.address} onChange={(event) => updateForm("address", event.target.value)} placeholder="Quartier, commune, ville" autoComplete="street-address" /></div></div></div>
+              <div className="field profile-photo-field"><label htmlFor="profilePhoto">Photo de profil</label><label className="file-input-control"><ImagePlus size={16} /><span>{form.avatarUrl ? "Photo sélectionnée" : "Choisir une photo"}</span><input id="profilePhoto" type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; if (!file.type.startsWith("image/") || file.size > 520000) { setToast({ kind: "error", title: "Photo invalide", message: "La photo doit être une image de moins de 500 Ko." }); return; } const reader = new FileReader(); reader.onload = () => updateForm("avatarUrl", String(reader.result)); reader.readAsDataURL(file); }} /></label></div>
             </div>
 
             <div className="section-block role-block">

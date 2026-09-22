@@ -28,6 +28,11 @@ export function buildUserPayload(input: {
   id: string;
   fullName: string;
   phone: string;
+  whatsappPhone: string | null;
+  whatsappSameAsPhone: boolean;
+  dateOfBirth: string | null;
+  address: string | null;
+  avatarUrl?: string | null;
   password: string;
   role: UserRole;
   category: UserCategory | null;
@@ -38,11 +43,16 @@ export function buildUserPayload(input: {
     id: input.id,
     full_name: input.fullName.trim(),
     phone: input.phone,
+    whatsapp_phone: input.whatsappPhone,
+    whatsapp_same_as_phone: input.whatsappSameAsPhone,
+    date_of_birth: input.dateOfBirth,
+    address: input.address,
     password_hash: input.password,
     role: input.role,
     user_category: input.category || null,
     supervisor_id: input.supervisorId || null,
     permanent_shop_id: input.permanentShopId || null,
+    avatar_url: input.avatarUrl || null,
   };
 }
 

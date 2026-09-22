@@ -9,6 +9,10 @@ export type UserRecord = {
   id: string;
   full_name: string;
   phone: string;
+  whatsapp_phone: string | null;
+  whatsapp_same_as_phone: boolean;
+  date_of_birth: string | null;
+  address: string | null;
   password_hash: string | null;
   role: UserRole;
   user_category: UserCategory | null;
@@ -79,6 +83,11 @@ export type RegistrationRequest = {
   id: string;
   full_name: string;
   phone: string;
+  whatsapp_phone: string | null;
+  whatsapp_same_as_phone: boolean;
+  date_of_birth: string | null;
+  address: string | null;
+  avatar_url: string | null;
   role: "agent";
   user_category: UserCategory | null;
   status: RegistrationRequestStatus;
@@ -158,11 +167,11 @@ export async function testSupabaseConnection(url: string, publishableKey: string
 }
 
 const demoUsers: UserRecord[] = [
-  { id: "b7d7aef4-2e2b-4a7e-9f12-1d5ce8481b0a", full_name: "Patrick Kabeya", phone: "0812345678", password_hash: null, role: "supervisor", user_category: null, supervisor_id: null, permanent_shop_id: null, avatar_url: null, profile_updated_at: null },
-  { id: "e6a5f5f0-3f88-4fd9-a3a5-11e8c18d8a5c", full_name: "Grâce Mbuyi", phone: "0998765432", password_hash: null, role: "admin", user_category: null, supervisor_id: null, permanent_shop_id: null, avatar_url: null, profile_updated_at: null },
+  { id: "b7d7aef4-2e2b-4a7e-9f12-1d5ce8481b0a", full_name: "Patrick Kabeya", phone: "0812345678", whatsapp_phone: null, whatsapp_same_as_phone: true, date_of_birth: null, address: null, password_hash: null, role: "supervisor", user_category: null, supervisor_id: null, permanent_shop_id: null, avatar_url: null, profile_updated_at: null },
+  { id: "e6a5f5f0-3f88-4fd9-a3a5-11e8c18d8a5c", full_name: "Grâce Mbuyi", phone: "0998765432", whatsapp_phone: null, whatsapp_same_as_phone: true, date_of_birth: null, address: null, password_hash: null, role: "admin", user_category: null, supervisor_id: null, permanent_shop_id: null, avatar_url: null, profile_updated_at: null },
 ];
 let demoUsersCache = [...demoUsers];
-const safeUserColumns = "id, full_name, phone, role, user_category, supervisor_id, permanent_shop_id, avatar_url, profile_updated_at";
+const safeUserColumns = "id, full_name, phone, whatsapp_phone, whatsapp_same_as_phone, date_of_birth, address, role, user_category, supervisor_id, permanent_shop_id, avatar_url, profile_updated_at";
 const safeCampaignColumns = "id, code, name, campaign_type, status, starts_on, ends_on";
 const safeAssignmentColumns = "id, user_id, campaign_id, is_active, assigned_at, assigned_by";
 
@@ -374,6 +383,11 @@ export async function insertUser(payload: UserInsert): Promise<UserRecord> {
     p_user_category: payload.user_category,
     p_supervisor_id: payload.supervisor_id,
     p_permanent_shop_id: payload.permanent_shop_id,
+    p_whatsapp_phone: payload.whatsapp_phone,
+    p_whatsapp_same_as_phone: payload.whatsapp_same_as_phone,
+    p_date_of_birth: payload.date_of_birth,
+    p_address: payload.address,
+    p_avatar_url: payload.avatar_url,
   });
   if (error) throw error;
   const row = Array.isArray(data) ? data[0] : data;
@@ -381,7 +395,7 @@ export async function insertUser(payload: UserInsert): Promise<UserRecord> {
   return { ...row, password_hash: null } as UserRecord;
 }
 
-export async function createRegistrationRequest(input: { fullName: string; phone: string; password: string; category: UserCategory }): Promise<RegistrationRequest> {
+export async function createRegistrationRequest(input: { fullName: string; phone: string; whatsappPhone: string | null; whatsappSameAsPhone: boolean; dateOfBirth: string | null; address: string | null; avatarUrl: string | null; password: string; category: UserCategory }): Promise<RegistrationRequest> {
   if (!supabaseClient) throw new Error("Configurez Supabase avant de créer une demande.");
   const normalizedPhone = normalizePhone(input.phone);
   if (!isValidMsisdn(normalizedPhone)) throw new Error("Le MSISDN fourni est invalide.");
@@ -390,12 +404,17 @@ export async function createRegistrationRequest(input: { fullName: string; phone
     p_request_id: id,
     p_full_name: input.fullName.trim(),
     p_phone: normalizedPhone,
+    p_whatsapp_phone: input.whatsappPhone,
+    p_whatsapp_same_as_phone: input.whatsappSameAsPhone,
+    p_date_of_birth: input.dateOfBirth,
+    p_address: input.address,
+    p_avatar_url: input.avatarUrl,
     p_password_hash: input.password,
     p_user_category: input.category,
   });
   if (error) throw error;
   const request = Array.isArray(data) ? data[0] : data;
-  return request ? mapRequest(request) : { id, full_name: input.fullName.trim(), phone: normalizedPhone, role: "agent", user_category: input.category, status: "pending", created_at: new Date().toISOString(), reviewed_at: null, reviewed_by: null, review_note: null };
+  return request ? mapRequest(request) : { id, full_name: input.fullName.trim(), phone: normalizedPhone, whatsapp_phone: input.whatsappPhone, whatsapp_same_as_phone: input.whatsappSameAsPhone, date_of_birth: input.dateOfBirth, address: input.address, avatar_url: input.avatarUrl, role: "agent", user_category: input.category, status: "pending", created_at: new Date().toISOString(), reviewed_at: null, reviewed_by: null, review_note: null };
 }
 
 export async function loadPendingRegistrationRequests(): Promise<RegistrationRequest[]> {
