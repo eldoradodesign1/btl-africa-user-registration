@@ -1054,6 +1054,15 @@ html { scrollbar-width: thin; scrollbar-color: rgba(158,233,232,.35) rgba(3,11,1
 .activity-badge.is-inactive, .activity-text.is-inactive { color: #ffb1a3; }
 .activity-badge.is-inactive { background: rgba(255,154,138,.11); }
 .activity-text { font-size: 9px; }
+.activity-toggle { display: inline-flex; align-items: center; justify-content: center; min-width: 58px; min-height: 25px; padding: 4px 8px; border: 1px solid transparent; border-radius: 999px; font: inherit; font-family: "DM Mono", monospace; font-size: 8px; cursor: pointer; transition: border-color .18s ease, background .18s ease, transform .18s ease; }
+.activity-toggle:hover:not(:disabled), .activity-toggle:focus-visible:not(:disabled) { transform: translateY(-1px); outline: none; }
+.activity-toggle.is-active { color: #c9f5a8; background: rgba(181,239,140,.11); border-color: rgba(181,239,140,.24); }
+.activity-toggle.is-active:hover:not(:disabled), .activity-toggle.is-active:focus-visible:not(:disabled) { border-color: rgba(181,239,140,.58); }
+.activity-toggle.is-inactive { color: #ffb1a3; background: rgba(255,154,138,.11); border-color: rgba(255,154,138,.24); }
+.activity-toggle.is-inactive:hover:not(:disabled), .activity-toggle.is-inactive:focus-visible:not(:disabled) { border-color: rgba(255,154,138,.58); }
+.activity-toggle:disabled { cursor: not-allowed; opacity: .58; }
+.activity-hidden { color: var(--muted-2); font-family: "DM Mono", monospace; font-size: 9px; }
+.user-gallery-facts .activity-toggle { min-height: 22px; }
 .export-selection-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
 .export-selection-toolbar small { color: var(--muted-2); font-size: 8px; text-align: right; }
 .export-select-all, .export-preview-row { cursor: pointer; }

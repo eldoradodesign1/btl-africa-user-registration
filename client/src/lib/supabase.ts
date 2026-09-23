@@ -642,6 +642,18 @@ export async function updateUser(id: string, patch: Partial<Pick<UserRecord, "fu
   return { ...data, password_hash: null } as UserRecord;
 }
 
+export async function setUserActivityStatus(userId: string, isActive: boolean): Promise<UserRecord> {
+  if (!supabaseClient) throw new Error("Configurez Supabase avant de modifier le statut.");
+  if (!activeProfile || !["super_admin", "admin", "sub_admin", "supervisor"].includes(activeProfile.role)) {
+    throw new Error("Vous n’êtes pas autorisé à modifier ce statut.");
+  }
+  const { data, error } = await supabaseClient.rpc("set_user_activity_status", { p_actor_id: activeProfile.id, p_user_id: userId, p_is_active: isActive });
+  if (error) throw error;
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row) throw new Error("Le statut n’a pas pu être mis à jour.");
+  return { ...row, password_hash: null } as UserRecord;
+}
+
 export async function deleteUser(id: string): Promise<void> {
   if (!supabaseClient) throw new Error("Configurez Supabase avant de supprimer un utilisateur.");
   assertManagePermission();
