@@ -161,14 +161,7 @@ async function fetchWithTimeout(input: RequestInfo | URL, init?: RequestInit): P
     else callerSignal.addEventListener("abort", abortFromCaller, { once: true });
   }
   try {
-    const headers = new Headers(init?.headers);
-    headers.set("cache-control", "no-cache");
-    return await globalThis.fetch(input, {
-      ...init,
-      cache: "no-store",
-      headers,
-      signal: controller.signal,
-    });
+    return await globalThis.fetch(input, { ...init, signal: controller.signal });
   } finally {
     globalThis.clearTimeout(timeoutId);
     callerSignal?.removeEventListener("abort", abortFromCaller);

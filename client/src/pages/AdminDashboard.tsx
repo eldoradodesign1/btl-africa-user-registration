@@ -198,8 +198,7 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
   const handleWorkspaceNotice = useCallback((next: Notice) => setNotice(next), []);
   const lastRefreshAt = useRef(0);
   const refreshInFlight = useRef<Promise<void> | null>(null);
-  const focusRefreshTimer = useRef<number | null>(null);
-  const lastEmptySearchRefresh = useRef("");
+  const realtimeRefreshTimer = useRef<number | null>(null);
   const isAuthenticated = Boolean(profile);
   const isSimulation = Boolean(profile?.role === "super_admin" && simulatedUser && simulatedUser.id !== profile.id);
   const effectiveProfile = simulatedUser || profile;
@@ -288,24 +287,23 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
   useEffect(() => { void refreshSession(); }, []);
   useEffect(() => {
     if (!profile) return;
-    const scheduleLiveRefresh = () => {
-      if (document.visibilityState !== "visible" || focusRefreshTimer.current !== null) return;
-      focusRefreshTimer.current = window.setTimeout(() => {
-        focusRefreshTimer.current = null;
+    const scheduleRealtimeRefresh = () => {
+      if (realtimeRefreshTimer.current !== null) return;
+      realtimeRefreshTimer.current = window.setTimeout(() => {
+        realtimeRefreshTimer.current = null;
         void refreshSession(true);
-      }, 250);
+      }, 150);
     };
-    const unsubscribe = subscribeToDataChanges(scheduleLiveRefresh);
-    const fallbackInterval = window.setInterval(scheduleLiveRefresh, 10000);
-    window.addEventListener("focus", scheduleLiveRefresh);
-    document.addEventListener("visibilitychange", scheduleLiveRefresh);
+    const unsubscribe = subscribeToDataChanges(scheduleRealtimeRefresh);
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") void refreshSession(true);
+    };
+    document.addEventListener("visibilitychange", refreshWhenVisible);
     return () => {
       unsubscribe();
-      window.clearInterval(fallbackInterval);
-      window.removeEventListener("focus", scheduleLiveRefresh);
-      document.removeEventListener("visibilitychange", scheduleLiveRefresh);
-      if (focusRefreshTimer.current !== null) window.clearTimeout(focusRefreshTimer.current);
-      focusRefreshTimer.current = null;
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+      if (realtimeRefreshTimer.current !== null) window.clearTimeout(realtimeRefreshTimer.current);
+      realtimeRefreshTimer.current = null;
     };
   }, [profile]);
 
@@ -495,14 +493,6 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
     const campaignUserIds = campaignFilter === "all" ? null : new Set([...campaignAssignments.filter((assignment) => assignment.campaign_id === campaignFilter && assignment.is_active).map((assignment) => assignment.user_id), ...campaignSupervisorAssignments.filter((assignment) => assignment.campaign_id === campaignFilter && assignment.is_active).map((assignment) => assignment.agent_id)]);
     return users.filter((user) => (!query || user.full_name.toLowerCase().includes(query) || user.phone.includes(normalizedQuery) || user.phone.includes(query)) && (roleFilter === "all" || user.role === roleFilter) && (categoryFilter === "all" || user.user_category === categoryFilter) && (!campaignUserIds || campaignUserIds.has(user.id)));
   }, [users, deferredSearch, roleFilter, categoryFilter, campaignFilter, campaignAssignments, campaignSupervisorAssignments]);
-  useEffect(() => {
-    const normalizedSearch = search.trim().toLowerCase();
-    if (!profile || normalizedSearch.length < 2 || filteredUsers.length > 0 || loading) return;
-    const refreshKey = `${normalizedSearch}|${roleFilter}|${categoryFilter}|${campaignFilter}`;
-    if (lastEmptySearchRefresh.current === refreshKey) return;
-    lastEmptySearchRefresh.current = refreshKey;
-    void refreshUsers(profile, true);
-  }, [search, roleFilter, categoryFilter, campaignFilter, filteredUsers.length, loading, profile, refreshUsers]);
   const categoryStats = useMemo(() => CATEGORY_OPTIONS.map((category) => ({ category, count: users.filter((user) => user.user_category === category).length })).filter((item) => item.count > 0), [users]);
   const donutGradient = useMemo(() => { const colors = ["#9ee9e8", "#b5ef8c", "#d3b5ff", "#ffca8a"]; const total = Math.max(users.length, 1); let cursor = 0; return `conic-gradient(${categoryStats.length ? categoryStats.map((item, index) => { const start = cursor; cursor += (item.count / total) * 100; return `${colors[index % colors.length]} ${start}% ${cursor}%`; }).join(", ") : "#29444b 0 100%"})`; }, [categoryStats, users.length]);
   const campaignStats = useMemo(() => campaigns.map((campaign) => ({ campaign, count: new Set([...campaignAssignments.filter((assignment) => assignment.campaign_id === campaign.id && users.some((user) => user.id === assignment.user_id)).map((assignment) => assignment.user_id), ...campaignSupervisorAssignments.filter((assignment) => assignment.campaign_id === campaign.id && users.some((user) => user.id === assignment.agent_id)).map((assignment) => assignment.agent_id)]).size })).filter((item) => item.count > 0), [campaigns, campaignAssignments, campaignSupervisorAssignments, users]);
