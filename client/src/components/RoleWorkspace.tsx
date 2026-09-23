@@ -4,7 +4,7 @@ import { BriefcaseBusiness, CalendarDays, CheckCircle2, ChevronLeft, ChevronRigh
 import { CopyablePhone } from "@/components/CopyablePhone";
 import { CATEGORY_LABELS, ROLE_LABELS, categoryShortLabel } from "@/lib/user-form";
 import { isValidMsisdn, normalizePhone } from "@/lib/phone";
-import { createCampaignClaim, loadAgentInsights, requestCampaignAssignment, reviewCampaignAssignmentRequest, reviewCampaignClaim, updateMyProfile, type AgentInsights, type CampaignAssignment, type CampaignAssignmentRequest, type CampaignClaim, type CampaignRecord, type CampaignSupervisorAssignment, type DailyReport, type UserRecord } from "@/lib/supabase";
+import { createCampaignClaim, loadAgentInsights, readableSupabaseError, requestCampaignAssignment, reviewCampaignAssignmentRequest, reviewCampaignClaim, updateMyProfile, type AgentInsights, type CampaignAssignment, type CampaignAssignmentRequest, type CampaignClaim, type CampaignRecord, type CampaignSupervisorAssignment, type DailyReport, type UserRecord } from "@/lib/supabase";
 
 type Notice = { kind: "error" | "success"; message: string };
 
@@ -367,7 +367,7 @@ export default function RoleWorkspace({ profile, users, superiors, campaigns, as
       setClaimOpen(false);
       onNotice({ kind: "success", message: `Réclamation envoyée pour ${selectedCampaign.name}.` });
     } catch (error) {
-      onNotice({ kind: "error", message: error instanceof Error ? error.message : "Impossible d’envoyer la réclamation." });
+      onNotice({ kind: "error", message: readableSupabaseError(error, "Impossible d’envoyer la réclamation.") });
     } finally { setClaimSending(false); }
   }
 
@@ -380,7 +380,7 @@ export default function RoleWorkspace({ profile, users, superiors, campaigns, as
   async function reviewClaim(claim: CampaignClaim, status: "acknowledged" | "rejected") {
     if (simulation) { onNotice({ kind: "error", message: "La simulation est en lecture seule. Quittez-la pour traiter une réclamation." }); return; }
     setReviewingClaim(claim.id);
-    try { await reviewCampaignClaim(claim.id, status); onRequestReviewed(); onNotice({ kind: "success", message: status === "acknowledged" ? "Réclamation prise en compte." : "Réclamation rejetée." }); } catch (error) { onNotice({ kind: "error", message: error instanceof Error ? error.message : "Impossible de traiter la réclamation." }); } finally { setReviewingClaim(null); }
+    try { await reviewCampaignClaim(claim.id, status); onRequestReviewed(); onNotice({ kind: "success", message: status === "acknowledged" ? "Réclamation prise en compte." : "Réclamation rejetée." }); } catch (error) { onNotice({ kind: "error", message: readableSupabaseError(error, "Impossible de traiter la réclamation.") }); } finally { setReviewingClaim(null); }
   }
 
   return <section className="role-workspace">

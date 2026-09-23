@@ -560,3 +560,14 @@ export function isPendingRequestConflict(error: unknown): boolean {
   const message = candidate?.message?.toLowerCase() || "";
   return candidate?.code === "23505" && (message.includes("registration") || message.includes("pending") || message.includes("phone"));
 }
+
+export function readableSupabaseError(error: unknown, fallback: string): string {
+  const candidate = error as { code?: string; message?: string; details?: string; hint?: string } | null;
+  const parts = [candidate?.message, candidate?.details, candidate?.hint].filter((part): part is string => Boolean(part && part.trim()));
+  if (!parts.length) return fallback;
+  const detail = parts.join(" — ");
+  if (candidate?.code === "PGRST202" || candidate?.code === "42883" || detail.toLowerCase().includes("could not find the function")) {
+    return `${fallback} La fonction Supabase de réclamation n’est pas disponible : exécutez la migration campaign_claims dans le SQL Editor.`;
+  }
+  return `${fallback} ${detail}`;
+}
