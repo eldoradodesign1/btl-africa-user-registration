@@ -46,6 +46,15 @@ export type CampaignAssignment = {
   assigned_at: string;
   assigned_by: string | null;
 };
+export type CampaignSupervisorAssignment = {
+  id: string;
+  agent_id: string;
+  supervisor_id: string;
+  campaign_id: string;
+  is_active: boolean;
+  assigned_at: string;
+  assigned_by: string | null;
+};
 export type CampaignAssignmentRequest = {
   id: string;
   user_id: string;
@@ -187,6 +196,7 @@ const safeUserColumns = "id, full_name, phone, whatsapp_phone, whatsapp_same_as_
 const safeCampaignColumns = "id, code, name, campaign_type, status, starts_on, ends_on";
 const safeShopColumns = "id, name, city, type";
 const safeAssignmentColumns = "id, user_id, campaign_id, is_active, assigned_at, assigned_by";
+const safeCampaignSupervisorAssignmentColumns = "id, agent_id, supervisor_id, campaign_id, is_active, assigned_at, assigned_by";
 
 function phoneCandidates(phone: string): string[] {
   const normalized = normalizePhone(phone);
@@ -288,6 +298,13 @@ export async function loadCampaignAssignments(): Promise<CampaignAssignment[]> {
   const { data, error } = await supabaseClient.from("user_campaign_assignments").select(safeAssignmentColumns).eq("is_active", true);
   if (error) throw error;
   return (data || []) as CampaignAssignment[];
+}
+
+export async function loadCampaignSupervisorAssignments(): Promise<CampaignSupervisorAssignment[]> {
+  if (!supabaseClient) return [];
+  const { data, error } = await supabaseClient.from("agent_campaign_supervisor_assignments").select(safeCampaignSupervisorAssignmentColumns).eq("is_active", true);
+  if (error) throw error;
+  return (data || []) as CampaignSupervisorAssignment[];
 }
 
 export async function loadSupervisors(): Promise<UserRecord[]> {
@@ -495,6 +512,21 @@ export async function setUserCampaignAssignments(userId: string, campaignIds: st
   const { data, error } = await supabaseClient.rpc("set_user_campaign_assignments", { p_user_id: userId, p_campaign_ids: campaignIds, p_manager_id: manager.id });
   if (error) throw error;
   return (data || []) as CampaignAssignment[];
+}
+
+export async function syncAgentCampaignSupervisors(
+  agentId: string,
+  assignments: Array<{ campaignId: string; supervisorIds: string[] }>,
+): Promise<CampaignSupervisorAssignment[]> {
+  const manager = assertCampaignManager();
+  if (!supabaseClient) throw new Error("Configurez Supabase avant de gérer les affectations.");
+  const { data, error } = await supabaseClient.rpc("sync_agent_campaign_supervisor_assignments", {
+    p_agent_id: agentId,
+    p_assignments: assignments.map((assignment) => ({ campaign_id: assignment.campaignId, supervisor_ids: assignment.supervisorIds })),
+    p_manager_id: manager.id,
+  });
+  if (error) throw error;
+  return (data || []) as CampaignSupervisorAssignment[];
 }
 
 function assertManagePermission(): void {

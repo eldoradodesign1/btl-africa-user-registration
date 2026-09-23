@@ -968,3 +968,21 @@ html { scrollbar-width: thin; scrollbar-color: rgba(158,233,232,.35) rgba(3,11,1
 .agent-supervisor-label small { color: #7899a5; font-family: "DM Mono", monospace; font-size: 7px; letter-spacing: .08em; text-transform: uppercase; }
 .agent-supervisor-label strong { overflow: hidden; color: #d6eef0; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
 @media (max-width: 680px) { .agent-supervisor-label { max-width: 130px; } }
+
+/* Campaign-scoped supervision */
+.campaign-option { display: block; padding: 0; overflow: hidden; }
+.campaign-option-toggle { display: flex; align-items: center; gap: 10px; width: 100%; padding: 11px; border: 0; color: var(--text); background: transparent; text-align: left; }
+.campaign-option-toggle:hover { background: rgba(158,233,232,.05); }
+.campaign-supervisor-editor { margin: 0 11px 11px 43px; padding: 9px; border-left: 1px solid rgba(158,233,232,.28); background: rgba(0,0,0,.12); }
+.campaign-supervisor-editor > small { display: block; margin-bottom: 7px; color: var(--muted-2); font-size: 8px; text-transform: uppercase; letter-spacing: .08em; }
+.campaign-supervisor-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 5px; }
+.campaign-supervisor-options button { display: flex; align-items: center; justify-content: space-between; gap: 7px; min-width: 0; padding: 7px 8px; border: 1px solid rgba(188,220,228,.10); border-radius: 6px; color: var(--muted); background: rgba(255,255,255,.025); text-align: left; font-size: 8px; }
+.campaign-supervisor-options button:hover, .campaign-supervisor-options button.is-selected { border-color: rgba(158,233,232,.42); color: #dff4f1; background: rgba(91,208,209,.10); }
+.campaign-supervisor-options button svg { flex: none; color: var(--lime); }
+.superior-campaigns { display: block; margin-top: 4px; overflow: hidden; color: var(--muted-2); font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
+.campaign-supervisor-strip { display: grid; gap: 7px; padding: 10px 12px; border: 1px solid rgba(158,233,232,.14); border-radius: 9px; background: rgba(91,208,209,.045); }
+.campaign-supervisor-strip > span { color: var(--muted-2); font-size: 8px; text-transform: uppercase; letter-spacing: .08em; }
+.campaign-supervisor-strip > div { display: flex; flex-wrap: wrap; gap: 6px; }
+.campaign-supervisor-strip button { padding: 5px 8px; border: 1px solid rgba(158,233,232,.24); border-radius: 999px; color: #bfe8e4; background: rgba(91,208,209,.08); font-size: 9px; }
+.campaign-supervisor-strip button:hover { border-color: var(--cyan); color: white; transform: translateY(-1px); }
+.detail-campaign-supervisors { display: block; margin-top: 4px; color: var(--cyan); font-size: 8px; font-style: normal; line-height: 1.35; }
