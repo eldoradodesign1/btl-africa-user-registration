@@ -927,6 +927,52 @@ html { scrollbar-width: thin; scrollbar-color: rgba(158,233,232,.35) rgba(3,11,1
 .claim-form textarea { width: 100%; min-height: 76px; resize: vertical; }
 .claim-form > div { display: flex; justify-content: flex-end; gap: 7px; }
 .claim-queue .request-queue-row small { max-width: 500px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.claim-queue-row { width: 100%; color: inherit; text-align: left; }
+.claim-queue-row > div:first-child { min-width: 0; flex: 1; }
+.claim-queue-row > div:first-child > span { display: block; margin-top: 6px; color: #b7cccf; font-size: 9px; line-height: 1.45; white-space: pre-line; }
+.claim-own-card { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 9px; padding: 10px 12px; border: 1px solid rgba(158,233,232,.16); border-radius: 10px; color: #dffbfd; background: rgba(91,208,209,.055); text-align: left; transition: border-color .18s var(--ease-out), transform .18s var(--ease-out), background .18s var(--ease-out); }
+.claim-own-card:hover { border-color: rgba(158,233,232,.48); background: rgba(91,208,209,.10); transform: translateY(-1px); }
+.claim-own-card span, .claim-own-card strong, .claim-own-card small { display: block; }
+.claim-own-card strong { color: var(--cyan); font-size: 10px; }
+.claim-own-card small { margin-top: 4px; color: var(--muted-2); font-size: 8px; }
+.claim-own-card > svg { flex: none; color: var(--cyan); }
+.claim-choice-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.claim-choice { position: relative; min-width: 0; }
+.claim-choice > span { display: block; margin-bottom: 5px; color: var(--muted-2); font-size: 8px; text-transform: uppercase; letter-spacing: .06em; }
+.claim-choice > button { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 6px; min-height: 34px; padding: 0 9px; border: 1px solid rgba(188,220,228,.15); border-radius: 8px; color: #d7e9ea; background: rgba(3,11,14,.35); font-size: 9px; text-align: left; }
+.claim-choice.is-open > button { border-color: rgba(158,233,232,.58); }
+.claim-choice-backdrop { position: fixed; z-index: 1001; inset: 0; width: 100vw; height: 100dvh; border: 0; background: transparent; }
+.claim-choice-menu { position: absolute; z-index: 1002; right: 0; bottom: calc(100% + 6px); left: 0; display: grid; gap: 2px; padding: 5px; border: 1px solid rgba(158,233,232,.24); border-radius: 9px; background: #092336; box-shadow: 0 18px 40px rgba(0,0,0,.34); }
+.claim-choice-menu button { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 8px; border: 0; border-radius: 6px; color: #b8cccf; background: transparent; font-size: 9px; text-align: left; }
+.claim-choice-menu button:hover, .claim-choice-menu button[aria-selected="true"] { color: #efffff; background: rgba(91,208,209,.12); }
+.claim-case-modal { width: min(760px, 100%); }
+.claim-case-meta { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 14px; }
+.claim-case-meta > span { display: inline-flex; align-items: center; gap: 5px; padding: 6px 9px; border: 1px solid rgba(188,220,228,.12); border-radius: 999px; color: var(--muted); background: rgba(255,255,255,.025); font-size: 8px; }
+.claim-case-meta .claim-status { color: var(--cyan); border-color: rgba(91,208,209,.25); }
+.claim-case-meta .claim-priority.priority-critical { color: #ffb0a4; border-color: rgba(255,154,138,.35); }
+.claim-case-meta .claim-priority.priority-high { color: var(--amber); border-color: rgba(245,205,120,.30); }
+.claim-case-original { padding: 12px; border: 1px solid rgba(245,205,120,.16); border-radius: 10px; background: rgba(245,205,120,.045); }
+.claim-case-original small { color: var(--amber); font-family: "DM Mono", monospace; font-size: 8px; text-transform: uppercase; letter-spacing: .06em; }
+.claim-case-original p { margin-top: 7px; color: #d6e3e3; font-size: 10px; line-height: 1.55; white-space: pre-wrap; }
+.claim-case-actions { margin-top: 14px; padding: 12px; border: 1px solid rgba(158,233,232,.12); border-radius: 10px; background: rgba(91,208,209,.035); }
+.claim-case-note label, .claim-case-note small { display: block; }
+.claim-case-note label { color: #cfe3e4; font-size: 10px; font-weight: 700; }
+.claim-case-note small { margin-top: 4px; color: var(--muted-2); font-size: 8px; font-weight: 400; }
+.claim-case-note textarea, .claim-reply-form textarea { width: 100%; margin-top: 8px; min-height: 68px; resize: vertical; }
+.claim-case-buttons { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; margin-top: 9px; }
+.claim-thread { margin-top: 17px; }
+.claim-thread-list { display: grid; gap: 8px; max-height: 230px; margin-top: 9px; overflow-y: auto; padding-right: 3px; }
+.claim-message { padding: 10px; border: 1px solid rgba(158,233,232,.12); border-radius: 9px; background: rgba(91,208,209,.035); }
+.claim-message.is-internal { border-color: rgba(245,205,120,.24); background: rgba(245,205,120,.055); }
+.claim-message-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.claim-message-head strong { color: #dffbfd; font-size: 9px; }
+.claim-message-head small { color: var(--muted-2); font-size: 7px; }
+.claim-message p { margin-top: 6px; color: #c7d8da; font-size: 9px; line-height: 1.5; white-space: pre-wrap; }
+.claim-reply-form { display: grid; gap: 8px; margin-top: 13px; padding-top: 12px; border-top: 1px solid rgba(188,220,228,.10); }
+.claim-reply-form > button { justify-self: end; }
+.claim-internal-toggle { display: inline-flex; align-items: center; gap: 7px; color: var(--muted-2); font-size: 8px; }
+.claim-internal-toggle input { position: absolute; opacity: 0; pointer-events: none; }
+.claim-internal-toggle .toggle-visual { width: 16px; height: 16px; }
 @media (max-width: 620px) { .followup-unassigned, .claim-area-heading { align-items: stretch; flex-direction: column; } .followup-unassigned .button, .claim-area-heading .button { align-self: flex-start; } }
 
 /* Gallery reveal v2: contained split layout with a centered portrait crop. */

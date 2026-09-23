@@ -70,12 +70,21 @@ export type CampaignClaim = {
   user_id: string;
   campaign_id: string;
   description: string;
-  status: "pending" | "acknowledged" | "resolved" | "rejected";
+  status: "pending" | "acknowledged" | "in_review" | "awaiting_agent" | "resolved" | "rejected";
+  priority: "low" | "normal" | "high" | "critical";
+  category: "attendance" | "payment" | "performance" | "technical" | "assignment" | "other";
+  assigned_to: string | null;
   created_at: string;
+  updated_at: string;
   reviewed_at: string | null;
   reviewed_by: string | null;
   review_note: string | null;
+  last_message_at: string | null;
+  resolved_at: string | null;
+  unread_count?: number;
 };
+export type CampaignClaimMessage = { id: string; claim_id: string; author_id: string; body: string; visibility: "shared" | "internal"; message_type: "message" | "request_information" | "status_change" | "system"; created_at: string };
+export type CampaignClaimStatus = CampaignClaim["status"];
 export type CampaignRun = { id: string; campaign_id: string; name: string; starts_on: string; ends_on: string | null; status: string };
 export type CampaignPause = { starts_on: string; ends_on: string; reason: string | null };
 export type PerformancePoint = { date: string; value: number; label: string };
@@ -359,9 +368,9 @@ export async function requestCampaignAssignment(userId: string, campaignId: stri
   return request as CampaignAssignmentRequest;
 }
 
-export async function createCampaignClaim(userId: string, campaignId: string, description: string): Promise<CampaignClaim> {
+export async function createCampaignClaim(userId: string, campaignId: string, description: string, priority: CampaignClaim["priority"] = "normal", category: CampaignClaim["category"] = "other"): Promise<CampaignClaim> {
   if (!supabaseClient) throw new Error("Configurez Supabase avant d’envoyer une réclamation.");
-  const { data, error } = await supabaseClient.rpc("create_campaign_claim", { p_user_id: userId, p_campaign_id: campaignId, p_description: description });
+  const { data, error } = await supabaseClient.rpc("create_campaign_claim", { p_user_id: userId, p_campaign_id: campaignId, p_description: description, p_priority: priority, p_category: category });
   if (error) throw error;
   const claim = Array.isArray(data) ? data[0] : data;
   if (!claim) throw new Error("La réclamation n’a pas été créée.");
@@ -376,14 +385,47 @@ export async function loadCampaignClaims(): Promise<CampaignClaim[]> {
   return (data || []) as CampaignClaim[];
 }
 
-export async function reviewCampaignClaim(claimId: string, status: Extract<CampaignClaim["status"], "acknowledged" | "resolved" | "rejected">, note = ""): Promise<CampaignClaim> {
+export async function loadMyCampaignClaims(userId: string): Promise<CampaignClaim[]> {
+  if (!supabaseClient) return [];
+  const { data, error } = await supabaseClient.rpc("list_my_campaign_claims", { p_agent_id: userId });
+  if (error) throw error;
+  return (data || []) as CampaignClaim[];
+}
+
+export async function loadCampaignClaimMessages(viewerId: string, claimId: string): Promise<CampaignClaimMessage[]> {
+  if (!supabaseClient) return [];
+  const { data, error } = await supabaseClient.rpc("list_campaign_claim_messages", { p_viewer_id: viewerId, p_claim_id: claimId });
+  if (error) throw error;
+  return (data || []) as CampaignClaimMessage[];
+}
+
+export async function addCampaignClaimMessage(authorId: string, claimId: string, body: string, visibility: "shared" | "internal" = "shared", messageType: CampaignClaimMessage["message_type"] = "message"): Promise<CampaignClaimMessage> {
+  if (!supabaseClient) throw new Error("Configurez Supabase avant d’ajouter un message.");
+  const { data, error } = await supabaseClient.rpc("add_campaign_claim_message", { p_author_id: authorId, p_claim_id: claimId, p_body: body, p_visibility: visibility, p_message_type: messageType });
+  if (error) throw error;
+  const message = Array.isArray(data) ? data[0] : data;
+  if (!message) throw new Error("Le message n’a pas été ajouté.");
+  return message as CampaignClaimMessage;
+}
+
+export async function transitionCampaignClaim(claimId: string, status: CampaignClaimStatus, note = ""): Promise<CampaignClaim> {
   const manager = assertCampaignManager();
   if (!supabaseClient) throw new Error("Configurez Supabase avant de traiter la réclamation.");
-  const { data, error } = await supabaseClient.rpc("review_campaign_claim", { p_claim_id: claimId, p_manager_id: manager.id, p_status: status, p_review_note: note || null });
+  const { data, error } = await supabaseClient.rpc("transition_campaign_claim", { p_claim_id: claimId, p_manager_id: manager.id, p_to_status: status, p_note: note || null });
   if (error) throw error;
   const claim = Array.isArray(data) ? data[0] : data;
-  if (!claim) throw new Error("La réclamation n’a pas pu être traitée.");
+  if (!claim) throw new Error("Le dossier n’a pas pu être mis à jour.");
   return claim as CampaignClaim;
+}
+
+export async function markCampaignClaimRead(userId: string, claimId: string): Promise<void> {
+  if (!supabaseClient) return;
+  const { error } = await supabaseClient.rpc("mark_campaign_claim_read", { p_user_id: userId, p_claim_id: claimId });
+  if (error) throw error;
+}
+
+export async function reviewCampaignClaim(claimId: string, status: Extract<CampaignClaim["status"], "acknowledged" | "resolved" | "rejected">, note = ""): Promise<CampaignClaim> {
+  return transitionCampaignClaim(claimId, status, note);
 }
 
 export async function loadCampaignAssignmentRequests(): Promise<CampaignAssignmentRequest[]> {
