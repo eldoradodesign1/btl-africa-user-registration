@@ -394,7 +394,11 @@ export async function loadMyCampaignClaims(userId: string): Promise<CampaignClai
 
 export async function loadCampaignClaimMessages(viewerId: string, claimId: string): Promise<CampaignClaimMessage[]> {
   if (!supabaseClient) return [];
-  const { data, error } = await supabaseClient.rpc("list_campaign_claim_messages", { p_viewer_id: viewerId, p_claim_id: claimId });
+  const request = supabaseClient.rpc("list_campaign_claim_messages", { p_viewer_id: viewerId, p_claim_id: claimId });
+  const timeout = new Promise<never>((_, reject) => {
+    window.setTimeout(() => reject(new Error("Le serveur Supabase ne répond pas pour le moment. Réessayez dans quelques instants.")), 12000);
+  });
+  const { data, error } = await Promise.race([request, timeout]);
   if (error) throw error;
   return (data || []) as CampaignClaimMessage[];
 }
@@ -608,6 +612,9 @@ export function readableSupabaseError(error: unknown, fallback: string): string 
   const parts = [candidate?.message, candidate?.details, candidate?.hint].filter((part): part is string => Boolean(part && part.trim()));
   if (!parts.length) return fallback;
   const detail = parts.join(" — ");
+  if (/failed to fetch|networkerror|load failed|timed out|timeout|521|503|502/i.test(detail)) {
+    return `${fallback} Le service Supabase est momentanément indisponible. Réessayez dans quelques instants.`;
+  }
   if (candidate?.code === "PGRST202" || candidate?.code === "42883" || detail.toLowerCase().includes("could not find the function")) {
     return `${fallback} La fonction Supabase de réclamation n’est pas disponible : exécutez la migration campaign_claims dans le SQL Editor.`;
   }
