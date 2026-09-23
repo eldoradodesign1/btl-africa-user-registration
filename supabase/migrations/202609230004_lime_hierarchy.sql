@@ -1,4 +1,5 @@
--- BTL Africa: Lime hierarchy for the historical user relationship.
+-- BTL Africa: Lime hierarchy stored in the existing users.supervisor_id column.
+-- No Lime table or new column is created; this preserves the shared schema.
 -- Abel and Supervisor are intentionally not referenced because no matching
 -- account was present in the database when this migration was prepared.
 
