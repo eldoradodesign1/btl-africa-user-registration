@@ -347,7 +347,7 @@ export async function loadAgentInsights(user: UserRecord, campaign: CampaignReco
   if (pausesError) throw pausesError;
   const pauses = (pausesData || []) as CampaignPause[];
   if (user.user_category === "hostess") {
-    const { data, error } = await supabaseClient.from("daily_reports").select("id, date, agent_name, shop_id, shop_name, priv, roam, bund, amount, comment, pdf_url, photos, arrival_time, departure_time, pointage_photo").eq("agent_id", user.id).order("date");
+    const { data, error } = await supabaseClient.from("daily_reports").select("id, date, agent_name, shop_id, shop_name, priv, roam, bund, amount, comment, pdf_url, arrival_time, departure_time, pointage_photo").eq("agent_id", user.id).order("date");
     if (error) throw error;
     const rows = (data || []) as Array<Record<string, unknown>>;
     return {
@@ -364,7 +364,7 @@ export async function loadAgentInsights(user: UserRecord, campaign: CampaignReco
   if (runsError) throw runsError;
   const runIds = ((runsData || []) as Array<{ id: string }>).map((run) => run.id);
   if (!runIds.length) return { performance: [], presence: [], metricLabel: "Heures terrain", campaignStart: campaign.starts_on, campaignEnd: campaign.ends_on, pauses };
-  const { data, error } = await supabaseClient.from("ba_daily_attendance").select("id, activity_date, status, checkin_at, checkout_at, closing_comment, checkin_photo_path, checkin_latitude, checkin_longitude, checkout_latitude, checkout_longitude").eq("ba_id", user.id).in("campaign_run_id", runIds).order("activity_date");
+  const { data, error } = await supabaseClient.from("ba_daily_attendance").select("id, activity_date, status, checkin_at, checkout_at, closing_comment, checkin_photo_path").eq("ba_id", user.id).in("campaign_run_id", runIds).order("activity_date");
   if (error) throw error;
   const rows = (data || []) as Array<Record<string, unknown>>;
   return {
