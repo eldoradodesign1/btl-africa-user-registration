@@ -379,11 +379,35 @@ export default function RoleWorkspace({ profile, users, superiors, campaigns, as
   ]);
   const assignedCampaigns = campaigns.filter((campaign) => assignedCampaignIds.has(campaign.id));
   const operationalSuperiorIds = new Set(campaignSupervisorAssignments.filter((assignment) => assignment.agent_id === profile.id && assignment.is_active).map((assignment) => assignment.supervisor_id));
-  const superiorDirectory = Array.from(new Map([...superiors, ...users.filter((user) => ["supervisor", "sub_admin", "admin", "super_admin"].includes(user.role))].map((user) => [user.id, user])).values()).filter((user) => !isAgent || operationalSuperiorIds.has(user.id) || user.id === profile.supervisor_id).sort((a, b) => a.full_name.localeCompare(b.full_name));
+  const superiorDirectory = Array.from(new Map([...superiors, ...users.filter((user) => ["supervisor", "sub_admin", "admin", "super_admin"].includes(user.role))].map((user) => [user.id, user])).values()).filter((user) => ["supervisor", "sub_admin", "admin", "super_admin"].includes(user.role)).sort((a, b) => a.full_name.localeCompare(b.full_name));
+  const hierarchicalSuperiorIds = new Set(operationalSuperiorIds);
+  const knownUsers = new Map(users.map((user) => [user.id, user]));
+  let parentId = profile.supervisor_id;
+  while (parentId && !hierarchicalSuperiorIds.has(parentId)) {
+    hierarchicalSuperiorIds.add(parentId);
+    parentId = knownUsers.get(parentId)?.supervisor_id || null;
+  }
   const visibleCampaigns = campaigns.filter((campaign) => campaign.status === "active" || campaign.status === "draft");
   const selectedCampaignAssigned = Boolean(selectedCampaign && assignedCampaigns.some((campaign) => campaign.id === selectedCampaign.id));
   const requestIds = new Set(assignmentRequests.filter((request) => request.user_id === profile.id && request.status === "pending").map((request) => request.campaign_id));
   const ownClaims = campaignClaims.filter((claim) => claim.user_id === profile.id);
+
+  useEffect(() => {
+    if (!isAgent) return;
+    const visibleAssignedCampaigns = assignedCampaigns.filter((campaign) => campaign.status === "active" || campaign.status === "draft");
+    const activeAssignedCampaigns = visibleAssignedCampaigns
+      .filter((campaign) => campaign.status === "active")
+      .sort((left, right) => {
+        const leftStart = left.starts_on ? new Date(left.starts_on).getTime() : 0;
+        const rightStart = right.starts_on ? new Date(right.starts_on).getTime() : 0;
+        return rightStart - leftStart || right.name.localeCompare(left.name);
+      });
+    const fallbackCampaign = activeAssignedCampaigns[0] || visibleAssignedCampaigns[0] || null;
+    setSelectedCampaign((current) => {
+      if (current && visibleCampaigns.some((campaign) => campaign.id === current.id)) return current;
+      return fallbackCampaign;
+    });
+  }, [isAgent, profile.id, campaigns, assignments, campaignSupervisorAssignments]);
 
   useEffect(() => {
     if (!isAgent || !selectedCampaign || !selectedCampaignAssigned) {
@@ -438,7 +462,7 @@ export default function RoleWorkspace({ profile, users, superiors, campaigns, as
   return <section className="role-workspace">
     <div className="workspace-hero"><div className="workspace-identity"><div className="workspace-profile-hero"><button type="button" className="workspace-profile-photo-button" onClick={() => setPhotoPreview(true)} aria-label="Agrandir ma photo de profil"><Avatar user={profile} size="large" /></button><button type="button" className="workspace-profile-edit" onClick={onProfileOpen} aria-label="Modifier mon profil" title="Modifier mon profil"><FilePenLine size={11} /></button></div><div><div className="eyebrow">{isAgent ? "Espace agent" : "Espace superviseur"}</div><h2>Bonjour, {profile.full_name}</h2><p>{isAgent ? "Sélectionnez une campagne pour consulter votre performance et votre présence." : "Consultez les équipes, les campagnes et les suivis terrain."}</p></div></div></div>
     <div className="workspace-grid">
-      <section className="workspace-card superiors-card"><div className="workspace-card-heading"><span><Users size={15} /> Équipe de coordination</span><small>{superiorDirectory.length}</small></div><div className="superior-list">{superiorDirectory.map((superior) => { const isOperational = isAgent && operationalSuperiorIds.has(superior.id); const superiorCampaigns = campaigns.filter((campaign) => campaignSupervisorAssignments.some((assignment) => assignment.agent_id === profile.id && assignment.supervisor_id === superior.id && assignment.campaign_id === campaign.id && assignment.is_active)); const isClickable = isAgent && (isOperational || superior.id === profile.supervisor_id); const content = <><Avatar user={superior} /><div><strong>{superior.full_name}</strong><small>{ROLE_LABELS[superior.role]}{isAgent ? "" : <> · <CopyablePhone value={superior.phone} /></>}</small>{isAgent && superiorCampaigns.length > 0 && <span className="superior-campaigns">{superiorCampaigns.map((campaign) => campaign.name).join(" · ")}</span>}</div>{isClickable && <span className="superior-open">Voir la fiche</span>}</>; return isClickable ? <button type="button" className="superior-row is-clickable" key={superior.id} onClick={() => setSelectedSuperior(superior)} aria-label={`Ouvrir la fiche de ${superior.full_name}`}>{content}</button> : <div className="superior-row" key={superior.id}>{content}</div>; })}</div>{!superiorDirectory.length && <div className="workspace-empty">Aucun responsable disponible.</div>}</section>
+      <section className="workspace-card superiors-card"><div className="workspace-card-heading"><span><Users size={15} /> Équipe de coordination</span><small>{superiorDirectory.length}</small></div><div className="superior-list">{superiorDirectory.map((superior) => { const superiorCampaigns = campaigns.filter((campaign) => campaignSupervisorAssignments.some((assignment) => assignment.agent_id === profile.id && assignment.supervisor_id === superior.id && assignment.campaign_id === campaign.id && assignment.is_active)); const isClickable = isAgent && hierarchicalSuperiorIds.has(superior.id); const content = <><Avatar user={superior} /><div><strong>{superior.full_name}</strong><small>{ROLE_LABELS[superior.role]}{isAgent ? "" : <> · <CopyablePhone value={superior.phone} /></>}</small>{isAgent && superiorCampaigns.length > 0 && <span className="superior-campaigns">{superiorCampaigns.map((campaign) => campaign.name).join(" · ")}</span>}</div>{isClickable && <span className="superior-open">Voir la fiche</span>}</>; return isClickable ? <button type="button" className="superior-row is-clickable" key={superior.id} onClick={() => setSelectedSuperior(superior)} aria-label={`Ouvrir la fiche de ${superior.full_name}`}>{content}</button> : <div className="superior-row" key={superior.id}>{content}</div>; })}</div>{!superiorDirectory.length && <div className="workspace-empty">Aucun responsable disponible.</div>}</section>
       {!isAgent && <section className="workspace-card agents-card"><div className="workspace-card-heading"><span><Users size={15} /> Agents</span><small>{agents.length}</small></div><div className="agent-list">{agents.map((agent) => { const campaignCount = new Set([...assignments.filter((assignment) => assignment.user_id === agent.id && assignment.is_active).map((assignment) => assignment.campaign_id), ...campaignSupervisorAssignments.filter((assignment) => assignment.agent_id === agent.id && assignment.is_active).map((assignment) => assignment.campaign_id)]).size; return <button type="button" className="agent-list-row" key={agent.id} onClick={() => setSelectedAgent(agent)}><Avatar user={agent} /><span><strong>{agent.full_name}</strong><small>{categoryShortLabel(agent.user_category)} · {campaignCount} campagne(s)</small></span><span className="agent-list-arrow">›</span></button>; })}</div></section>}
     </div>
     {!isAgent && assignmentRequests.length > 0 && <section className="workspace-card request-queue"><div className="workspace-card-heading"><span><BriefcaseBusiness size={15} /> Demandes d’affectation</span><small>{assignmentRequests.length}</small></div><div className="request-queue-list">{assignmentRequests.map((request) => { const agent = users.find((user) => user.id === request.user_id); const campaign = campaigns.find((item) => item.id === request.campaign_id); if (!agent || !campaign) return null; return <div className="request-queue-row" key={request.id}><div><strong>{agent.full_name}</strong><small>{campaign.name} · {new Date(request.requested_at).toLocaleDateString("fr-FR")}</small></div><div className="request-queue-actions"><button type="button" className="icon-action approve" onClick={() => void reviewRequest(request, true)} disabled={reviewingRequest === request.id} aria-label="Approuver"><CheckCircle2 size={14} /></button><button type="button" className="icon-action delete" onClick={() => void reviewRequest(request, false)} disabled={reviewingRequest === request.id} aria-label="Rejeter"><XCircle size={14} /></button></div></div>; })}</div></section>}
