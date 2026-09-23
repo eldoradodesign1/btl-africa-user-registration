@@ -544,6 +544,8 @@ html { scrollbar-width: thin; scrollbar-color: rgba(158,233,232,.35) rgba(3,11,1
 .request-queue-row strong { color: #d9e4e5; font-size: 10px; }
 .request-queue-row small { margin-top: 4px; color: var(--muted-2); font-size: 8px; }
 .request-queue-actions { display: flex; gap: 5px; }
+.claim-pending-item { align-items: flex-start; }
+.claim-pending-description { max-width: min(680px, 68vw); color: #c5d8da !important; font-size: 9px !important; line-height: 1.45; white-space: pre-line; }
 .agent-detail-modal { width: min(720px, 100%); max-height: calc(100dvh - 40px); overflow-y: auto; }
 .agent-detail-heading { display: flex; align-items: center; gap: 11px; }
 .agent-detail-heading h3 { margin-top: 5px; }
