@@ -701,6 +701,11 @@ html { scrollbar-width: thin; scrollbar-color: rgba(158,233,232,.35) rgba(3,11,1
 .button.primary { background: linear-gradient(135deg, #159fd3, #0873c5); box-shadow: 0 8px 20px rgba(0, 122, 210, .22); }
 .button.primary:hover:not(:disabled) { filter: brightness(1.12); transform: translateY(-1px); }
 @media (prefers-reduced-motion: reduce) { .app-shell::after { animation: none; } *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; } }
+@media (max-width: 760px) {
+  .app-shell::before { opacity: .08; }
+  .ambient { filter: blur(42px); opacity: .14; }
+  .glass-card, .side-card { backdrop-filter: none; box-shadow: 0 12px 34px rgba(0,0,0,.13), inset 0 1px 0 rgba(255,255,255,.035); }
+}
 @media (max-width: 600px) { .user-detail-meta { grid-template-columns: 1fr; } .superior-open { display: none; } }
 
 /* User list/card view switch */

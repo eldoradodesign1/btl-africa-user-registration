@@ -66,7 +66,7 @@ function CampaignPicker({ campaigns, value, onChange }: { campaigns: CampaignRec
 export function Avatar({ user, size = "small" }: { user: UserRecord; size?: "small" | "large" }) {
   const [imageFailed, setImageFailed] = useState(false);
   useEffect(() => setImageFailed(false), [user.avatar_url]);
-  return user.avatar_url && !imageFailed ? <img className={`profile-avatar ${size}`} src={user.avatar_url} alt={`${user.full_name} — photo de profil`} loading={size === "large" ? "eager" : "lazy"} decoding="async" onError={() => setImageFailed(true)} /> : <div className={`avatar ${size === "small" ? "small" : ""}`} aria-label={`${user.full_name} — initiale`}>{user.full_name.slice(0, 1).toUpperCase()}</div>;
+  return user.avatar_url && !imageFailed ? <img className={`profile-avatar ${size}`} src={user.avatar_url} alt={`${user.full_name} — photo de profil`} loading="lazy" decoding="async" onError={() => setImageFailed(true)} /> : <div className={`avatar ${size === "small" ? "small" : ""}`} aria-label={`${user.full_name} — initiale`}>{user.full_name.slice(0, 1).toUpperCase()}</div>;
 }
 
 export function ProfilePhotoPreviewModal({ user, onClose }: { user: UserRecord; onClose: () => void }) {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ChangeEvent, type CSSProperties, type FormEvent, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type FormEvent, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { createPortal } from "react-dom";
 import { AlertCircle, BriefcaseBusiness, CalendarDays, CheckCircle2, ChevronDown, ChevronLeft, Clock3, Database, Download, FilePenLine, FileSpreadsheet, FileText, Filter, ImagePlus, LayoutGrid, List, LoaderCircle, LogIn, LogOut, MapPin, PieChart, RefreshCw, Search, ServerCog, ShieldCheck, Trash2, UserCheck, UserPlus, UserCircle2, UserRoundPlus, X, XCircle } from "lucide-react";
 import { CopyablePhone } from "@/components/CopyablePhone";
@@ -101,9 +101,7 @@ function ModalLayer({ children }: { children: React.ReactNode }) {
 type UserGalleryCardProps = {
   user: UserRecord;
   users: UserRecord[];
-  campaigns: CampaignRecord[];
-  assignments: CampaignAssignment[];
-  campaignSupervisorAssignments: CampaignSupervisorAssignment[];
+  campaignsByUserId: ReadonlyMap<string, CampaignRecord[]>;
   shops: ShopRecord[];
   canManage: boolean;
   canManageCampaigns: boolean;
@@ -114,13 +112,9 @@ type UserGalleryCardProps = {
   onDelete: (user: UserRecord) => void;
 };
 
-function UserGalleryCard({ user, users, campaigns, assignments, campaignSupervisorAssignments, shops, canManage, canManageCampaigns, onOpenUser, onOpenPhoto, onAssign, onEdit, onDelete }: UserGalleryCardProps) {
+function UserGalleryCard({ user, users, campaignsByUserId, shops, canManage, canManageCampaigns, onOpenUser, onOpenPhoto, onAssign, onEdit, onDelete }: UserGalleryCardProps) {
   const [revealed, setRevealed] = useState(false);
-  const userCampaignIds = new Set([
-    ...assignments.filter((assignment) => assignment.user_id === user.id && assignment.is_active).map((assignment) => assignment.campaign_id),
-    ...campaignSupervisorAssignments.filter((assignment) => assignment.agent_id === user.id && assignment.is_active).map((assignment) => assignment.campaign_id),
-  ]);
-  const userCampaigns = campaigns.filter((campaign) => userCampaignIds.has(campaign.id));
+  const userCampaigns = campaignsByUserId.get(user.id) || [];
   const canAssign = canManageCampaigns && user.role === "agent" && ["hostess", "brand_ambassador", "brand_ambassador_youth"].includes(user.user_category || "");
   const category = user.user_category ? CATEGORY_LABELS[user.user_category].split(" — ")[0] : "Profil administratif";
 
@@ -199,6 +193,11 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
   const [actionLoading, setActionLoading] = useState(false);
   const [requestActionId, setRequestActionId] = useState<string | null>(null);
   const [simulatedUser, setSimulatedUser] = useState<UserRecord | null>(null);
+  const deferredSearch = useDeferredValue(search);
+  const handleWorkspaceNotice = useCallback((next: Notice) => setNotice(next), []);
+  const lastRefreshAt = useRef(0);
+  const refreshInFlight = useRef<Promise<void> | null>(null);
+  const focusRefreshTimer = useRef<number | null>(null);
   const isAuthenticated = Boolean(profile);
   const isSimulation = Boolean(profile?.role === "super_admin" && simulatedUser && simulatedUser.id !== profile.id);
   const effectiveProfile = simulatedUser || profile;
@@ -224,25 +223,38 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
     }
   }
 
-  async function refreshUsers(currentProfile: UserRecord | null = profile) {
-    setLoading(true);
-    try {
-      const [nextUsers, nextSuperiors, nextCampaigns, nextShops, nextAssignments, nextCampaignSupervisorAssignments, nextRequests, nextClaims] = await Promise.all([loadUsers(), loadSupervisors(), loadCampaigns(), loadShops().catch(() => []), loadCampaignAssignments(), loadCampaignSupervisorAssignments().catch(() => []), currentProfile && ["admin", "super_admin", "sub_admin", "supervisor"].includes(currentProfile.role) ? loadCampaignAssignmentRequests() : Promise.resolve([]), currentProfile?.role === "agent" ? loadMyCampaignClaims(currentProfile.id).catch(() => []) : currentProfile && ["admin", "super_admin", "sub_admin", "supervisor"].includes(currentProfile.role) ? loadCampaignClaims().catch(() => []) : Promise.resolve([])]);
-      setUsers(nextUsers);
-      setSuperiors(nextSuperiors);
-      setCampaigns(nextCampaigns);
-      setShops(nextShops as ShopRecord[]);
-      setCampaignAssignments(nextAssignments);
-      setCampaignSupervisorAssignments(nextCampaignSupervisorAssignments as CampaignSupervisorAssignment[]);
-      setAssignmentRequests(nextRequests as CampaignAssignmentRequest[]);
-      setCampaignClaims(nextClaims as CampaignClaim[]);
-      setNotice(null);
-    } catch (error) {
-      setNotice({ kind: "error", message: readableSupabaseError(error, "Impossible de charger les utilisateurs, campagnes ou affectations. Vérifiez les politiques RLS.") });
-    } finally {
-      setLoading(false);
-    }
-  }
+  const refreshUsers = useCallback(async (currentProfile: UserRecord | null = profile, force = false) => {
+    if (refreshInFlight.current) return refreshInFlight.current;
+    if (!force && Date.now() - lastRefreshAt.current < 15000) return;
+    const task = (async () => {
+      setLoading(true);
+      try {
+        const isManager = Boolean(currentProfile && ["admin", "super_admin", "sub_admin", "supervisor"].includes(currentProfile.role));
+        const isAdmin = Boolean(currentProfile && ["admin", "super_admin"].includes(currentProfile.role));
+        const [nextUsers, nextCampaigns] = await Promise.all([loadUsers(), loadCampaigns()]);
+        const nextSuperiors = nextUsers.filter((user) => ["supervisor", "admin", "sub_admin", "super_admin"].includes(user.role));
+        setUsers(nextUsers);
+        setSuperiors(nextSuperiors);
+        setCampaigns(nextCampaigns);
+        setLoading(false);
+
+        const [nextShops, nextAssignments, nextCampaignSupervisorAssignments, nextRequests, nextClaims] = await Promise.all([isAdmin ? loadShops().catch(() => []) : Promise.resolve([]), loadCampaignAssignments(), loadCampaignSupervisorAssignments().catch(() => []), isManager ? loadCampaignAssignmentRequests().catch(() => []) : Promise.resolve([]), currentProfile?.role === "agent" ? loadMyCampaignClaims(currentProfile.id).catch(() => []) : isManager ? loadCampaignClaims().catch(() => []) : Promise.resolve([])]);
+        setShops(nextShops as ShopRecord[]);
+        setCampaignAssignments(nextAssignments);
+        setCampaignSupervisorAssignments(nextCampaignSupervisorAssignments as CampaignSupervisorAssignment[]);
+        setAssignmentRequests(nextRequests as CampaignAssignmentRequest[]);
+        setCampaignClaims(nextClaims as CampaignClaim[]);
+        setNotice(null);
+      } catch (error) {
+        setNotice({ kind: "error", message: readableSupabaseError(error, "Impossible de charger les utilisateurs, campagnes ou affectations. Vérifiez les politiques RLS.") });
+      } finally {
+        setLoading(false);
+        lastRefreshAt.current = Date.now();
+      }
+    })();
+    refreshInFlight.current = task;
+    try { await task; } finally { if (refreshInFlight.current === task) refreshInFlight.current = null; }
+  }, [profile]);
 
   async function refreshSession() {
     if (!isSupabaseConfigured()) return;
@@ -271,11 +283,14 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
   useEffect(() => { void refreshSession(); }, []);
   useEffect(() => {
     if (!profile) return;
-    const refreshOnFocus = () => { void refreshUsers(profile); };
+    const refreshOnFocus = () => {
+      if (document.visibilityState !== "visible" || Date.now() - lastRefreshAt.current < 30000 || focusRefreshTimer.current !== null) return;
+      focusRefreshTimer.current = window.setTimeout(() => { focusRefreshTimer.current = null; void refreshUsers(profile, true); }, 250);
+    };
     window.addEventListener("focus", refreshOnFocus);
     document.addEventListener("visibilitychange", refreshOnFocus);
-    return () => { window.removeEventListener("focus", refreshOnFocus); document.removeEventListener("visibilitychange", refreshOnFocus); };
-  }, [profile]);
+    return () => { window.removeEventListener("focus", refreshOnFocus); document.removeEventListener("visibilitychange", refreshOnFocus); if (focusRefreshTimer.current !== null) window.clearTimeout(focusRefreshTimer.current); focusRefreshTimer.current = null; };
+  }, [profile, refreshUsers]);
 
   useEffect(() => {
     if (simulatedUser && !users.some((user) => user.id === simulatedUser.id)) setSimulatedUser(null);
@@ -318,7 +333,7 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
       setProfile(current.profile);
       setPhone("");
       setPassword("");
-      await refreshUsers(current.profile);
+      await refreshUsers(current.profile, true);
       if (current.profile.role === "super_admin") {
         setLoadingRequests(true);
         try { setPendingRequests(await loadPendingRegistrationRequests()); } finally { setLoadingRequests(false); }
@@ -458,19 +473,30 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
   }
 
   const filteredUsers = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    const normalizedQuery = normalizePhone(search);
+    const query = deferredSearch.trim().toLowerCase();
+    const normalizedQuery = normalizePhone(deferredSearch);
     const campaignUserIds = campaignFilter === "all" ? null : new Set([...campaignAssignments.filter((assignment) => assignment.campaign_id === campaignFilter && assignment.is_active).map((assignment) => assignment.user_id), ...campaignSupervisorAssignments.filter((assignment) => assignment.campaign_id === campaignFilter && assignment.is_active).map((assignment) => assignment.agent_id)]);
     return users.filter((user) => (!query || user.full_name.toLowerCase().includes(query) || user.phone.includes(normalizedQuery) || user.phone.includes(query)) && (roleFilter === "all" || user.role === roleFilter) && (categoryFilter === "all" || user.user_category === categoryFilter) && (!campaignUserIds || campaignUserIds.has(user.id)));
-  }, [users, search, roleFilter, categoryFilter, campaignFilter, campaignAssignments, campaignSupervisorAssignments]);
+  }, [users, deferredSearch, roleFilter, categoryFilter, campaignFilter, campaignAssignments, campaignSupervisorAssignments]);
   const categoryStats = useMemo(() => CATEGORY_OPTIONS.map((category) => ({ category, count: users.filter((user) => user.user_category === category).length })).filter((item) => item.count > 0), [users]);
   const donutGradient = useMemo(() => { const colors = ["#9ee9e8", "#b5ef8c", "#d3b5ff", "#ffca8a"]; const total = Math.max(users.length, 1); let cursor = 0; return `conic-gradient(${categoryStats.length ? categoryStats.map((item, index) => { const start = cursor; cursor += (item.count / total) * 100; return `${colors[index % colors.length]} ${start}% ${cursor}%`; }).join(", ") : "#29444b 0 100%"})`; }, [categoryStats, users.length]);
   const campaignStats = useMemo(() => campaigns.map((campaign) => ({ campaign, count: new Set([...campaignAssignments.filter((assignment) => assignment.campaign_id === campaign.id && users.some((user) => user.id === assignment.user_id)).map((assignment) => assignment.user_id), ...campaignSupervisorAssignments.filter((assignment) => assignment.campaign_id === campaign.id && users.some((user) => user.id === assignment.agent_id)).map((assignment) => assignment.agent_id)]).size })).filter((item) => item.count > 0), [campaigns, campaignAssignments, campaignSupervisorAssignments, users]);
   const campaignDonutGradient = useMemo(() => { const colors = ["#9ee9e8", "#b5ef8c", "#d3b5ff", "#ffca8a", "#f5cd78", "#ff9a8a"]; const total = Math.max(campaignStats.reduce((sum, item) => sum + item.count, 0), 1); let cursor = 0; return `conic-gradient(${campaignStats.length ? campaignStats.map((item, index) => { const start = cursor; cursor += (item.count / total) * 100; return `${colors[index % colors.length]} ${start}% ${cursor}%`; }).join(", ") : "#29444b 0 100%"})`; }, [campaignStats]);
+  const campaignsByUserId = useMemo(() => {
+    const byUser = new Map<string, Set<string>>();
+    [...campaignAssignments, ...campaignSupervisorAssignments.map((assignment) => ({ user_id: assignment.agent_id, campaign_id: assignment.campaign_id, is_active: assignment.is_active }))].forEach((assignment) => {
+      if (!assignment.is_active) return;
+      const ids = byUser.get(assignment.user_id) || new Set<string>();
+      ids.add(assignment.campaign_id);
+      byUser.set(assignment.user_id, ids);
+    });
+    const result = new Map<string, CampaignRecord[]>();
+    byUser.forEach((campaignIds, userId) => result.set(userId, campaigns.filter((campaign) => campaignIds.has(campaign.id))));
+    return result;
+  }, [campaignAssignments, campaignSupervisorAssignments, campaigns]);
 
   function campaignNamesForUser(userId: string): string {
-    const ids = new Set([...campaignAssignments.filter((assignment) => assignment.user_id === userId && assignment.is_active).map((assignment) => assignment.campaign_id), ...campaignSupervisorAssignments.filter((assignment) => assignment.agent_id === userId && assignment.is_active).map((assignment) => assignment.campaign_id)]);
-    return campaigns.filter((campaign) => ids.has(campaign.id)).map((campaign) => campaign.name).join(" · ");
+    return (campaignsByUserId.get(userId) || []).map((campaign) => campaign.name).join(" · ");
   }
 
   const selectedCampaignName = campaignFilter === "all" ? "Toutes les campagnes" : campaigns.find((campaign) => campaign.id === campaignFilter)?.name || "Campagne sélectionnée";
@@ -607,7 +633,7 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
   }
 
   if (effectiveProfile && (effectiveProfile.role === "agent" || effectiveProfile.role === "supervisor" || effectiveProfile.role === "sub_admin")) {
-    return <section className="admin-dashboard glass-card role-dashboard">{simulationControl}<div className="dashboard-header"><div className="dashboard-title"><div className="heading-icon"><ServerCog size={19} /></div><div><div className="eyebrow"><ShieldCheck size={13} /> Console sécurisée</div><h2>Tableau de bord</h2></div></div><div className="dashboard-actions"><span className="session-chip"><span className="session-dot" />{effectiveProfile.full_name} · {ROLE_LABELS[effectiveProfile.role]}</span><button className="icon-button" type="button" onClick={() => void handleLogout()} aria-label="Se déconnecter" title="Se déconnecter"><LogOut size={15} /></button></div></div>{notice && <div className={`dashboard-notice ${notice.kind}`}><span>{notice.kind === "success" ? <CheckCircle2 size={15} /> : <AlertCircle size={15} />}</span>{notice.message}<button type="button" onClick={() => setNotice(null)} aria-label="Fermer"><X size={14} /></button></div>}<RoleWorkspace profile={effectiveProfile} users={users} superiors={superiors} campaigns={campaigns} assignments={campaignAssignments} campaignSupervisorAssignments={campaignSupervisorAssignments} assignmentRequests={assignmentRequests} campaignClaims={campaignClaims} onNotice={(next) => setNotice(next)} onProfileUpdated={handleProfileSaved} onProfileOpen={() => isSimulation ? setNotice({ kind: "error", message: "Le profil est indisponible pendant une simulation." }) : setProfileOpen(true)} onRequestReviewed={() => void refreshUsers(profile)} simulation={isSimulation} />{profileOpen && !isSimulation && profile && <ProfileModal profile={profile} onClose={() => setProfileOpen(false)} onSaved={handleProfileSaved} />}{profilePhotoPreviewOpen && effectiveProfile && <ProfilePhotoPreviewModal user={effectiveProfile} onClose={() => setProfilePhotoPreviewOpen(false)} />}</section>;
+    return <section className="admin-dashboard glass-card role-dashboard">{simulationControl}<div className="dashboard-header"><div className="dashboard-title"><div className="heading-icon"><ServerCog size={19} /></div><div><div className="eyebrow"><ShieldCheck size={13} /> Console sécurisée</div><h2>Tableau de bord</h2></div></div><div className="dashboard-actions"><span className="session-chip"><span className="session-dot" />{effectiveProfile.full_name} · {ROLE_LABELS[effectiveProfile.role]}</span><button className="icon-button" type="button" onClick={() => void handleLogout()} aria-label="Se déconnecter" title="Se déconnecter"><LogOut size={15} /></button></div></div>{notice && <div className={`dashboard-notice ${notice.kind}`}><span>{notice.kind === "success" ? <CheckCircle2 size={15} /> : <AlertCircle size={15} />}</span>{notice.message}<button type="button" onClick={() => setNotice(null)} aria-label="Fermer"><X size={14} /></button></div>}<RoleWorkspace profile={effectiveProfile} users={users} superiors={superiors} campaigns={campaigns} assignments={campaignAssignments} campaignSupervisorAssignments={campaignSupervisorAssignments} assignmentRequests={assignmentRequests} campaignClaims={campaignClaims} onNotice={handleWorkspaceNotice} onProfileUpdated={handleProfileSaved} onProfileOpen={() => isSimulation ? setNotice({ kind: "error", message: "Le profil est indisponible pendant une simulation." }) : setProfileOpen(true)} onRequestReviewed={() => void refreshUsers(profile, true)} simulation={isSimulation} />{profileOpen && !isSimulation && profile && <ProfileModal profile={profile} onClose={() => setProfileOpen(false)} onSaved={handleProfileSaved} />}{profilePhotoPreviewOpen && effectiveProfile && <ProfilePhotoPreviewModal user={effectiveProfile} onClose={() => setProfilePhotoPreviewOpen(false)} />}</section>;
   }
 
   return <section className="admin-dashboard glass-card">{simulationControl}
@@ -632,17 +658,15 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
     {configured && isAuthenticated && <>{isReadOnly && <div className="readonly-banner"><ShieldCheck size={15} /><span><strong>Lecture seule</strong> · {ROLE_LABELS[profile!.role]}</span></div>}
       {profile?.role === "super_admin" && !isSimulation && pendingRequests.length > 0 && <section className="pending-panel"><div className="pending-heading"><div><div className="card-kicker"><Clock3 size={14} /> Validation requise</div><h3>Demandes d’inscription</h3><p>Les agents restent absents des listes tant qu’ils ne sont pas approuvés.</p></div><span className="pending-count">{pendingRequests.length}</span><button type="button" className="icon-button" onClick={() => void refreshRequests()} disabled={loadingRequests} aria-label="Actualiser les demandes" title="Actualiser les demandes">{loadingRequests ? <LoaderCircle className="spin" size={14} /> : <RefreshCw size={14} />}</button></div><div className="pending-list">{pendingRequests.map((request) => <div className="pending-item" key={request.id}><div className="avatar small">{request.full_name.slice(0, 1).toUpperCase()}</div><div className="pending-identity"><strong>{request.full_name}</strong><CopyablePhone value={request.phone} /> <small>{categoryShortLabel(request.user_category)} · {new Date(request.created_at).toLocaleDateString("fr-FR")}</small></div><span className="role-badge">En attente</span><div className="pending-actions"><button type="button" className="icon-action approve" onClick={() => void handleApprove(request)} disabled={requestActionId === request.id} aria-label={`Approuver ${request.full_name}`} title="Approuver">{requestActionId === request.id ? <LoaderCircle className="spin" size={14} /> : <CheckCircle2 size={14} />}</button><button type="button" className="icon-action delete" onClick={() => void handleReject(request)} disabled={requestActionId === request.id} aria-label={`Rejeter ${request.full_name}`} title="Rejeter"><XCircle size={14} /></button></div></div>)}</div></section>}
       {canManageCampaigns && assignmentRequests.length > 0 && <section className="pending-panel campaign-request-panel"><div className="pending-heading"><div><div className="card-kicker"><BriefcaseBusiness size={14} /> Affectations à valider</div><h3>Demandes de campagne</h3><p>Les agents ont demandé à rejoindre une campagne.</p></div><span className="pending-count">{assignmentRequests.length}</span></div><div className="pending-list">{assignmentRequests.map((request) => { const agent = users.find((user) => user.id === request.user_id); const campaign = campaigns.find((item) => item.id === request.campaign_id); if (!agent || !campaign) return null; return <div className="pending-item" key={request.id}><div className="avatar small">{agent.full_name.slice(0, 1).toUpperCase()}</div><div className="pending-identity"><strong>{agent.full_name}</strong><small>{campaign.name} · {new Date(request.requested_at).toLocaleDateString("fr-FR")}</small></div><div className="pending-actions"><button type="button" className="icon-action approve" onClick={() => void handleCampaignRequestReview(request, true)} disabled={requestActionId === request.id} aria-label="Approuver"><CheckCircle2 size={14} /></button><button type="button" className="icon-action delete" onClick={() => void handleCampaignRequestReview(request, false)} disabled={requestActionId === request.id} aria-label="Rejeter"><XCircle size={14} /></button></div></div>; })}</div></section>}
-      {canManageCampaigns && campaignClaims.length > 0 && <section className="pending-panel campaign-claims-panel"><div className="pending-heading"><div><div className="card-kicker"><FileText size={14} /> Réclamations campagne</div><h3>Dossiers à traiter</h3><p>Ouvrez un dossier pour répondre, demander des informations ou le clôturer.</p></div><span className="pending-count">{campaignClaims.length}</span><button type="button" className="icon-button" onClick={() => void refreshUsers()} disabled={loading} aria-label="Actualiser les dossiers" title="Actualiser les dossiers">{loading ? <LoaderCircle className="spin" size={14} /> : <RefreshCw size={14} />}</button></div><div className="pending-list">{campaignClaims.map((claim) => { const agent = users.find((user) => user.id === claim.user_id); const campaign = campaigns.find((item) => item.id === claim.campaign_id); if (!agent || !campaign) return null; return <button type="button" className="pending-item claim-pending-item" key={claim.id} onClick={() => setSelectedClaim(claim)}><div className="avatar small">{agent.full_name.slice(0, 1).toUpperCase()}</div><div className="pending-identity"><strong>{agent.full_name} · {campaign.name}</strong><small>{CLAIM_STATUS_NAMES[claim.status]} · {new Date(claim.updated_at || claim.created_at).toLocaleDateString("fr-FR")}</small><span className="claim-pending-description">{claim.description}</span></div><span className="button secondary compact">Ouvrir le dossier</span></button>; })}</div></section>}
+      {canManageCampaigns && campaignClaims.length > 0 && <section className="pending-panel campaign-claims-panel"><div className="pending-heading"><div><div className="card-kicker"><FileText size={14} /> Réclamations campagne</div><h3>Dossiers à traiter</h3><p>Ouvrez un dossier pour répondre, demander des informations ou le clôturer.</p></div><span className="pending-count">{campaignClaims.length}</span><button type="button" className="icon-button" onClick={() => void refreshUsers(profile, true)} disabled={loading} aria-label="Actualiser les dossiers" title="Actualiser les dossiers">{loading ? <LoaderCircle className="spin" size={14} /> : <RefreshCw size={14} />}</button></div><div className="pending-list">{campaignClaims.map((claim) => { const agent = users.find((user) => user.id === claim.user_id); const campaign = campaigns.find((item) => item.id === claim.campaign_id); if (!agent || !campaign) return null; return <button type="button" className="pending-item claim-pending-item" key={claim.id} onClick={() => setSelectedClaim(claim)}><div className="avatar small">{agent.full_name.slice(0, 1).toUpperCase()}</div><div className="pending-identity"><strong>{agent.full_name} · {campaign.name}</strong><small>{CLAIM_STATUS_NAMES[claim.status]} · {new Date(claim.updated_at || claim.created_at).toLocaleDateString("fr-FR")}</small><span className="claim-pending-description">{claim.description}</span></div><span className="button secondary compact">Ouvrir le dossier</span></button>; })}</div></section>}
       <div className="dashboard-insights"><div className="donut-card"><div className="donut-heading"><span><PieChart size={14} /> Répartition campagne</span><small>{users.length} total</small></div><div className="donut-content"><div className="donut" style={{ "--donut": donutGradient } as CSSProperties}><div><strong>{users.length}</strong><small>profils</small></div></div><div className="donut-legend">{categoryStats.length ? categoryStats.map((item, index) => <div key={item.category}><i style={{ background: ["#9ee9e8", "#b5ef8c", "#d3b5ff", "#ffca8a"][index % 4] }} /> <span>{categoryShortLabel(item.category)}</span><b>{item.count}</b></div>) : <span className="muted-note">Aucune catégorie renseignée</span>}</div></div></div><div className="role-summary"><div className="donut-heading"><span><ShieldCheck size={14} /> Rôles actifs</span><small>{users.length} profils</small></div>{ROLE_OPTIONS.map((role) => { const count = users.filter((user) => user.role === role).length; return count ? <div className="role-line" key={role}><span>{ROLE_LABELS[role]}</span><b>{count}</b><div><i style={{ width: `${Math.max(8, (count / Math.max(users.length, 1)) * 100)}%` }} /></div></div> : null; })}</div><div className="donut-card campaign-donut-card"><div className="donut-heading"><span><BriefcaseBusiness size={14} /> Effectifs par campagne</span><small>{campaignStats.reduce((sum, item) => sum + item.count, 0)} affectations</small></div><div className="donut-content"><div className="donut" style={{ "--donut": campaignDonutGradient } as CSSProperties}><div><strong>{campaignStats.reduce((sum, item) => sum + item.count, 0)}</strong><small>affectés</small></div></div><div className="donut-legend">{campaignStats.length ? campaignStats.map((item, index) => <div key={item.campaign.id}><i style={{ background: ["#9ee9e8", "#b5ef8c", "#d3b5ff", "#ffca8a", "#f5cd78", "#ff9a8a"][index % 6] }} /> <span title={item.campaign.name}>{item.campaign.name}</span><b>{item.count}</b></div>) : <span className="muted-note">Aucune affectation</span>}</div></div></div></div>
-      <div className="dashboard-toolbar"><div className="history-search"><Search size={16} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Rechercher un MSISDN ou un nom…" aria-label="Rechercher dans l’historique" /></div><div className="filter-control"><Filter size={14} /><CustomSelect value={roleFilter} onChange={setRoleFilter} ariaLabel="Filtrer par rôle" placeholder="Tous les rôles" options={[{ value: "all", label: "Tous les rôles" }, ...ROLE_OPTIONS.map((role) => ({ value: role, label: ROLE_LABELS[role] }))]} /></div><div className="filter-control"><CustomSelect value={categoryFilter} onChange={setCategoryFilter} ariaLabel="Filtrer par catégorie" placeholder="Toutes les catégories" options={[{ value: "all", label: "Toutes les catégories" }, ...CATEGORY_OPTIONS.map((category) => ({ value: category, label: categoryShortLabel(category) }))]} /></div><div className="filter-control campaign-filter-control"><BriefcaseBusiness size={14} /><CustomSelect value={campaignFilter} onChange={setCampaignFilter} ariaLabel="Filtrer par campagne" placeholder="Toutes les campagnes" options={[{ value: "all", label: "Toutes les campagnes" }, ...campaignFilterOptions]} /></div><div className="view-toggle" role="group" aria-label="Mode d’affichage des utilisateurs"><button type="button" className={userView === "table" ? "is-active" : ""} onClick={() => setUserView("table")} aria-label="Afficher en liste" title="Vue liste"><List size={15} /></button><button type="button" className={userView === "cards" ? "is-active" : ""} onClick={() => setUserView("cards")} aria-label="Afficher en cartes" title="Vue cartes"><LayoutGrid size={15} /></button></div><button className="icon-button" type="button" onClick={() => void refreshUsers()} disabled={loading} aria-label="Actualiser" title="Actualiser">{loading ? <LoaderCircle className="spin" size={15} /> : <RefreshCw size={15} />}</button>{profile?.role === "super_admin" && !isSimulation && <button className="button primary compact toolbar-create-user" type="button" onClick={onRequestCreate}><UserPlus size={14} /> Nouvel utilisateur</button>}<button className="icon-button primary-icon" type="button" onClick={() => setExportOpen(true)} disabled={!filteredUsers.length} aria-label="Choisir le format d’export" title="Exporter"><Download size={15} /></button></div>
+      <div className="dashboard-toolbar"><div className="history-search"><Search size={16} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Rechercher un MSISDN ou un nom…" aria-label="Rechercher dans l’historique" /></div><div className="filter-control"><Filter size={14} /><CustomSelect value={roleFilter} onChange={setRoleFilter} ariaLabel="Filtrer par rôle" placeholder="Tous les rôles" options={[{ value: "all", label: "Tous les rôles" }, ...ROLE_OPTIONS.map((role) => ({ value: role, label: ROLE_LABELS[role] }))]} /></div><div className="filter-control"><CustomSelect value={categoryFilter} onChange={setCategoryFilter} ariaLabel="Filtrer par catégorie" placeholder="Toutes les catégories" options={[{ value: "all", label: "Toutes les catégories" }, ...CATEGORY_OPTIONS.map((category) => ({ value: category, label: categoryShortLabel(category) }))]} /></div><div className="filter-control campaign-filter-control"><BriefcaseBusiness size={14} /><CustomSelect value={campaignFilter} onChange={setCampaignFilter} ariaLabel="Filtrer par campagne" placeholder="Toutes les campagnes" options={[{ value: "all", label: "Toutes les campagnes" }, ...campaignFilterOptions]} /></div><div className="view-toggle" role="group" aria-label="Mode d’affichage des utilisateurs"><button type="button" className={userView === "table" ? "is-active" : ""} onClick={() => setUserView("table")} aria-label="Afficher en liste" title="Vue liste"><List size={15} /></button><button type="button" className={userView === "cards" ? "is-active" : ""} onClick={() => setUserView("cards")} aria-label="Afficher en cartes" title="Vue cartes"><LayoutGrid size={15} /></button></div><button className="icon-button" type="button" onClick={() => void refreshUsers(profile, true)} disabled={loading} aria-label="Actualiser" title="Actualiser">{loading ? <LoaderCircle className="spin" size={15} /> : <RefreshCw size={15} />}</button>{profile?.role === "super_admin" && !isSimulation && <button className="button primary compact toolbar-create-user" type="button" onClick={onRequestCreate}><UserPlus size={14} /> Nouvel utilisateur</button>}<button className="icon-button primary-icon" type="button" onClick={() => setExportOpen(true)} disabled={!filteredUsers.length} aria-label="Choisir le format d’export" title="Exporter"><Download size={15} /></button></div>
       <div className="dashboard-stats"><span><strong>{filteredUsers.length}</strong> résultat{filteredUsers.length > 1 ? "s" : ""}</span><span><strong>{users.length}</strong> utilisateur{users.length > 1 ? "s" : ""}</span>{campaignFilter !== "all" && <span className="active-filter"><BriefcaseBusiness size={12} /> {selectedCampaignName}</span>}<span className="secure-label"><ShieldCheck size={13} /> Sans password_hash</span></div>
-      {userView === "table" ? <div className="users-table-wrap"><table className="users-table"><thead><tr><th>Utilisateur</th><th>MSISDN</th><th>Rôle</th><th>Catégorie</th><th>Campagnes</th><th>Entrée agence</th><th>Shop</th>{(canManage || canManageCampaigns) && <th aria-label="Actions" />}</tr></thead><tbody>{filteredUsers.map((user) => { const userCampaignIds = new Set([...campaignAssignments.filter((assignment) => assignment.user_id === user.id && assignment.is_active).map((assignment) => assignment.campaign_id), ...campaignSupervisorAssignments.filter((assignment) => assignment.agent_id === user.id && assignment.is_active).map((assignment) => assignment.campaign_id)]); const userCampaigns = campaigns.filter((campaign) => userCampaignIds.has(campaign.id)); const canAssign = canManageCampaigns && user.role === "agent" && ["hostess", "brand_ambassador", "brand_ambassador_youth"].includes(user.user_category || ""); return <tr key={user.id} className={canManage ? "row-clickable" : ""} onClick={() => handleUserRowClick(user)}><td><div className="table-user"><Avatar user={user} /><div><strong>{user.full_name}</strong><small>{user.id}</small></div></div></td><td><CopyablePhone value={user.phone} className="mono-value" /></td><td><span className={`role-badge role-${user.role}`}>{ROLE_LABELS[user.role]}</span></td><td>{user.user_category ? CATEGORY_LABELS[user.user_category].split(" — ")[0] : "—"}</td><td><div className="campaign-pills">{userCampaigns.length ? userCampaigns.map((campaign) => <span className="campaign-pill" key={campaign.id} title={campaign.name}>{campaign.name}</span>) : <span className="muted-note">Aucune</span>}</div></td><td>{supervisorDisplayName(user.supervisor_id, users)}</td><td>{shopDisplayName(user.permanent_shop_id, shops)}</td>{(canManage || canManageCampaigns) && <td><div className="row-actions">{canManage && user.role === "agent" && <button type="button" className="icon-action profile-action" aria-label={`Ouvrir la fiche de ${user.full_name}`} title="Ouvrir la fiche agent" onClick={(event) => { event.stopPropagation(); setSelectedAgentProfile(user); }}><UserCircle2 size={14} /></button>}{canAssign && <button type="button" className="icon-action campaign-action" aria-label={`Affecter ${user.full_name} à une campagne`} title="Affecter aux campagnes" onClick={(event) => { event.stopPropagation(); beginCampaignAssignment(user); }}><BriefcaseBusiness size={14} /></button>}{canManage && <button type="button" className="icon-action edit" aria-label={`Modifier ${user.full_name}`} title="Modifier" onClick={(event) => { event.stopPropagation(); beginEdit(user); }}><FilePenLine size={14} /></button>}{canManage && <button type="button" className="icon-action delete" aria-label={`Supprimer ${user.full_name}`} title="Supprimer" onClick={(event) => { event.stopPropagation(); setDeleteCandidate(user); }}><Trash2 size={14} /></button>}</div></td>}</tr>; })}</tbody></table>{!filteredUsers.length && <div className="table-empty"><Search size={22} /><strong>Aucun utilisateur trouvé</strong><span>Essayez un MSISDN ou élargissez vos filtres.</span></div>}</div> : <div className="users-card-grid">{filteredUsers.map((user) => <UserGalleryCard
+      {userView === "table" ? <div className="users-table-wrap"><table className="users-table"><thead><tr><th>Utilisateur</th><th>MSISDN</th><th>Rôle</th><th>Catégorie</th><th>Campagnes</th><th>Entrée agence</th><th>Shop</th>{(canManage || canManageCampaigns) && <th aria-label="Actions" />}</tr></thead><tbody>{filteredUsers.map((user) => { const userCampaigns = campaignsByUserId.get(user.id) || []; const canAssign = canManageCampaigns && user.role === "agent" && ["hostess", "brand_ambassador", "brand_ambassador_youth"].includes(user.user_category || ""); return <tr key={user.id} className={canManage ? "row-clickable" : ""} onClick={() => handleUserRowClick(user)}><td><div className="table-user"><Avatar user={user} /><div><strong>{user.full_name}</strong><small>{user.id}</small></div></div></td><td><CopyablePhone value={user.phone} className="mono-value" /></td><td><span className={`role-badge role-${user.role}`}>{ROLE_LABELS[user.role]}</span></td><td>{user.user_category ? CATEGORY_LABELS[user.user_category].split(" — ")[0] : "—"}</td><td><div className="campaign-pills">{userCampaigns.length ? userCampaigns.map((campaign) => <span className="campaign-pill" key={campaign.id} title={campaign.name}>{campaign.name}</span>) : <span className="muted-note">Aucune</span>}</div></td><td>{supervisorDisplayName(user.supervisor_id, users)}</td><td>{shopDisplayName(user.permanent_shop_id, shops)}</td>{(canManage || canManageCampaigns) && <td><div className="row-actions">{canManage && user.role === "agent" && <button type="button" className="icon-action profile-action" aria-label={`Ouvrir la fiche de ${user.full_name}`} title="Ouvrir la fiche agent" onClick={(event) => { event.stopPropagation(); setSelectedAgentProfile(user); }}><UserCircle2 size={14} /></button>}{canAssign && <button type="button" className="icon-action campaign-action" aria-label={`Affecter ${user.full_name} à une campagne`} title="Affecter aux campagnes" onClick={(event) => { event.stopPropagation(); beginCampaignAssignment(user); }}><BriefcaseBusiness size={14} /></button>}{canManage && <button type="button" className="icon-action edit" aria-label={`Modifier ${user.full_name}`} title="Modifier" onClick={(event) => { event.stopPropagation(); beginEdit(user); }}><FilePenLine size={14} /></button>}{canManage && <button type="button" className="icon-action delete" aria-label={`Supprimer ${user.full_name}`} title="Supprimer" onClick={(event) => { event.stopPropagation(); setDeleteCandidate(user); }}><Trash2 size={14} /></button>}</div></td>}</tr>; })}</tbody></table>{!filteredUsers.length && <div className="table-empty"><Search size={22} /><strong>Aucun utilisateur trouvé</strong><span>Essayez un MSISDN ou élargissez vos filtres.</span></div>}</div> : <div className="users-card-grid">{filteredUsers.map((user) => <UserGalleryCard
         key={user.id}
         user={user}
         users={users}
-        campaigns={campaigns}
-        assignments={campaignAssignments}
-        campaignSupervisorAssignments={campaignSupervisorAssignments}
+        campaignsByUserId={campaignsByUserId}
         shops={shops}
         canManage={canManage}
         canManageCampaigns={canManageCampaigns}
@@ -661,7 +685,7 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
     {selectedUserProfile && <UserDetailModal user={selectedUserProfile} users={users} superiors={superiors} campaigns={campaigns} assignments={campaignAssignments} campaignSupervisorAssignments={campaignSupervisorAssignments} assignmentRequests={assignmentRequests} canRequest={false} onNotice={(next) => setNotice(next)} onClose={() => setSelectedUserProfile(null)} />}
     {galleryPhotoUser && <ProfilePhotoPreviewModal user={galleryPhotoUser} onClose={() => setGalleryPhotoUser(null)} />}
     {profileOpen && profile && <ProfileModal profile={profile} onClose={() => setProfileOpen(false)} onSaved={handleProfileSaved} />}
-    {selectedClaim && effectiveProfile && <CampaignClaimCaseModal claim={selectedClaim} viewer={effectiveProfile} agent={users.find((user) => user.id === selectedClaim.user_id)} campaign={campaigns.find((campaign) => campaign.id === selectedClaim.campaign_id)} users={users} canManage={Boolean(canManageCampaigns && !isSimulation)} onNotice={(next) => setNotice(next)} onChanged={(updated) => { setSelectedClaim(updated); void refreshUsers(profile); }} onClose={() => setSelectedClaim(null)} />}
+    {selectedClaim && effectiveProfile && <CampaignClaimCaseModal claim={selectedClaim} viewer={effectiveProfile} agent={users.find((user) => user.id === selectedClaim.user_id)} campaign={campaigns.find((campaign) => campaign.id === selectedClaim.campaign_id)} users={users} canManage={Boolean(canManageCampaigns && !isSimulation)} onNotice={handleWorkspaceNotice} onChanged={(updated) => { setSelectedClaim(updated); void refreshUsers(profile, true); }} onClose={() => setSelectedClaim(null)} />}
     </>}
   </section>;
 }
