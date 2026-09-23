@@ -30,6 +30,7 @@ import {
   reviewCampaignAssignmentRequest,
   signInAdmin,
   signOutAdmin,
+  subscribeToDataChanges,
   syncAgentCampaignSupervisors,
   testSupabaseConnection,
   updateUser,
@@ -72,9 +73,9 @@ function shopDisplayName(shopId: string | null, shops: ShopRecord[]): string {
   return shops.find((shop) => shop.id === shopId)?.name || "Shop non référencé";
 }
 
-function limeDisplayName(supervisorId: string | null, users: UserRecord[]): string {
-  if (!supervisorId) return "—";
-  return users.find((user) => user.id === supervisorId)?.full_name || "—";
+function limeDisplayName(limeId: string | null, users: UserRecord[]): string {
+  if (!limeId) return "—";
+  return users.find((user) => user.id === limeId)?.full_name || "—";
 }
 
 function readableSupabaseError(error: unknown, fallback: string): string {
@@ -256,13 +257,16 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
     try { await task; } finally { if (refreshInFlight.current === task) refreshInFlight.current = null; }
   }, [profile]);
 
-  async function refreshSession() {
+  async function refreshSession(force = false) {
     if (!isSupabaseConfigured()) return;
     try {
       const current = await getAdminContext();
-      setProfile(current?.profile || null);
+      setProfile((previous) => {
+        const next = current?.profile || null;
+        return previous && next && JSON.stringify(previous) === JSON.stringify(next) ? previous : next;
+      });
       if (current) {
-        await refreshUsers(current.profile);
+        await refreshUsers(current.profile, force);
         if (current.profile.role === "super_admin") {
           setLoadingRequests(true);
           try {
@@ -272,10 +276,10 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
           } finally {
             setLoadingRequests(false);
           }
-        }
+        } else setPendingRequests([]);
       }
     } catch (error) {
-      setProfile(null);
+      if (!profile) setProfile(null);
       setNotice({ kind: "error", message: readableSupabaseError(error, "Session indisponible.") });
     }
   }
@@ -283,14 +287,26 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
   useEffect(() => { void refreshSession(); }, []);
   useEffect(() => {
     if (!profile) return;
-    const refreshOnFocus = () => {
-      if (document.visibilityState !== "visible" || Date.now() - lastRefreshAt.current < 30000 || focusRefreshTimer.current !== null) return;
-      focusRefreshTimer.current = window.setTimeout(() => { focusRefreshTimer.current = null; void refreshUsers(profile, true); }, 250);
+    const scheduleLiveRefresh = () => {
+      if (document.visibilityState !== "visible" || focusRefreshTimer.current !== null) return;
+      focusRefreshTimer.current = window.setTimeout(() => {
+        focusRefreshTimer.current = null;
+        void refreshSession(true);
+      }, 250);
     };
-    window.addEventListener("focus", refreshOnFocus);
-    document.addEventListener("visibilitychange", refreshOnFocus);
-    return () => { window.removeEventListener("focus", refreshOnFocus); document.removeEventListener("visibilitychange", refreshOnFocus); if (focusRefreshTimer.current !== null) window.clearTimeout(focusRefreshTimer.current); focusRefreshTimer.current = null; };
-  }, [profile, refreshUsers]);
+    const unsubscribe = subscribeToDataChanges(scheduleLiveRefresh);
+    const fallbackInterval = window.setInterval(scheduleLiveRefresh, 10000);
+    window.addEventListener("focus", scheduleLiveRefresh);
+    document.addEventListener("visibilitychange", scheduleLiveRefresh);
+    return () => {
+      unsubscribe();
+      window.clearInterval(fallbackInterval);
+      window.removeEventListener("focus", scheduleLiveRefresh);
+      document.removeEventListener("visibilitychange", scheduleLiveRefresh);
+      if (focusRefreshTimer.current !== null) window.clearTimeout(focusRefreshTimer.current);
+      focusRefreshTimer.current = null;
+    };
+  }, [profile]);
 
   useEffect(() => {
     if (simulatedUser && !users.some((user) => user.id === simulatedUser.id)) setSimulatedUser(null);
@@ -502,7 +518,7 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
   const selectedCampaignName = campaignFilter === "all" ? "Toutes les campagnes" : campaigns.find((campaign) => campaign.id === campaignFilter)?.name || "Campagne sélectionnée";
 
   function exportCsv() {
-    const headers = ["id", "full_name", "phone", "role", "user_category", "campaigns", "supervisor", "permanent_shop_id"];
+    const headers = ["id", "full_name", "phone", "role", "user_category", "campaigns", "lime", "permanent_shop_id"];
     const rows = filteredUsers.map((user) => [user.id, user.full_name, user.phone, user.role, user.user_category || "", campaignNamesForUser(user.id), limeDisplayName(user.supervisor_id, users), user.permanent_shop_id || ""].map(escapeCsv).join(","));
     const blob = new Blob([`\ufeff${headers.join(",")}\n${rows.join("\n")}`], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -517,7 +533,7 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
     const XLSX = await import("xlsx-js-style");
     const workbook = XLSX.utils.book_new();
     const rows = filteredUsers.map((user) => [user.id, user.full_name, user.phone, ROLE_LABELS[user.role], user.user_category ? categoryShortLabel(user.user_category) : "", campaignNamesForUser(user.id), limeDisplayName(user.supervisor_id, users), user.permanent_shop_id || ""]);
-    const sheet = XLSX.utils.aoa_to_sheet([["BTL AFRICA · UTILISATEURS", "", "", "", "", "", "", ""], [`Filtre campagne : ${selectedCampaignName}`, "", "", "", "", "", "", ""], ["ID", "Nom complet", "MSISDN", "Rôle", "Catégorie", "Campagnes", "Superviseur", "Shop"], ...rows]);
+    const sheet = XLSX.utils.aoa_to_sheet([["BTL AFRICA · UTILISATEURS", "", "", "", "", "", "", ""], [`Filtre campagne : ${selectedCampaignName}`, "", "", "", "", "", "", ""], ["ID", "Nom complet", "MSISDN", "Rôle", "Catégorie", "Campagnes", "Lime", "Shop"], ...rows]);
     sheet["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 7 } }, { s: { r: 1, c: 0 }, e: { r: 1, c: 7 } }];
     sheet["!cols"] = [22, 28, 17, 18, 28, 32, 24, 18].map((wch) => ({ wch }));
     sheet["!freeze"] = { xSplit: 0, ySplit: 3 };
@@ -632,7 +648,7 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
     }
   }
 
-  if (effectiveProfile && (effectiveProfile.role === "agent" || effectiveProfile.role === "supervisor" || effectiveProfile.role === "sub_admin")) {
+  if (effectiveProfile?.role === "agent") {
     return <section className="admin-dashboard glass-card role-dashboard">{simulationControl}<div className="dashboard-header"><div className="dashboard-title"><div className="heading-icon"><ServerCog size={19} /></div><div><div className="eyebrow"><ShieldCheck size={13} /> Console sécurisée</div><h2>Tableau de bord</h2></div></div><div className="dashboard-actions"><span className="session-chip"><span className="session-dot" />{effectiveProfile.full_name} · {ROLE_LABELS[effectiveProfile.role]}</span><button className="icon-button" type="button" onClick={() => void handleLogout()} aria-label="Se déconnecter" title="Se déconnecter"><LogOut size={15} /></button></div></div>{notice && <div className={`dashboard-notice ${notice.kind}`}><span>{notice.kind === "success" ? <CheckCircle2 size={15} /> : <AlertCircle size={15} />}</span>{notice.message}<button type="button" onClick={() => setNotice(null)} aria-label="Fermer"><X size={14} /></button></div>}<RoleWorkspace profile={effectiveProfile} users={users} superiors={superiors} campaigns={campaigns} assignments={campaignAssignments} campaignSupervisorAssignments={campaignSupervisorAssignments} assignmentRequests={assignmentRequests} campaignClaims={campaignClaims} onNotice={handleWorkspaceNotice} onProfileUpdated={handleProfileSaved} onProfileOpen={() => isSimulation ? setNotice({ kind: "error", message: "Le profil est indisponible pendant une simulation." }) : setProfileOpen(true)} onRequestReviewed={() => void refreshUsers(profile, true)} simulation={isSimulation} />{profileOpen && !isSimulation && profile && <ProfileModal profile={profile} onClose={() => setProfileOpen(false)} onSaved={handleProfileSaved} />}{profilePhotoPreviewOpen && effectiveProfile && <ProfilePhotoPreviewModal user={effectiveProfile} onClose={() => setProfilePhotoPreviewOpen(false)} />}</section>;
   }
 
@@ -660,7 +676,7 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
       {canManageCampaigns && assignmentRequests.length > 0 && <section className="pending-panel campaign-request-panel"><div className="pending-heading"><div><div className="card-kicker"><BriefcaseBusiness size={14} /> Affectations à valider</div><h3>Demandes de campagne</h3><p>Les agents ont demandé à rejoindre une campagne.</p></div><span className="pending-count">{assignmentRequests.length}</span></div><div className="pending-list">{assignmentRequests.map((request) => { const agent = users.find((user) => user.id === request.user_id); const campaign = campaigns.find((item) => item.id === request.campaign_id); if (!agent || !campaign) return null; return <div className="pending-item" key={request.id}><div className="avatar small">{agent.full_name.slice(0, 1).toUpperCase()}</div><div className="pending-identity"><strong>{agent.full_name}</strong><small>{campaign.name} · {new Date(request.requested_at).toLocaleDateString("fr-FR")}</small></div><div className="pending-actions"><button type="button" className="icon-action approve" onClick={() => void handleCampaignRequestReview(request, true)} disabled={requestActionId === request.id} aria-label="Approuver"><CheckCircle2 size={14} /></button><button type="button" className="icon-action delete" onClick={() => void handleCampaignRequestReview(request, false)} disabled={requestActionId === request.id} aria-label="Rejeter"><XCircle size={14} /></button></div></div>; })}</div></section>}
       {canManageCampaigns && campaignClaims.length > 0 && <section className="pending-panel campaign-claims-panel"><div className="pending-heading"><div><div className="card-kicker"><FileText size={14} /> Réclamations campagne</div><h3>Dossiers à traiter</h3><p>Ouvrez un dossier pour répondre, demander des informations ou le clôturer.</p></div><span className="pending-count">{campaignClaims.length}</span><button type="button" className="icon-button" onClick={() => void refreshUsers(profile, true)} disabled={loading} aria-label="Actualiser les dossiers" title="Actualiser les dossiers">{loading ? <LoaderCircle className="spin" size={14} /> : <RefreshCw size={14} />}</button></div><div className="pending-list">{campaignClaims.map((claim) => { const agent = users.find((user) => user.id === claim.user_id); const campaign = campaigns.find((item) => item.id === claim.campaign_id); if (!agent || !campaign) return null; return <button type="button" className="pending-item claim-pending-item" key={claim.id} onClick={() => setSelectedClaim(claim)}><div className="avatar small">{agent.full_name.slice(0, 1).toUpperCase()}</div><div className="pending-identity"><strong>{agent.full_name} · {campaign.name}</strong><small>{CLAIM_STATUS_NAMES[claim.status]} · {new Date(claim.updated_at || claim.created_at).toLocaleDateString("fr-FR")}</small><span className="claim-pending-description">{claim.description}</span></div><span className="button secondary compact">Ouvrir le dossier</span></button>; })}</div></section>}
       <div className="dashboard-insights"><div className="donut-card"><div className="donut-heading"><span><PieChart size={14} /> Répartition campagne</span><small>{users.length} total</small></div><div className="donut-content"><div className="donut" style={{ "--donut": donutGradient } as CSSProperties}><div><strong>{users.length}</strong><small>profils</small></div></div><div className="donut-legend">{categoryStats.length ? categoryStats.map((item, index) => <div key={item.category}><i style={{ background: ["#9ee9e8", "#b5ef8c", "#d3b5ff", "#ffca8a"][index % 4] }} /> <span>{categoryShortLabel(item.category)}</span><b>{item.count}</b></div>) : <span className="muted-note">Aucune catégorie renseignée</span>}</div></div></div><div className="role-summary"><div className="donut-heading"><span><ShieldCheck size={14} /> Rôles actifs</span><small>{users.length} profils</small></div>{ROLE_OPTIONS.map((role) => { const count = users.filter((user) => user.role === role).length; return count ? <div className="role-line" key={role}><span>{ROLE_LABELS[role]}</span><b>{count}</b><div><i style={{ width: `${Math.max(8, (count / Math.max(users.length, 1)) * 100)}%` }} /></div></div> : null; })}</div><div className="donut-card campaign-donut-card"><div className="donut-heading"><span><BriefcaseBusiness size={14} /> Effectifs par campagne</span><small>{campaignStats.reduce((sum, item) => sum + item.count, 0)} affectations</small></div><div className="donut-content"><div className="donut" style={{ "--donut": campaignDonutGradient } as CSSProperties}><div><strong>{campaignStats.reduce((sum, item) => sum + item.count, 0)}</strong><small>affectés</small></div></div><div className="donut-legend">{campaignStats.length ? campaignStats.map((item, index) => <div key={item.campaign.id}><i style={{ background: ["#9ee9e8", "#b5ef8c", "#d3b5ff", "#ffca8a", "#f5cd78", "#ff9a8a"][index % 6] }} /> <span title={item.campaign.name}>{item.campaign.name}</span><b>{item.count}</b></div>) : <span className="muted-note">Aucune affectation</span>}</div></div></div></div>
-      <div className="dashboard-toolbar"><div className="history-search"><Search size={16} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Rechercher un MSISDN ou un nom…" aria-label="Rechercher dans l’historique" /></div><div className="filter-control"><Filter size={14} /><CustomSelect value={roleFilter} onChange={setRoleFilter} ariaLabel="Filtrer par rôle" placeholder="Tous les rôles" options={[{ value: "all", label: "Tous les rôles" }, ...ROLE_OPTIONS.map((role) => ({ value: role, label: ROLE_LABELS[role] }))]} /></div><div className="filter-control"><CustomSelect value={categoryFilter} onChange={setCategoryFilter} ariaLabel="Filtrer par catégorie" placeholder="Toutes les catégories" options={[{ value: "all", label: "Toutes les catégories" }, ...CATEGORY_OPTIONS.map((category) => ({ value: category, label: categoryShortLabel(category) }))]} /></div><div className="filter-control campaign-filter-control"><BriefcaseBusiness size={14} /><CustomSelect value={campaignFilter} onChange={setCampaignFilter} ariaLabel="Filtrer par campagne" placeholder="Toutes les campagnes" options={[{ value: "all", label: "Toutes les campagnes" }, ...campaignFilterOptions]} /></div><div className="view-toggle" role="group" aria-label="Mode d’affichage des utilisateurs"><button type="button" className={userView === "table" ? "is-active" : ""} onClick={() => setUserView("table")} aria-label="Afficher en liste" title="Vue liste"><List size={15} /></button><button type="button" className={userView === "cards" ? "is-active" : ""} onClick={() => setUserView("cards")} aria-label="Afficher en cartes" title="Vue cartes"><LayoutGrid size={15} /></button></div><button className="icon-button" type="button" onClick={() => void refreshUsers(profile, true)} disabled={loading} aria-label="Actualiser" title="Actualiser">{loading ? <LoaderCircle className="spin" size={15} /> : <RefreshCw size={15} />}</button>{profile?.role === "super_admin" && !isSimulation && <button className="button primary compact toolbar-create-user" type="button" onClick={onRequestCreate}><UserPlus size={14} /> Nouvel utilisateur</button>}<button className="icon-button primary-icon" type="button" onClick={() => setExportOpen(true)} disabled={!filteredUsers.length} aria-label="Choisir le format d’export" title="Exporter"><Download size={15} /></button></div>
+      <div className="dashboard-toolbar"><div className="history-search"><Search size={16} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Rechercher un MSISDN ou un nom…" aria-label="Rechercher dans l’historique" /></div><div className="filter-control"><Filter size={14} /><CustomSelect value={roleFilter} onChange={setRoleFilter} ariaLabel="Filtrer par rôle" placeholder="Tous les rôles" options={[{ value: "all", label: "Tous les rôles" }, ...ROLE_OPTIONS.map((role) => ({ value: role, label: ROLE_LABELS[role] }))]} /></div><div className="filter-control"><CustomSelect value={categoryFilter} onChange={setCategoryFilter} ariaLabel="Filtrer par catégorie" placeholder="Toutes les catégories" options={[{ value: "all", label: "Toutes les catégories" }, ...CATEGORY_OPTIONS.map((category) => ({ value: category, label: categoryShortLabel(category) }))]} /></div><div className="filter-control campaign-filter-control"><BriefcaseBusiness size={14} /><CustomSelect value={campaignFilter} onChange={setCampaignFilter} ariaLabel="Filtrer par campagne" placeholder="Toutes les campagnes" options={[{ value: "all", label: "Toutes les campagnes" }, ...campaignFilterOptions]} /></div><div className="view-toggle" role="group" aria-label="Mode d’affichage des utilisateurs"><button type="button" className={userView === "table" ? "is-active" : ""} onClick={() => setUserView("table")} aria-label="Afficher en liste" title="Vue liste"><List size={15} /></button><button type="button" className={userView === "cards" ? "is-active" : ""} onClick={() => setUserView("cards")} aria-label="Afficher en cartes" title="Vue cartes"><LayoutGrid size={15} /></button></div><button className="icon-button" type="button" onClick={() => void refreshUsers(profile, true)} disabled={loading} aria-label="Actualiser" title="Actualiser">{loading ? <LoaderCircle className="spin" size={15} /> : <RefreshCw size={15} />}</button>{canManage && !isSimulation && <button className="button primary compact toolbar-create-user" type="button" onClick={onRequestCreate}><UserPlus size={14} /> Nouvel utilisateur</button>}<button className="icon-button primary-icon" type="button" onClick={() => setExportOpen(true)} disabled={!filteredUsers.length} aria-label="Choisir le format d’export" title="Exporter"><Download size={15} /></button></div>
       <div className="dashboard-stats"><span><strong>{filteredUsers.length}</strong> résultat{filteredUsers.length > 1 ? "s" : ""}</span><span><strong>{users.length}</strong> utilisateur{users.length > 1 ? "s" : ""}</span>{campaignFilter !== "all" && <span className="active-filter"><BriefcaseBusiness size={12} /> {selectedCampaignName}</span>}<span className="secure-label"><ShieldCheck size={13} /> Sans password_hash</span></div>
       {userView === "table" ? <div className="users-table-wrap"><table className="users-table"><thead><tr><th>Utilisateur</th><th>MSISDN</th><th>Rôle</th><th>Catégorie</th><th>Campagnes</th><th>Lime</th><th>Shop</th>{(canManage || canManageCampaigns) && <th aria-label="Actions" />}</tr></thead><tbody>{filteredUsers.map((user) => { const userCampaigns = campaignsByUserId.get(user.id) || []; const canAssign = canManageCampaigns && user.role === "agent" && ["hostess", "brand_ambassador", "brand_ambassador_youth"].includes(user.user_category || ""); return <tr key={user.id} className={canManage ? "row-clickable" : ""} onClick={() => handleUserRowClick(user)}><td><div className="table-user"><Avatar user={user} /><div><strong>{user.full_name}</strong><small>{user.id}</small></div></div></td><td><CopyablePhone value={user.phone} className="mono-value" /></td><td><span className={`role-badge role-${user.role}`}>{ROLE_LABELS[user.role]}</span></td><td>{user.user_category ? CATEGORY_LABELS[user.user_category].split(" — ")[0] : "—"}</td><td><div className="campaign-pills">{userCampaigns.length ? userCampaigns.map((campaign) => <span className="campaign-pill" key={campaign.id} title={campaign.name}>{campaign.name}</span>) : <span className="muted-note">Aucune</span>}</div></td><td>{limeDisplayName(user.supervisor_id, users)}</td><td>{shopDisplayName(user.permanent_shop_id, shops)}</td>{(canManage || canManageCampaigns) && <td><div className="row-actions">{canManage && user.role === "agent" && <button type="button" className="icon-action profile-action" aria-label={`Ouvrir la fiche de ${user.full_name}`} title="Ouvrir la fiche agent" onClick={(event) => { event.stopPropagation(); setSelectedAgentProfile(user); }}><UserCircle2 size={14} /></button>}{canAssign && <button type="button" className="icon-action campaign-action" aria-label={`Affecter ${user.full_name} à une campagne`} title="Affecter aux campagnes" onClick={(event) => { event.stopPropagation(); beginCampaignAssignment(user); }}><BriefcaseBusiness size={14} /></button>}{canManage && <button type="button" className="icon-action edit" aria-label={`Modifier ${user.full_name}`} title="Modifier" onClick={(event) => { event.stopPropagation(); beginEdit(user); }}><FilePenLine size={14} /></button>}{canManage && <button type="button" className="icon-action delete" aria-label={`Supprimer ${user.full_name}`} title="Supprimer" onClick={(event) => { event.stopPropagation(); setDeleteCandidate(user); }}><Trash2 size={14} /></button>}</div></td>}</tr>; })}</tbody></table>{!filteredUsers.length && <div className="table-empty"><Search size={22} /><strong>Aucun utilisateur trouvé</strong><span>Essayez un MSISDN ou élargissez vos filtres.</span></div>}</div> : <div className="users-card-grid">{filteredUsers.map((user) => <UserGalleryCard
         key={user.id}

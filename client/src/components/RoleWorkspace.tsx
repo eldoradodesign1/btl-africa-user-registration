@@ -372,8 +372,7 @@ export default function RoleWorkspace({ profile, users, superiors, campaigns, as
   const [selectedClaim, setSelectedClaim] = useState<CampaignClaim | null>(null);
   const [photoPreview, setPhotoPreview] = useState(false);
   const isAgent = profile.role === "agent";
-  const scopedAgentIds = new Set(campaignSupervisorAssignments.filter((assignment) => assignment.supervisor_id === profile.id && assignment.is_active).map((assignment) => assignment.agent_id));
-  const agents = users.filter((user) => user.role === "agent" && (profile.role !== "supervisor" || scopedAgentIds.has(user.id)));
+  const agents = users.filter((user) => user.role === "agent");
   const assignedCampaignIds = new Set([
     ...assignments.filter((assignment) => assignment.user_id === profile.id && assignment.is_active).map((assignment) => assignment.campaign_id),
     ...campaignSupervisorAssignments.filter((assignment) => assignment.agent_id === profile.id && assignment.is_active).map((assignment) => assignment.campaign_id),

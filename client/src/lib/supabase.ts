@@ -277,7 +277,42 @@ function mapRequest(data: unknown): RegistrationRequest {
 }
 
 export async function getAdminContext(): Promise<AdminContext | null> {
-  return activeProfile ? { profile: activeProfile } : null;
+  const profile = await refreshActiveProfile();
+  return profile ? { profile } : null;
+}
+
+export async function refreshActiveProfile(): Promise<UserRecord | null> {
+  if (!activeProfile || !supabaseClient) return activeProfile;
+  const { data, error } = await supabaseClient.from("users").select(safeUserColumns).eq("id", activeProfile.id).maybeSingle();
+  if (error) throw error;
+  if (!data) {
+    activeProfile = null;
+    localStorage.removeItem(profileKey);
+    return null;
+  }
+  activeProfile = { ...data, password_hash: null } as UserRecord;
+  localStorage.setItem(profileKey, JSON.stringify(activeProfile));
+  return activeProfile;
+}
+
+export function subscribeToDataChanges(onChange: () => void): () => void {
+  if (!supabaseClient) return () => undefined;
+  const channel = supabaseClient.channel(`btl-dashboard-${Date.now()}`);
+  [
+    "users",
+    "campaigns",
+    "user_campaign_assignments",
+    "agent_campaign_supervisor_assignments",
+    "campaign_assignment_requests",
+    "campaign_claims",
+    "user_registration_requests",
+  ].forEach((table) => {
+    channel.on("postgres_changes", { event: "*", schema: "public", table }, onChange);
+  });
+  channel.subscribe();
+  return () => {
+    void supabaseClient?.removeChannel(channel);
+  };
 }
 
 export async function signInAdmin(phone: string, password: string): Promise<AdminContext> {
@@ -494,7 +529,7 @@ export async function insertUser(payload: UserInsert): Promise<UserRecord> {
     throw new Error("Configurez Supabase avant de créer un utilisateur.");
   }
   if (!activeProfile) throw new Error("Connexion administrateur requise avant la création.");
-  if (activeProfile.role !== "super_admin") throw new Error("Seul un super_admin peut créer un utilisateur.");
+  if (!["admin", "super_admin"].includes(activeProfile.role)) throw new Error("Seuls un admin ou un super_admin peuvent créer un utilisateur.");
   const { data, error } = await supabaseClient.rpc("create_user_by_super_admin", {
     p_id: payload.id,
     p_creator_id: activeProfile.id,
