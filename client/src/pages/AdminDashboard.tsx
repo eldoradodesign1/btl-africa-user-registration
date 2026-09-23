@@ -269,6 +269,13 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
   }
 
   useEffect(() => { void refreshSession(); }, []);
+  useEffect(() => {
+    if (!profile) return;
+    const refreshOnFocus = () => { void refreshUsers(profile); };
+    window.addEventListener("focus", refreshOnFocus);
+    document.addEventListener("visibilitychange", refreshOnFocus);
+    return () => { window.removeEventListener("focus", refreshOnFocus); document.removeEventListener("visibilitychange", refreshOnFocus); };
+  }, [profile]);
 
   useEffect(() => {
     if (simulatedUser && !users.some((user) => user.id === simulatedUser.id)) setSimulatedUser(null);
