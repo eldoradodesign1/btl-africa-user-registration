@@ -80,7 +80,7 @@ Sans ces variables, l’application n’affiche aucune donnée utilisateur local
 
 ## Dashboard et historique MSISDN
 
-Le dashboard permet de rechercher rapidement un nom ou un MSISDN — le format `+24381…` est normalisé avant la comparaison — puis de filtrer par rôle et catégorie. Les graphiques sont placés au-dessus de la barre de filtres, qui reste juste au-dessus de la liste. La liste propose une vue table ou cartes, et le bouton **Nouvel utilisateur** est regroupé avec les contrôles de liste. L’export ouvre un aperçu proposant CSV, XLSX et PDF ; dans cet aperçu, les raccourcis `C`, `X` et `P` déclenchent directement le format correspondant.
+Le dashboard permet de rechercher rapidement un nom ou un MSISDN — le format `+24381…` est normalisé avant la comparaison — puis de filtrer par rôle, catégorie, statut **Actif/Inactif** et campagne. Le champ `public.users.is_active` est ajouté par [`supabase/migrations/202609230009_user_activity_status.sql`](supabase/migrations/202609230009_user_activity_status.sql), avec la valeur `true` par défaut pour préserver les utilisateurs existants. La modale d’édition permet de changer ce statut, principalement utilisé pour les agents. Les graphiques sont placés au-dessus de la barre de filtres, qui reste juste au-dessus de la liste. La liste propose une vue table ou cartes, et le bouton **Nouvel utilisateur** est regroupé avec les contrôles de liste. L’export ouvre un aperçu proposant CSV, XLSX et PDF ; chaque ligne filtrée peut être désélectionnée avant export, et les raccourcis `C`, `X` et `P` déclenchent directement le format correspondant.
 
 ## Schéma cible et payload
 
@@ -96,6 +96,7 @@ Exemple de payload strict, limité aux colonnes autorisées :
   "password_hash": "<valeur conforme au mécanisme d’authentification existant>",
   "role": "agent",
   "user_category": "hostess",
+  "is_active": true,
   "supervisor_id": "b7d7aef4-2e2b-4a7e-9f12-1d5ce8481b0a",
   "permanent_shop_id": null
 }

@@ -16,6 +16,7 @@ export type UserRecord = {
   password_hash: string | null;
   role: UserRole;
   user_category: UserCategory | null;
+  is_active: boolean;
   supervisor_id: string | null;
   permanent_shop_id: string | null;
   avatar_url: string | null;
@@ -219,7 +220,7 @@ export async function testSupabaseConnection(url: string, publishableKey: string
   if (![200, 206, 403].includes(response.status)) throw new Error(`Connexion refusée (${response.status}).`);
 }
 
-const safeUserColumns = "id, full_name, phone, whatsapp_phone, whatsapp_same_as_phone, date_of_birth, address, role, user_category, supervisor_id, permanent_shop_id, avatar_url, profile_updated_at";
+const safeUserColumns = "id, full_name, phone, whatsapp_phone, whatsapp_same_as_phone, date_of_birth, address, role, user_category, is_active, supervisor_id, permanent_shop_id, avatar_url, profile_updated_at";
 const safeCampaignColumns = "id, code, name, campaign_type, status, starts_on, ends_on";
 const safeShopColumns = "id, name, city, type";
 const safeAssignmentColumns = "id, user_id, campaign_id, is_active, assigned_at, assigned_by";
@@ -633,7 +634,7 @@ function assertManagePermission(): void {
   if (!["admin", "super_admin"].includes(activeProfile.role)) throw new Error("Cette opération est réservée aux rôles admin et super_admin.");
 }
 
-export async function updateUser(id: string, patch: Partial<Pick<UserRecord, "full_name" | "phone" | "role" | "user_category" | "supervisor_id" | "permanent_shop_id">>): Promise<UserRecord> {
+export async function updateUser(id: string, patch: Partial<Pick<UserRecord, "full_name" | "phone" | "role" | "user_category" | "is_active" | "supervisor_id" | "permanent_shop_id">>): Promise<UserRecord> {
   if (!supabaseClient) throw new Error("Configurez Supabase avant de modifier un utilisateur.");
   assertManagePermission();
   const { data, error } = await supabaseClient.from("users").update(patch).eq("id", id).select(safeUserColumns).single();

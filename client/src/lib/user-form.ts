@@ -50,6 +50,7 @@ export function buildUserPayload(input: {
     password_hash: input.password,
     role: input.role,
     user_category: input.category || null,
+    is_active: true,
     supervisor_id: input.supervisorId || null,
     permanent_shop_id: input.permanentShopId || null,
     avatar_url: input.avatarUrl || null,
