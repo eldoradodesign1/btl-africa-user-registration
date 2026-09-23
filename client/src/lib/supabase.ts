@@ -136,6 +136,7 @@ export type AdminContext = { profile: UserRecord };
 
 const runtimeKey = "btl-supabase-connection";
 const profileKey = "btl-active-profile";
+const SUPABASE_REQUEST_TIMEOUT_MS = 15000;
 const envUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const envKey = (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY) as string | undefined;
 
@@ -150,8 +151,25 @@ function readRuntimeConnection(): SupabaseConnection | null {
   }
 }
 
+async function fetchWithTimeout(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = globalThis.setTimeout(() => controller.abort(), SUPABASE_REQUEST_TIMEOUT_MS);
+  const callerSignal = init?.signal;
+  const abortFromCaller = () => controller.abort();
+  if (callerSignal) {
+    if (callerSignal.aborted) controller.abort();
+    else callerSignal.addEventListener("abort", abortFromCaller, { once: true });
+  }
+  try {
+    return await globalThis.fetch(input, { ...init, signal: controller.signal });
+  } finally {
+    globalThis.clearTimeout(timeoutId);
+    callerSignal?.removeEventListener("abort", abortFromCaller);
+  }
+}
+
 function createConfiguredClient(connection: SupabaseConnection): SupabaseClient {
-  return createClient(connection.url, connection.publishableKey);
+  return createClient(connection.url, connection.publishableKey, { global: { fetch: fetchWithTimeout } });
 }
 
 let activeConnection: SupabaseConnection | null = readRuntimeConnection() || (envUrl && envKey ? { url: envUrl, publishableKey: envKey } : null);
