@@ -1076,6 +1076,12 @@ html { scrollbar-width: thin; scrollbar-color: rgba(158,233,232,.35) rgba(3,11,1
 .export-selection-list .export-preview-row { min-height: 38px; }
 .export-selection-list .export-preview-row.is-selected { background: rgba(91,208,209,.035); }
 .export-selection-list .export-preview-row:hover { background: rgba(91,208,209,.08); }
+.queue-heading { cursor: pointer; user-select: none; }
+.queue-heading:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; border-radius: 10px; }
+.queue-heading-main { min-width: 0; flex: 1; }
+.queue-chevron { flex: none; color: var(--cyan); transition: transform .2s var(--ease-out), color .2s var(--ease-out); }
+.queue-chevron.is-open { transform: rotate(180deg); color: var(--lime); }
+.queue-heading:hover .queue-chevron { color: var(--lime); }
 @media (max-width: 680px) {
   .export-selection-toolbar { align-items: flex-start; flex-direction: column; }
   .export-selection-toolbar small { text-align: left; }
