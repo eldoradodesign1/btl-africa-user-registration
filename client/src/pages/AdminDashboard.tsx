@@ -334,15 +334,21 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
     });
     const fallbackRefreshTimer = window.setInterval(() => {
       if (!realtimeConnected && document.visibilityState === "visible") void refreshSession(true);
-    }, 20000);
+    }, 5000);
     const refreshWhenVisible = () => {
       if (document.visibilityState === "visible") void refreshSession(true);
     };
     document.addEventListener("visibilitychange", refreshWhenVisible);
+    window.addEventListener("focus", refreshWhenVisible);
+    window.addEventListener("online", refreshWhenVisible);
+    window.addEventListener("pageshow", refreshWhenVisible);
     return () => {
       unsubscribe();
       window.clearInterval(fallbackRefreshTimer);
       document.removeEventListener("visibilitychange", refreshWhenVisible);
+      window.removeEventListener("focus", refreshWhenVisible);
+      window.removeEventListener("online", refreshWhenVisible);
+      window.removeEventListener("pageshow", refreshWhenVisible);
       if (realtimeRefreshTimer.current !== null) window.clearTimeout(realtimeRefreshTimer.current);
       realtimeRefreshTimer.current = null;
     };
@@ -732,7 +738,7 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
   }
 
   return <section className="admin-dashboard glass-card">{simulationControl}
-    <div className="dashboard-header"><div className="dashboard-title"><div className="heading-icon"><ServerCog size={19} /></div><div><div className="eyebrow"><ShieldCheck size={13} /> Console sécurisée</div><h2>Tableau de bord administrateur</h2></div></div><div className="dashboard-actions">{effectiveProfile && <span className="session-chip"><span className="session-dot" />{effectiveProfile.full_name} · {activeProfileRoleLabel(effectiveProfile)}</span>}{profile && <button className="icon-button" type="button" onClick={() => void handleLogout()} aria-label="Se déconnecter" title="Se déconnecter"><LogOut size={15} /></button>}{configured && profile?.role === "super_admin" && !isSimulation && <button className="icon-button" type="button" onClick={() => setShowConfig(true)} aria-label="Configurer la base de données" title="Configurer la base de données"><Database size={16} /></button>}</div></div>{effectiveProfile && <div className="admin-profile-hero"><div className="admin-profile-photo"><button type="button" className="workspace-profile-photo-button" onClick={() => setProfilePhotoPreviewOpen(true)} aria-label="Agrandir ma photo de profil"><Avatar user={effectiveProfile!} size="large" /></button><button type="button" className="workspace-profile-edit" onClick={() => isSimulation ? setNotice({ kind: "error", message: "Le profil est indisponible pendant une simulation." }) : setProfileOpen(true)} aria-label="Modifier mon profil" title="Modifier mon profil"><FilePenLine size={11} /></button></div><div><div className="eyebrow"><UserCircle2 size={13} /> Profil actif</div><h3>{effectiveProfile?.full_name || "Utilisateur"}</h3><p>{effectiveProfile ? activeProfileRoleLabel(effectiveProfile) : ""} · Gérez vos informations personnelles depuis la photo.</p></div></div>}
+    <div className="dashboard-header"><div className="dashboard-title"><div className="heading-icon"><ServerCog size={19} /></div><div><div className="eyebrow"><ShieldCheck size={13} /> Console sécurisée</div><h2>Tableau de bord administrateur</h2></div></div><div className="dashboard-actions">{effectiveProfile && <span className="session-chip"><span className="session-dot" />{effectiveProfile.full_name} · {activeProfileRoleLabel(effectiveProfile)}</span>}{canCreateUsers && !isSimulation && <button className="button primary compact dashboard-create-user" type="button" onClick={() => onRequestCreate(!canManage)}><UserPlus size={14} /> {canManage ? "Nouvel utilisateur" : "Ajouter un agent"}</button>}{profile && <button className="icon-button" type="button" onClick={() => void handleLogout()} aria-label="Se déconnecter" title="Se déconnecter"><LogOut size={15} /></button>}{configured && profile?.role === "super_admin" && !isSimulation && <button className="icon-button" type="button" onClick={() => setShowConfig(true)} aria-label="Configurer la base de données" title="Configurer la base de données"><Database size={16} /></button>}</div></div>{effectiveProfile && <div className="admin-profile-hero"><div className="admin-profile-photo"><button type="button" className="workspace-profile-photo-button" onClick={() => setProfilePhotoPreviewOpen(true)} aria-label="Agrandir ma photo de profil"><Avatar user={effectiveProfile!} size="large" /></button><button type="button" className="workspace-profile-edit" onClick={() => isSimulation ? setNotice({ kind: "error", message: "Le profil est indisponible pendant une simulation." }) : setProfileOpen(true)} aria-label="Modifier mon profil" title="Modifier mon profil"><FilePenLine size={11} /></button></div><div><div className="eyebrow"><UserCircle2 size={13} /> Profil actif</div><h3>{effectiveProfile?.full_name || "Utilisateur"}</h3><p>{effectiveProfile ? activeProfileRoleLabel(effectiveProfile) : ""} · Gérez vos informations personnelles depuis la photo.</p></div></div>}
     {notice && <div className={`dashboard-notice ${notice.kind}`}><span>{notice.kind === "success" ? <CheckCircle2 size={15} /> : <AlertCircle size={15} />}</span>{notice.message}<button type="button" onClick={() => setNotice(null)} aria-label="Fermer"><X size={14} /></button></div>}
     {!configured && !showConfig && <div className="dashboard-empty"><ServerCog size={27} /><strong>Connectez votre projet Supabase</strong><button className="button primary compact" type="button" onClick={() => setShowConfig(true)}><Database size={14} /> Configurer</button></div>}
     {configured && !isAuthenticated && !showConfig && <>
