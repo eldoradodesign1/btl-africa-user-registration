@@ -1082,3 +1082,5 @@ html { scrollbar-width: thin; scrollbar-color: rgba(158,233,232,.35) rgba(3,11,1
   .export-selection-list .export-preview-head, .export-selection-list .export-preview-row { grid-template-columns: 24px minmax(0, 1fr) 70px; }
   .export-selection-list .export-preview-head span:last-child, .export-selection-list .export-preview-row > span:last-child { display: none; }
 }
+.role-fixed-value { min-height: 46px; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid rgba(158,233,232,.22); border-radius: 11px; background: rgba(3,11,14,.31); }
+.role-fixed-value small { color: var(--muted); font-size: 10px; line-height: 1.35; }

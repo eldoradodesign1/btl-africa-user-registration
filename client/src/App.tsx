@@ -7,6 +7,7 @@ import { isSupabaseConfigured } from "@/lib/supabase";
 
 export default function App() {
   const [view, setView] = useState<"create" | "dashboard">(isSupabaseConfigured() ? "dashboard" : "create");
+  const [agentsOnlyCreation, setAgentsOnlyCreation] = useState(false);
   const [connectionVersion, setConnectionVersion] = useState(0);
 
   function handleConnectionChanged() {
@@ -19,9 +20,9 @@ export default function App() {
         <div className="brand-lockup"><BrandLogo /><div><span className="brand-name">BTL Africa</span><span className="brand-context">Privilege Tracker · Administration</span></div></div>
         <div className="topbar-actions"><span className="admin-entry-label"><ShieldCheck size={13} /> Accès sécurisé</span></div>
       </header>
-      <main className="page-content dashboard-page"><AdminDashboard onConnectionChanged={handleConnectionChanged} onRequestCreate={() => setView("create")} /></main>
+      <main className="page-content dashboard-page"><AdminDashboard onConnectionChanged={handleConnectionChanged} onRequestCreate={(agentsOnly) => { setAgentsOnlyCreation(agentsOnly); setView("create"); }} /></main>
     </div>
   ) : (
-    <Home key={connectionVersion} onNavigateDashboard={() => setView("dashboard")} />
+    <Home key={`${connectionVersion}-${agentsOnlyCreation ? "agents" : "all"}`} agentsOnly={agentsOnlyCreation} onNavigateDashboard={() => { setAgentsOnlyCreation(false); setView("dashboard"); }} />
   );
 }

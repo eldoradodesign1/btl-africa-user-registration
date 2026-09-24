@@ -536,7 +536,8 @@ export async function insertUser(payload: UserInsert): Promise<UserRecord> {
     throw new Error("Configurez Supabase avant de créer un utilisateur.");
   }
   if (!activeProfile) throw new Error("Connexion administrateur requise avant la création.");
-  if (!["admin", "super_admin"].includes(activeProfile.role)) throw new Error("Seuls un admin ou un super_admin peuvent créer un utilisateur.");
+  if (!["admin", "super_admin", "supervisor", "sub_admin"].includes(activeProfile.role)) throw new Error("Seuls les administratifs peuvent créer un utilisateur.");
+  if (["supervisor", "sub_admin"].includes(activeProfile.role) && payload.role !== "agent") throw new Error("Les superviseurs et la coordination peuvent uniquement créer des agents.");
   const { data, error } = await supabaseClient.rpc("create_user_by_super_admin", {
     p_id: payload.id,
     p_creator_id: activeProfile.id,

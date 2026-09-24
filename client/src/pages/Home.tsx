@@ -152,7 +152,7 @@ function UserRoleBadge({ role }: { role: UserRole }) {
   return <span className={`role-badge role-${role}`}>{ROLE_LABELS[role]}</span>;
 }
 
-function Home({ onUserCreated, onNavigateDashboard }: { onUserCreated?: (user: UserRecord) => void; onNavigateDashboard?: () => void }) {
+function Home({ onUserCreated, onNavigateDashboard, agentsOnly = false }: { onUserCreated?: (user: UserRecord) => void; onNavigateDashboard?: () => void; agentsOnly?: boolean }) {
   const [form, setForm] = useState<FormState>(INITIAL_FORM);
   const [supervisors, setSupervisors] = useState<UserRecord[]>([]);
   const [shops, setShops] = useState<ShopRecord[]>([]);
@@ -316,6 +316,7 @@ function Home({ onUserCreated, onNavigateDashboard }: { onUserCreated?: (user: U
         return;
       }
 
+      const creationRole = agentsOnly ? "agent" : form.role;
       const payload = buildUserPayload({
         id: crypto.randomUUID(),
         fullName: trimmedName,
@@ -325,9 +326,9 @@ function Home({ onUserCreated, onNavigateDashboard }: { onUserCreated?: (user: U
         dateOfBirth: form.dateOfBirth || null,
         address: form.address.trim() || null,
         avatarUrl: form.avatarUrl,
-        password: form.useDefaultPassword ? defaultPasswordForRole(form.role) : form.password,
-        role: form.role,
-        category: form.role === "agent" ? form.category : "operations",
+        password: form.useDefaultPassword ? defaultPasswordForRole(creationRole) : form.password,
+        role: creationRole,
+        category: creationRole === "agent" ? form.category : "operations",
         supervisorId: form.supervisorId || null,
         permanentShopId: showShop ? form.permanentShopId || null : null,
       });
@@ -440,9 +441,9 @@ function Home({ onUserCreated, onNavigateDashboard }: { onUserCreated?: (user: U
             </div>
 
             <div className="section-block role-block">
-              <div className="section-title"><span>02</span><div><h3>Rôle & rattachement</h3><p>Définissez le périmètre de l’utilisateur.</p></div></div>
+              <div className="section-title"><span>02</span><div><h3>Rôle & rattachement</h3><p>{agentsOnly ? "Ajout d’un agent par un responsable habilité." : "Définissez le périmètre de l’utilisateur."}</p></div></div>
               <div className="field-grid two-columns">
-                <CustomSelect label="Rôle" value={form.role} options={ROLE_OPTIONS} labels={ROLE_LABELS} onChange={handleRoleChange} helper="Accès applicatif" />
+                {agentsOnly ? <div className="field select-field"><div className="field-label-row"><label>Rôle</label><span className="field-helper">Accès limité</span></div><div className="role-fixed-value"><span className="role-badge role-agent">Agent</span><small>Seuls les agents peuvent être ajoutés depuis cet espace.</small></div></div> : <CustomSelect label="Rôle" value={form.role} options={ROLE_OPTIONS} labels={ROLE_LABELS} onChange={handleRoleChange} helper="Accès applicatif" />}
                 <div className="field select-field">
                   <div className="field-label-row"><label>Superviseur</label><span className="field-helper">Optionnel</span></div>
                   <div className="supervisor-shell">
@@ -495,7 +496,7 @@ function Home({ onUserCreated, onNavigateDashboard }: { onUserCreated?: (user: U
             <div className="form-actions">
               <button type="button" className="button secondary" onClick={resetForm}><RefreshCw size={16} /> Réinitialiser</button>
               <button type="submit" className="button primary" disabled={!canSubmit}>
-                {submitting ? <><LoaderCircle className="spin" size={17} /> Création…</> : <>Créer l’utilisateur <ArrowRight size={17} /></>}
+                {submitting ? <><LoaderCircle className="spin" size={17} /> Création…</> : <>{agentsOnly ? "Créer l’agent" : "Créer l’utilisateur"} <ArrowRight size={17} /></>}
               </button>
             </div>
             <p className="required-note"><span>*</span> Le bouton reste désactivé tant que le nom, le MSISDN ou le contrôle anti-doublon n’est pas valide.</p>
