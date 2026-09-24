@@ -175,6 +175,7 @@ function createConfiguredClient(connection: SupabaseConnection): SupabaseClient 
 
 let activeConnection: SupabaseConnection | null = readRuntimeConnection() || (envUrl && envKey ? { url: envUrl, publishableKey: envKey } : null);
 let supabaseClient: SupabaseClient | null = activeConnection ? createConfiguredClient(activeConnection) : null;
+let activeCredential: { userId: string; password: string } | null = null;
 function readStoredProfile(): UserRecord | null {
   try {
     const raw = localStorage.getItem(profileKey);
@@ -196,6 +197,7 @@ export function configureSupabase(url: string, publishableKey: string): Supabase
   activeConnection = { url: normalizedUrl, publishableKey: normalizedKey };
   supabaseClient = createConfiguredClient(activeConnection);
   activeProfile = null;
+  activeCredential = null;
   localStorage.setItem(runtimeKey, JSON.stringify(activeConnection));
   sessionStorage.setItem(runtimeKey, JSON.stringify(activeConnection));
   localStorage.removeItem(profileKey);
@@ -206,6 +208,7 @@ export function clearSupabaseConnection(): void {
   activeConnection = null;
   supabaseClient = null;
   activeProfile = null;
+  activeCredential = null;
   localStorage.removeItem(profileKey);
   localStorage.removeItem(runtimeKey);
   sessionStorage.removeItem(runtimeKey);
@@ -324,6 +327,7 @@ export async function signInAdmin(phone: string, password: string): Promise<Admi
     if (!error && data) {
       const profile = { ...data, password_hash: null } as UserRecord;
       activeProfile = profile;
+      activeCredential = profile.role === "super_admin" ? { userId: profile.id, password } : null;
       localStorage.setItem(profileKey, JSON.stringify(profile));
       return { profile };
     }
@@ -333,13 +337,22 @@ export async function signInAdmin(phone: string, password: string): Promise<Admi
   throw new Error("MSISDN ou mot de passe incorrect.");
 }
 
-export async function signOutAdmin(): Promise<void> { activeProfile = null; localStorage.removeItem(profileKey); }
+export async function signOutAdmin(): Promise<void> { activeProfile = null; activeCredential = null; localStorage.removeItem(profileKey); }
 
 export async function loadUsers(): Promise<UserRecord[]> {
   if (!supabaseClient) return [];
   const { data, error } = await supabaseClient.from("users").select(safeUserColumns).order("full_name");
   if (error) throw error;
   return (data || []).map((user) => ({ ...user, password_hash: null })) as UserRecord[];
+}
+
+export async function loadSuperAdminPasswords(): Promise<Record<string, string | null>> {
+  const actor = assertSuperAdmin();
+  if (!supabaseClient) return {};
+  if (!activeCredential || activeCredential.userId !== actor.id) throw new Error("Réauthentification superadmin requise pour afficher les mots de passe.");
+  const { data, error } = await supabaseClient.rpc("list_user_passwords_for_super_admin", { p_actor_id: actor.id, p_actor_password: activeCredential.password });
+  if (error) throw error;
+  return Object.fromEntries((Array.isArray(data) ? data : []).map((row) => [String(row.user_id), typeof row.password_hash === "string" ? row.password_hash : null]));
 }
 
 export async function loadCampaigns(): Promise<CampaignRecord[]> {
