@@ -1027,11 +1027,6 @@ html { scrollbar-width: thin; scrollbar-color: rgba(158,233,232,.35) rgba(3,11,1
 .agent-supervisor-label small { color: #7899a5; font-family: "DM Mono", monospace; font-size: 7px; letter-spacing: .08em; text-transform: uppercase; }
 .agent-supervisor-label strong { overflow: hidden; color: #d6eef0; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
 @media (max-width: 680px) { .agent-supervisor-label { max-width: 130px; } }
-.agent-password-label { display: inline-flex; flex-direction: column; min-width: 0; max-width: 210px; gap: 3px; padding-left: 9px; border-left: 1px solid rgba(245,205,120,.25); }
-.agent-password-label small { color: var(--amber); font-family: "DM Mono", monospace; font-size: 7px; letter-spacing: .08em; text-transform: uppercase; }
-.agent-password-label strong, .agent-password-label .copyable-phone { overflow: hidden; color: #f5d99a; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
-.user-gallery-facts .copyable-phone { max-width: 100%; overflow: hidden; color: #f5d99a; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
-@media (max-width: 680px) { .agent-password-label { max-width: 150px; } }
 
 /* Campaign-scoped supervision */
 .campaign-option { display: block; padding: 0; overflow: hidden; }

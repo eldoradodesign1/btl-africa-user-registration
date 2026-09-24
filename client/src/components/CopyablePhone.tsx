@@ -7,7 +7,10 @@ type CopyablePhoneProps = {
   className?: string;
 };
 
-export function CopyableValue({ value, children, className = "", label = "valeur" }: CopyablePhoneProps & { label?: string }) {
+/**
+ * Affiche un numéro de téléphone cliquable qui se copie dans le presse-papier.
+ */
+export function CopyablePhone({ value, children, className = "" }: CopyablePhoneProps) {
   const [copied, setCopied] = useState(false);
 
   async function handleCopy() {
@@ -35,18 +38,11 @@ export function CopyableValue({ value, children, className = "", label = "valeur
         event.stopPropagation();
         void handleCopy();
       }}
-      title={`Copier ${label}`}
-      aria-label={`Copier ${label}`}
+      title={`Copier ${value}`}
+      aria-label={`Copier le numéro ${value}`}
     >
       <span>{children ?? value}</span>
       {copied ? <Check size={11} /> : <Copy size={11} className="copy-icon" />}
     </button>
   );
-}
-
-/**
- * Affiche un numéro de téléphone cliquable qui se copie dans le presse-papier.
- */
-export function CopyablePhone({ value, children, className = "" }: CopyablePhoneProps) {
-  return <CopyableValue value={value} children={children} className={className} label={`le numéro ${value}`} />;
 }
