@@ -12,7 +12,7 @@ if ("serviceWorker" in navigator && (import.meta.env.PROD || window.location.hos
       reloaded = true;
       window.location.reload();
     });
-    navigator.serviceWorker.register("./sw.js?v=4", { updateViaCache: "none" }).catch((error: unknown) => {
+    navigator.serviceWorker.register("./sw.js?v=5", { updateViaCache: "none" }).catch((error: unknown) => {
       console.error("Échec de l’enregistrement du service worker", error);
     });
   });

@@ -296,7 +296,9 @@ export async function refreshActiveProfile(): Promise<UserRecord | null> {
   return activeProfile;
 }
 
-export function subscribeToDataChanges(onChange: () => void): () => void {
+export type RealtimeStatus = "SUBSCRIBED" | "TIMED_OUT" | "CLOSED" | "CHANNEL_ERROR";
+
+export function subscribeToDataChanges(onChange: () => void, onStatus?: (status: RealtimeStatus) => void): () => void {
   if (!supabaseClient) return () => undefined;
   const channel = supabaseClient.channel(`btl-dashboard-${Date.now()}`);
   [
@@ -310,7 +312,11 @@ export function subscribeToDataChanges(onChange: () => void): () => void {
   ].forEach((table) => {
     channel.on("postgres_changes", { event: "*", schema: "public", table }, onChange);
   });
-  channel.subscribe();
+  channel.subscribe((status) => {
+    if (status === "SUBSCRIBED" || status === "TIMED_OUT" || status === "CLOSED" || status === "CHANNEL_ERROR") {
+      onStatus?.(status);
+    }
+  });
   return () => {
     void supabaseClient?.removeChannel(channel);
   };

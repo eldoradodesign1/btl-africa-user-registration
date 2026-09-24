@@ -1,4 +1,4 @@
-const CACHE_NAME = "btl-africa-user-registration-v4";
+const CACHE_NAME = "btl-africa-user-registration-v5";
 const APP_SHELL = ["./", "./index.html", "./manifest.webmanifest", "./btl-beyond-the-line-icon-v2.webp", "./btl-beyond-the-line-v2.webp"];
 
 self.addEventListener("install", (event) => {
@@ -42,7 +42,7 @@ self.addEventListener("fetch", (event) => {
 
   if (isNavigation || isHashedAsset) {
     event.respondWith(
-      fetch(event.request)
+      fetch(event.request, { cache: "no-store" })
         .then((networkResponse) => {
           if (networkResponse && networkResponse.status === 200) {
             const response = networkResponse.clone();

@@ -308,6 +308,7 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
   useEffect(() => { void refreshSession(); }, []);
   useEffect(() => {
     if (!profile) return;
+    let realtimeConnected = false;
     const scheduleRealtimeRefresh = () => {
       if (realtimeRefreshTimer.current !== null) return;
       realtimeRefreshTimer.current = window.setTimeout(() => {
@@ -315,13 +316,20 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
         void refreshSession(true);
       }, 150);
     };
-    const unsubscribe = subscribeToDataChanges(scheduleRealtimeRefresh);
+    const unsubscribe = subscribeToDataChanges(scheduleRealtimeRefresh, (status) => {
+      realtimeConnected = status === "SUBSCRIBED";
+      if (!realtimeConnected) scheduleRealtimeRefresh();
+    });
+    const fallbackRefreshTimer = window.setInterval(() => {
+      if (!realtimeConnected && document.visibilityState === "visible") void refreshSession(true);
+    }, 20000);
     const refreshWhenVisible = () => {
       if (document.visibilityState === "visible") void refreshSession(true);
     };
     document.addEventListener("visibilitychange", refreshWhenVisible);
     return () => {
       unsubscribe();
+      window.clearInterval(fallbackRefreshTimer);
       document.removeEventListener("visibilitychange", refreshWhenVisible);
       if (realtimeRefreshTimer.current !== null) window.clearTimeout(realtimeRefreshTimer.current);
       realtimeRefreshTimer.current = null;
