@@ -1091,3 +1091,16 @@ html { scrollbar-width: thin; scrollbar-color: rgba(158,233,232,.35) rgba(3,11,1
 }
 .role-fixed-value { min-height: 46px; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid rgba(158,233,232,.22); border-radius: 11px; background: rgba(3,11,14,.31); }
 .role-fixed-value small { color: var(--muted); font-size: 10px; line-height: 1.35; }
+
+/* Superadmin password assistance */
+.password-assistance-button { border-color: rgba(245,205,120,.34); color: #f5d99a; }
+.password-assistance-button:hover { border-color: rgba(245,205,120,.66); background: rgba(245,205,120,.08); }
+.password-assistance-modal { width: min(460px, calc(100vw - 28px)); }
+.password-assistance-warning { display: flex; align-items: flex-start; gap: 10px; margin: 4px 0 16px; padding: 12px; border: 1px solid rgba(245,205,120,.24); border-radius: 12px; color: #f5d99a; background: rgba(245,205,120,.07); }
+.password-assistance-warning p { margin: 0; color: #c9dfe1; font-size: 11px; line-height: 1.5; }
+.password-assistance-warning code { color: #f5d99a; font-family: "DM Mono", monospace; font-size: 10px; }
+.agent-password-label { display: inline-flex; flex-direction: column; min-width: 0; max-width: 210px; gap: 3px; padding-left: 9px; border-left: 1px solid rgba(245,205,120,.25); }
+.agent-password-label small { color: var(--amber); font-family: "DM Mono", monospace; font-size: 7px; letter-spacing: .08em; text-transform: uppercase; }
+.agent-password-label .copyable-phone, .agent-password-label .copyable-phone span, .user-gallery-facts .copyable-phone { max-width: 100%; overflow: hidden; color: #f5d99a; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.user-gallery-facts .copyable-phone { justify-content: flex-start; padding-inline: 0; border: 0; background: transparent; }
+@media (max-width: 680px) { .agent-password-label { max-width: 150px; } }

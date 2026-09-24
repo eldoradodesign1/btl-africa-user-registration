@@ -348,6 +348,28 @@ export async function loadUsers(): Promise<UserRecord[]> {
   return (data || []).map((user) => ({ ...user, password_hash: null })) as UserRecord[];
 }
 
+/**
+ * Charge les mots de passe uniquement après une réauthentification explicite.
+ * Le mot de passe fourni n'est jamais conservé dans le profil, le localStorage
+ * ou l'état global du client.
+ */
+export async function loadSuperAdminPasswords(currentPassword: string): Promise<Record<string, string | null>> {
+  const actor = assertSuperAdmin();
+  if (!supabaseClient) throw new Error("Configurez Supabase avant d’afficher les mots de passe.");
+  if (!currentPassword.trim()) throw new Error("Le mot de passe actuel du superadmin est requis.");
+  const { data, error } = await supabaseClient.rpc("list_user_passwords_for_super_admin", {
+    p_actor_id: actor.id,
+    p_actor_password: currentPassword,
+  });
+  if (error) throw error;
+  return Object.fromEntries(
+    (Array.isArray(data) ? data : []).map((row) => [
+      String((row as { user_id?: unknown }).user_id),
+      typeof (row as { password_hash?: unknown }).password_hash === "string" ? (row as { password_hash: string }).password_hash : null,
+    ]),
+  );
+}
+
 export async function loadCampaigns(): Promise<CampaignRecord[]> {
   if (!supabaseClient) return [];
   const { data, error } = await supabaseClient.from("campaigns").select(safeCampaignColumns).order("name");
