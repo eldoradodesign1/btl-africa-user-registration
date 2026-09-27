@@ -71,7 +71,10 @@ export function Avatar({ user, size = "small" }: { user: UserRecord; size?: "sma
 }
 
 export function ProfilePhotoPreviewModal({ user, onClose }: { user: UserRecord; onClose: () => void }) {
-  return <ViewportModal><div className="modal-layer profile-photo-lightbox"><button className="modal-backdrop" type="button" aria-label="Fermer la photo" onClick={onClose} /><div className="profile-photo-lightbox-card"><button type="button" className="modal-close" onClick={onClose} aria-label="Fermer"><X size={16} /></button><Avatar user={user} size="large" /><strong>{user.full_name}</strong><small>{ROLE_LABELS[user.role]}</small></div></div></ViewportModal>;
+  const [photoRatio, setPhotoRatio] = useState(1);
+  const [imageFailed, setImageFailed] = useState(false);
+  useEffect(() => { setPhotoRatio(1); setImageFailed(false); }, [user.avatar_url]);
+  return <ViewportModal><div className="modal-layer profile-photo-lightbox"><button className="modal-backdrop" type="button" aria-label="Fermer la photo" onClick={onClose} /><div className="profile-photo-lightbox-card"><button type="button" className="modal-close" onClick={onClose} aria-label="Fermer"><X size={16} /></button><div className="profile-photo-lightbox-media" style={{ "--photo-ratio": photoRatio } as React.CSSProperties}>{user.avatar_url && !imageFailed ? <img className="profile-photo-lightbox-image" src={user.avatar_url} alt={`Photo de profil de ${user.full_name}`} loading="eager" decoding="async" onLoad={(event) => { const image = event.currentTarget; if (image.naturalWidth && image.naturalHeight) setPhotoRatio(image.naturalWidth / image.naturalHeight); }} onError={() => setImageFailed(true)} /> : <Avatar user={user} size="large" />}</div><strong>{user.full_name}</strong><small>{ROLE_LABELS[user.role]}</small></div></div></ViewportModal>;
 }
 
 export function UserDetailModal({ user, users = [], superiors, campaigns, assignments, campaignSupervisorAssignments, assignmentRequests, requester, canRequest, onNotice, onClose }: UserDetailProps) {
