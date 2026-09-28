@@ -141,12 +141,16 @@ const SUPABASE_REQUEST_TIMEOUT_MS = 15000;
 const envUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const envKey = (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY) as string | undefined;
 
+function normalizeSupabaseUrl(value: string): string {
+  return value.trim().replace(/\/rest\/v1\/?$/i, "").replace(/\/+$/, "");
+}
+
 function readRuntimeConnection(): SupabaseConnection | null {
   try {
     const raw = localStorage.getItem(runtimeKey) || sessionStorage.getItem(runtimeKey);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<SupabaseConnection>;
-    return parsed.url && parsed.publishableKey ? { url: parsed.url, publishableKey: parsed.publishableKey } : null;
+    return parsed.url && parsed.publishableKey ? { url: normalizeSupabaseUrl(parsed.url), publishableKey: parsed.publishableKey } : null;
   } catch {
     return null;
   }
@@ -173,7 +177,7 @@ function createConfiguredClient(connection: SupabaseConnection): SupabaseClient 
   return createClient(connection.url, connection.publishableKey, { global: { fetch: fetchWithTimeout } });
 }
 
-let activeConnection: SupabaseConnection | null = readRuntimeConnection() || (envUrl && envKey ? { url: envUrl, publishableKey: envKey } : null);
+let activeConnection: SupabaseConnection | null = readRuntimeConnection() || (envUrl && envKey ? { url: normalizeSupabaseUrl(envUrl), publishableKey: envKey } : null);
 let supabaseClient: SupabaseClient | null = activeConnection ? createConfiguredClient(activeConnection) : null;
 function readStoredProfile(): UserRecord | null {
   try {
@@ -189,7 +193,7 @@ export function getSupabaseConnection(): SupabaseConnection | null { return acti
 export function isSupabaseConfigured(): boolean { return Boolean(activeConnection && supabaseClient); }
 
 export function configureSupabase(url: string, publishableKey: string): SupabaseConnection {
-  const normalizedUrl = url.trim().replace(/\/$/, "");
+  const normalizedUrl = normalizeSupabaseUrl(url);
   const normalizedKey = publishableKey.trim();
   if (!/^https:\/\/[^\s]+\.supabase\.co$/i.test(normalizedUrl)) throw new Error("L’URL Supabase doit ressembler à https://votre-projet.supabase.co.");
   if (normalizedKey.length < 20 || normalizedKey.toLowerCase().includes("service_role")) throw new Error("Utilisez uniquement la clé publishable/anon, jamais la clé service_role.");
@@ -212,7 +216,7 @@ export function clearSupabaseConnection(): void {
 }
 
 export async function testSupabaseConnection(url: string, publishableKey: string): Promise<void> {
-  const normalizedUrl = url.trim().replace(/\/$/, "");
+  const normalizedUrl = normalizeSupabaseUrl(url);
   const key = publishableKey.trim();
   if (!normalizedUrl || !key) throw new Error("Renseignez l’URL et la clé publishable.");
   const response = await fetch(`${normalizedUrl}/rest/v1/users?select=id&limit=1`, { headers: { apikey: key, Authorization: `Bearer ${key}` } });
