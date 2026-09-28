@@ -66,15 +66,17 @@ function CampaignPicker({ campaigns, value, onChange }: { campaigns: CampaignRec
 
 export function Avatar({ user, size = "small" }: { user: UserRecord; size?: "small" | "large" }) {
   const [imageFailed, setImageFailed] = useState(false);
-  useEffect(() => setImageFailed(false), [user.avatar_url]);
-  return user.avatar_url && !imageFailed ? <img className={`profile-avatar ${size}`} src={user.avatar_url} alt={`${user.full_name} — photo de profil`} loading="lazy" decoding="async" onError={() => setImageFailed(true)} /> : <div className={`avatar ${size === "small" ? "small" : ""}`} aria-label={`${user.full_name} — initiale`}>{user.full_name.slice(0, 1).toUpperCase()}</div>;
+  useEffect(() => setImageFailed(false), [user.avatar_url, user.profile_updated_at]);
+  const imageSource = user.avatar_url && /^https?:\/\//i.test(user.avatar_url) ? `${user.avatar_url}${user.avatar_url.includes("?") ? "&" : "?"}v=${encodeURIComponent(user.profile_updated_at || "1")}` : user.avatar_url;
+  return imageSource && !imageFailed ? <img className={`profile-avatar ${size}`} src={imageSource} alt={`${user.full_name} — photo de profil`} loading="lazy" decoding="async" onError={() => setImageFailed(true)} /> : <div className={`avatar ${size === "small" ? "small" : ""}`} aria-label={`${user.full_name} — initiale`}>{user.full_name.slice(0, 1).toUpperCase()}</div>;
 }
 
 export function ProfilePhotoPreviewModal({ user, onClose }: { user: UserRecord; onClose: () => void }) {
   const [photoRatio, setPhotoRatio] = useState(1);
   const [imageFailed, setImageFailed] = useState(false);
-  useEffect(() => { setPhotoRatio(1); setImageFailed(false); }, [user.avatar_url]);
-  return <ViewportModal><div className="modal-layer profile-photo-lightbox"><button className="modal-backdrop" type="button" aria-label="Fermer la photo" onClick={onClose} /><div className="profile-photo-lightbox-card"><button type="button" className="modal-close" onClick={onClose} aria-label="Fermer"><X size={16} /></button><div className="profile-photo-lightbox-media" style={{ "--photo-ratio": photoRatio } as React.CSSProperties}>{user.avatar_url && !imageFailed ? <img className="profile-photo-lightbox-image" src={user.avatar_url} alt={`Photo de profil de ${user.full_name}`} loading="eager" decoding="async" onLoad={(event) => { const image = event.currentTarget; if (image.naturalWidth && image.naturalHeight) setPhotoRatio(image.naturalWidth / image.naturalHeight); }} onError={() => setImageFailed(true)} /> : <Avatar user={user} size="large" />}</div><strong>{user.full_name}</strong><small>{ROLE_LABELS[user.role]}</small></div></div></ViewportModal>;
+  useEffect(() => { setPhotoRatio(1); setImageFailed(false); }, [user.avatar_url, user.profile_updated_at]);
+  const imageSource = user.avatar_url && /^https?:\/\//i.test(user.avatar_url) ? `${user.avatar_url}${user.avatar_url.includes("?") ? "&" : "?"}v=${encodeURIComponent(user.profile_updated_at || "1")}` : user.avatar_url;
+  return <ViewportModal><div className="modal-layer profile-photo-lightbox"><button className="modal-backdrop" type="button" aria-label="Fermer la photo" onClick={onClose} /><div className="profile-photo-lightbox-card"><button type="button" className="modal-close" onClick={onClose} aria-label="Fermer"><X size={16} /></button><div className="profile-photo-lightbox-media" style={{ "--photo-ratio": photoRatio } as React.CSSProperties}>{imageSource && !imageFailed ? <img className="profile-photo-lightbox-image" src={imageSource} alt={`Photo de profil de ${user.full_name}`} loading="eager" decoding="async" onLoad={(event) => { const image = event.currentTarget; if (image.naturalWidth && image.naturalHeight) setPhotoRatio(image.naturalWidth / image.naturalHeight); }} onError={() => setImageFailed(true)} /> : <Avatar user={user} size="large" />}</div><strong>{user.full_name}</strong><small>{ROLE_LABELS[user.role]}</small></div></div></ViewportModal>;
 }
 
 export function UserDetailModal({ user, users = [], superiors, campaigns, assignments, campaignSupervisorAssignments, assignmentRequests, requester, canRequest, onNotice, onClose }: UserDetailProps) {

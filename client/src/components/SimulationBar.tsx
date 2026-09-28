@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { ChevronDown, LogOut, Search, ShieldCheck, UserRound, X } from "lucide-react";
+import { ChevronDown, ChevronRight, LogOut, Search, ShieldCheck, UserRound, X } from "lucide-react";
 import { ROLE_LABELS } from "@/lib/user-form";
 import type { UserRecord, UserRole } from "@/lib/supabase";
 
@@ -25,7 +25,7 @@ export function sortUsersForSimulation(users: UserRecord[]) {
 function findShortcutUser(users: UserRecord[], role: ShortcutRole) {
   const normalized = users.map((user) => ({ user, name: normalize(user.full_name) }));
   if (role === "agent") return normalized.find(({ user, name }) => user.role === "agent" && name === "agent test")?.user;
-  if (role === "supervisor") return normalized.find(({ user, name }) => user.role === "supervisor" && (name === "herve ntalu" || name === "herve ntalu"))?.user;
+  if (role === "supervisor") return normalized.find(({ user, name }) => user.role === "supervisor" && name === "herve ntalu")?.user;
   return normalized.find(({ user, name }) => user.role === "admin" && name.startsWith("bradley"))?.user;
 }
 
@@ -37,6 +37,7 @@ const shortcutLabels: Array<{ role: ShortcutRole; label: string; short: string }
 
 export default function SimulationBar({ masterUser, effectiveUser, users, onSelectUser, onExit }: SimulationBarProps) {
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
   const [query, setQuery] = useState("");
   const sortedUsers = useMemo(() => sortUsersForSimulation(users), [users]);
   const filteredUsers = useMemo(() => {
@@ -77,11 +78,14 @@ export default function SimulationBar({ masterUser, effectiveUser, users, onSele
   ) : null;
 
   return <>
-    <div className={`simulation-bar ${isSimulating ? "is-active" : ""}`}>
-      <div className="simulation-brand"><div className="simulation-brand-icon"><ShieldCheck size={15} /></div><div><span>Simulation superadmin</span><small>Compte réel · {masterUser.full_name}</small></div></div>
-      <button type="button" className="simulation-user-select" onClick={() => setPickerOpen(true)} aria-label="Choisir l’utilisateur à simuler" aria-expanded={pickerOpen}><span className="avatar small">{effectiveUser.full_name.slice(0, 1).toUpperCase()}</span><span><strong>{effectiveUser.full_name}</strong><small>{ROLE_LABELS[effectiveUser.role]}</small></span><ChevronDown size={15} /></button>
-      <div className="simulation-shortcuts" aria-label="Raccourcis de simulation">{shortcutLabels.map(({ role, label, short }) => { const target = findShortcutUser(users, role); const active = target?.id === effectiveUser.id; return <button type="button" className={`simulation-shortcut ${active ? "is-active" : ""}`} key={role} disabled={!target} onClick={() => target && onSelectUser(target)} title={target ? `Simuler ${target.full_name}` : `Compte ${label} indisponible`} aria-label={target ? `Simuler ${target.full_name}` : `Compte ${label} indisponible`}>{short}</button>; })}</div>
-      {isSimulating && <button type="button" className="simulation-exit" onClick={onExit} title="Quitter la simulation" aria-label="Quitter la simulation"><LogOut size={14} /><span>Quitter</span></button>}
+    <div className={`simulation-bar ${isSimulating ? "is-active" : ""} ${collapsed ? "is-collapsed" : ""}`}>
+      <div className="simulation-brand"><div className="simulation-brand-icon"><ShieldCheck size={15} /></div>{!collapsed && <div><span>Simulation superadmin</span><small>Compte réel · {masterUser.full_name}</small></div>}</div>
+      {!collapsed && <>
+        <button type="button" className="simulation-user-select" onClick={() => setPickerOpen(true)} aria-label="Choisir l’utilisateur à simuler" aria-expanded={pickerOpen}><span className="avatar small">{effectiveUser.full_name.slice(0, 1).toUpperCase()}</span><span><strong>{effectiveUser.full_name}</strong><small>{ROLE_LABELS[effectiveUser.role]}</small></span><ChevronDown size={15} /></button>
+        <div className="simulation-shortcuts" aria-label="Raccourcis de simulation">{shortcutLabels.map(({ role, label, short }) => { const target = findShortcutUser(users, role); const active = target?.id === effectiveUser.id; return <button type="button" className={`simulation-shortcut ${active ? "is-active" : ""}`} disabled={!target} onClick={() => target && onSelectUser(target)} title={target ? `Simuler ${target.full_name}` : `Compte ${label} indisponible`} aria-label={target ? `Simuler ${target.full_name}` : `Compte ${label} indisponible`}>{short}</button>; })}</div>
+        {isSimulating && <button type="button" className="simulation-exit" onClick={onExit} title="Quitter la simulation" aria-label="Quitter la simulation"><LogOut size={14} /><span>Quitter</span></button>}
+      </>}
+      <button type="button" className="simulation-collapse" onClick={() => setCollapsed((current) => !current)} aria-label={collapsed ? "Développer la simulation" : "Rétracter la simulation"} title={collapsed ? "Développer" : "Rétracter"}>{collapsed ? <ChevronRight size={15} /> : <ChevronDown size={15} />}</button>
     </div>
     {picker}
   </>;

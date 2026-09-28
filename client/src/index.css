@@ -1106,3 +1106,37 @@ html { scrollbar-width: thin; scrollbar-color: rgba(158,233,232,.35) rgba(3,11,1
 .agent-password-label .copyable-phone, .agent-password-label .copyable-phone span, .user-gallery-facts .copyable-phone { max-width: 100%; overflow: hidden; color: #f5d99a; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
 .user-gallery-facts .copyable-phone { justify-content: flex-start; padding-inline: 0; border: 0; background: transparent; }
 @media (max-width: 680px) { .agent-password-label { max-width: 150px; } }
+
+
+/* Compact operational filters and dedicated claims inbox */
+.compact-filter-group { display: inline-flex; align-items: center; gap: 3px; height: 39px; padding: 3px; border: 1px solid rgba(188,220,228,.14); border-radius: 9px; background: rgba(3,11,14,.3); }
+.compact-filter-button { display: grid; place-items: center; width: 31px; height: 31px; border: 1px solid transparent; border-radius: 7px; color: var(--muted-2); background: transparent; transition: color .18s ease, border-color .18s ease, background .18s ease, transform .18s ease; }
+.compact-filter-button:hover { color: var(--cyan); border-color: rgba(158,233,232,.28); background: rgba(91,208,209,.08); transform: translateY(-1px); }
+.compact-filter-button.is-active { color: #071015; border-color: transparent; background: var(--cyan); }
+.compact-filter-button.status-active.is-active { color: #102008; background: var(--lime); }
+.compact-filter-button.status-inactive.is-active { color: #2a1210; background: #ff9a8a; }
+.claims-menu-button { gap: 6px; }
+.claims-menu-button span { display: inline-grid; place-items: center; min-width: 18px; height: 18px; border-radius: 999px; color: #15120a; background: var(--amber); font-family: "DM Mono", monospace; font-size: 8px; }
+.claim-inbox-card { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 20px; padding: 14px 16px; border: 1px solid rgba(245,205,120,.22); border-radius: 13px; background: linear-gradient(100deg, rgba(245,205,120,.08), rgba(91,208,209,.035)); }
+.claim-inbox-card h3 { margin-top: 6px; color: #e2eeee; font-size: 14px; letter-spacing: -.03em; }
+.claim-inbox-card p { margin-top: 5px; color: var(--muted); font-size: 10px; }
+.claims-menu-modal { width: min(720px, 100%); }
+.claims-menu-modal .modal-header > span { display: block; margin-top: 5px; color: var(--muted-2); font-size: 9px; }
+.modal-header-actions { display: flex; align-items: center; gap: 7px; }
+.claims-menu-list { display: grid; gap: 7px; max-height: min(60vh, 520px); overflow-y: auto; padding-right: 3px; }
+.claim-menu-item { width: 100%; color: inherit; text-align: left; cursor: pointer; transition: border-color .18s ease, transform .18s ease, background .18s ease; }
+.claim-menu-item:hover { transform: translateY(-1px); border-color: rgba(158,233,232,.38); background: rgba(91,208,209,.07); }
+.claim-menu-item > .button { flex: none; pointer-events: none; }
+.claim-pending-description { display: block; margin-top: 5px; overflow: hidden; color: #b9cfd2; font-size: 9px; line-height: 1.4; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Simulation bar: compact/retractable chrome */
+.simulation-bar { transition: grid-template-columns .28s ease, padding .28s ease, background .28s ease, box-shadow .28s ease; }
+.simulation-bar.is-collapsed { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-block: 7px; }
+.simulation-bar.is-collapsed .simulation-brand { flex: 1; }
+.simulation-collapse { display: grid; place-items: center; width: 29px; height: 29px; flex: none; border: 1px solid rgba(188,220,228,.16); border-radius: 8px; color: var(--muted); background: rgba(255,255,255,.035); transition: color .18s ease, border-color .18s ease, transform .18s ease; }
+.simulation-collapse:hover { color: var(--cyan); border-color: rgba(158,233,232,.4); transform: translateY(-1px); }
+@media (max-width: 680px) {
+  .claim-inbox-card { align-items: flex-start; flex-direction: column; }
+  .claim-inbox-card .button { width: 100%; }
+  .compact-filter-group { flex: none; }
+}
