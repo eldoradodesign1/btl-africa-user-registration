@@ -138,22 +138,10 @@ export type AdminContext = { profile: UserRecord };
 const runtimeKey = "btl-supabase-connection";
 const profileKey = "btl-active-profile";
 const SUPABASE_REQUEST_TIMEOUT_MS = 15000;
-const envUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-const envKey = (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY) as string | undefined;
-
+const DEFAULT_SUPABASE_URL = "https://upkzlppvwckriuidnyvq.supabase.co";
+const DEFAULT_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_36S8t4yZQhYXXMZa3p9ldg_EWnP8gPL';
 function normalizeSupabaseUrl(value: string): string {
   return value.trim().replace(/\/rest\/v1\/?$/i, "").replace(/\/+$/, "");
-}
-
-function readRuntimeConnection(): SupabaseConnection | null {
-  try {
-    const raw = localStorage.getItem(runtimeKey) || sessionStorage.getItem(runtimeKey);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as Partial<SupabaseConnection>;
-    return parsed.url && parsed.publishableKey ? { url: normalizeSupabaseUrl(parsed.url), publishableKey: parsed.publishableKey } : null;
-  } catch {
-    return null;
-  }
 }
 
 async function fetchWithTimeout(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
@@ -177,7 +165,10 @@ function createConfiguredClient(connection: SupabaseConnection): SupabaseClient 
   return createClient(connection.url, connection.publishableKey, { global: { fetch: fetchWithTimeout } });
 }
 
-let activeConnection: SupabaseConnection | null = readRuntimeConnection() || (envUrl && envKey ? { url: normalizeSupabaseUrl(envUrl), publishableKey: envKey } : null);
+const defaultConnection: SupabaseConnection = { url: DEFAULT_SUPABASE_URL, publishableKey: DEFAULT_SUPABASE_PUBLISHABLE_KEY };
+// La base BTL est fixe : une ancienne configuration locale ne doit jamais
+// rendre l’application inutilisable sur un nouvel appareil ou après publication.
+let activeConnection: SupabaseConnection | null = defaultConnection;
 let supabaseClient: SupabaseClient | null = activeConnection ? createConfiguredClient(activeConnection) : null;
 function readStoredProfile(): UserRecord | null {
   try {

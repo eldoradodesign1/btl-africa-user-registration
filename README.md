@@ -21,16 +21,13 @@ Le code est organisé dans le template WebDev React :
 
 ## Branchement Supabase
 
-Pour une configuration au démarrage, créez un fichier `.env.local` à la racine du projet et renseignez :
+L’application est préconfigurée avec le projet Supabase partagé BTL :
 
-```bash
-VITE_SUPABASE_URL=https://<project-ref>.supabase.co
-VITE_SUPABASE_PUBLISHABLE_KEY=<publishable-or-anon-key>
+```text
+https://upkzlppvwckriuidnyvq.supabase.co
 ```
 
-`VITE_SUPABASE_ANON_KEY` est également accepté pour les projets qui utilisent encore l’ancien nom de variable. Redémarrez ensuite le serveur Vite.
-
-Vous pouvez aussi renseigner les valeurs directement dans **Dashboard → Configurer**. Cette configuration runtime est conservée localement pour restaurer la connexion après rechargement ; elle est effacée quand le projet est déconnecté. La clé Supabase est toujours saisie dans un champ masqué et les clés contenant `service_role` sont refusées.
+La connexion initiale ne dépend ni d’un fichier `.env`, ni des secrets GitHub, ni d’une saisie sur l’appareil de l’utilisateur. Les anciennes valeurs éventuellement conservées dans le navigateur ne sont pas utilisées pour éviter qu’une configuration obsolète bloque l’application. Le panneau de configuration reste disponible uniquement comme outil technique local; les utilisateurs terrain ne doivent jamais avoir à renseigner l’URL ou la clé.
 
 Après configuration, le dashboard demande une connexion **par MSISDN et mot de passe existant** avant de lire `public.users`. Le numéro local `0812345678` est essayé avec son équivalent international `+243812345678`, puis la ligne est vérifiée avec la valeur déjà utilisée dans `password_hash`. Aucun nouveau mécanisme d’authentification n’est introduit. Le profil correspondant détermine le rôle. L’écran n’affiche pas les données fictives dans ce parcours réel.
 
