@@ -224,6 +224,9 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
   const lastRefreshAt = useRef(0);
   const refreshInFlight = useRef<Promise<void> | null>(null);
   const realtimeRefreshTimer = useRef<number | null>(null);
+  const realtimeTables = useRef<Set<string>>(new Set());
+  const profileRef = useRef<UserRecord | null>(profile);
+  const activeProfileId = profile?.id;
   const isAuthenticated = Boolean(profile);
   const isSimulation = Boolean(profile?.role === "super_admin" && simulatedUser && simulatedUser.id !== profile.id);
   const effectiveProfile = simulatedUser || profile;
@@ -267,27 +270,48 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
     }
   }
 
-  const refreshUsers = useCallback(async (currentProfile: UserRecord | null = profile, force = false) => {
+  useEffect(() => {
+    profileRef.current = profile;
+  }, [profile]);
+
+  const refreshUsers = useCallback(async (currentProfile: UserRecord | null = null, force = false, changedTables?: ReadonlySet<string>) => {
     if (refreshInFlight.current) return refreshInFlight.current;
     if (!force && Date.now() - lastRefreshAt.current < 15000) return;
     const task = (async () => {
       setLoading(true);
       try {
         const isManager = Boolean(currentProfile && ["admin", "super_admin", "sub_admin", "supervisor"].includes(currentProfile.role));
-        const isAdmin = Boolean(currentProfile && ["admin", "super_admin"].includes(currentProfile.role));
-        const [nextUsers, nextCampaigns] = await Promise.all([loadUsers(), loadCampaigns()]);
-        const nextSuperiors = nextUsers.filter((user) => ["supervisor", "admin", "sub_admin", "super_admin"].includes(user.role));
-        setUsers(nextUsers);
-        setSuperiors(nextSuperiors);
-        setCampaigns(nextCampaigns);
-        setLoading(false);
-
-        const [nextShops, nextAssignments, nextCampaignSupervisorAssignments, nextRequests, nextClaims] = await Promise.all([isAdmin ? loadShops().catch(() => []) : Promise.resolve([]), loadCampaignAssignments(), loadCampaignSupervisorAssignments().catch(() => []), isManager ? loadCampaignAssignmentRequests().catch(() => []) : Promise.resolve([]), currentProfile?.role === "agent" ? loadMyCampaignClaims(currentProfile.id).catch(() => []) : isManager ? loadCampaignClaims().catch(() => []) : Promise.resolve([])]);
-        setShops(nextShops as ShopRecord[]);
-        setCampaignAssignments(nextAssignments);
-        setCampaignSupervisorAssignments(nextCampaignSupervisorAssignments as CampaignSupervisorAssignment[]);
-        setAssignmentRequests(nextRequests as CampaignAssignmentRequest[]);
-        setCampaignClaims(nextClaims as CampaignClaim[]);
+        const shouldRefresh = (table: string) => !changedTables || changedTables.has(table);
+        const [nextUsers, nextCampaigns, nextShops, nextAssignments, nextCampaignSupervisorAssignments, nextRequests, nextClaims, nextPending] = await Promise.all([
+          shouldRefresh("users") ? loadUsers() : Promise.resolve(null),
+          shouldRefresh("campaigns") ? loadCampaigns() : Promise.resolve(null),
+          shouldRefresh("shops") && isManager ? loadShops().catch(() => []) : Promise.resolve(null),
+          shouldRefresh("user_campaign_assignments") ? loadCampaignAssignments() : Promise.resolve(null),
+          shouldRefresh("agent_campaign_supervisor_assignments") ? loadCampaignSupervisorAssignments().catch(() => []) : Promise.resolve(null),
+          shouldRefresh("campaign_assignment_requests") && isManager ? loadCampaignAssignmentRequests().catch(() => []) : Promise.resolve(null),
+          shouldRefresh("campaign_claims") ? currentProfile?.role === "agent" ? loadMyCampaignClaims(currentProfile.id).catch(() => []) : isManager ? loadCampaignClaims().catch(() => []) : Promise.resolve(null) : Promise.resolve(null),
+          shouldRefresh("user_registration_requests") && currentProfile?.role === "super_admin" ? loadPendingRegistrationRequests().catch(() => []) : Promise.resolve(null),
+        ]);
+        if (nextUsers) {
+          const nextSuperiors = nextUsers.filter((user) => ["supervisor", "admin", "sub_admin", "super_admin"].includes(user.role));
+          if (currentProfile) {
+            const refreshedProfile = nextUsers.find((user) => user.id === currentProfile.id) || null;
+            setProfile((previous) => {
+              if (!refreshedProfile) return null;
+              return previous && JSON.stringify(previous) === JSON.stringify(refreshedProfile) ? previous : refreshedProfile;
+            });
+            if (!refreshedProfile) setSimulatedUser(null);
+          }
+          setUsers(nextUsers);
+          setSuperiors(nextSuperiors);
+        }
+        if (nextCampaigns) setCampaigns(nextCampaigns);
+        if (nextShops) setShops(nextShops as ShopRecord[]);
+        if (nextAssignments) setCampaignAssignments(nextAssignments);
+        if (nextCampaignSupervisorAssignments) setCampaignSupervisorAssignments(nextCampaignSupervisorAssignments as CampaignSupervisorAssignment[]);
+        if (nextRequests) setAssignmentRequests(nextRequests as CampaignAssignmentRequest[]);
+        if (nextClaims) setCampaignClaims(nextClaims as CampaignClaim[]);
+        if (nextPending) setPendingRequests(nextPending as RegistrationRequest[]);
         setNotice(null);
       } catch (error) {
         setNotice({ kind: "error", message: readableSupabaseError(error, "Impossible de charger les utilisateurs, campagnes ou affectations. Vérifiez les politiques RLS.") });
@@ -298,7 +322,7 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
     })();
     refreshInFlight.current = task;
     try { await task; } finally { if (refreshInFlight.current === task) refreshInFlight.current = null; }
-  }, [profile]);
+  }, []);
 
   async function refreshSession(force = false) {
     if (!isSupabaseConfigured()) return;
@@ -310,17 +334,7 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
       });
       if (current) {
         await refreshUsers(current.profile, force);
-        if (current.profile.role === "super_admin") {
-          setLoadingRequests(true);
-          try {
-            setPendingRequests(await loadPendingRegistrationRequests());
-          } catch (error) {
-            setNotice({ kind: "error", message: readableSupabaseError(error, "Impossible de charger les demandes d’inscription.") });
-          } finally {
-            setLoadingRequests(false);
-          }
-        } else setPendingRequests([]);
-      }
+      } else setPendingRequests([]);
     } catch (error) {
       if (!profile) setProfile(null);
       setNotice({ kind: "error", message: readableSupabaseError(error, "Session indisponible.") });
@@ -329,24 +343,37 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
 
   useEffect(() => { void refreshSession(); }, []);
   useEffect(() => {
-    if (!profile) return;
+    if (!activeProfileId) return;
     let realtimeConnected = false;
-    const scheduleRealtimeRefresh = () => {
-      if (realtimeRefreshTimer.current !== null) return;
-      realtimeRefreshTimer.current = window.setTimeout(() => {
-        realtimeRefreshTimer.current = null;
-        void refreshSession(true);
-      }, 150);
+    const flushRealtimeRefresh = () => {
+      realtimeRefreshTimer.current = null;
+      if (refreshInFlight.current) {
+        realtimeRefreshTimer.current = window.setTimeout(flushRealtimeRefresh, 800);
+        return;
+      }
+      const changedTables = new Set(realtimeTables.current);
+      realtimeTables.current.clear();
+      const currentProfile = profileRef.current;
+      if (currentProfile) void refreshUsers(currentProfile, true, changedTables);
+    };
+    const scheduleRealtimeRefresh = (table: string) => {
+      realtimeTables.current.add(table);
+      if (realtimeRefreshTimer.current === null) realtimeRefreshTimer.current = window.setTimeout(flushRealtimeRefresh, 220);
     };
     const unsubscribe = subscribeToDataChanges(scheduleRealtimeRefresh, (status) => {
       realtimeConnected = status === "SUBSCRIBED";
-      if (!realtimeConnected) scheduleRealtimeRefresh();
     });
     const fallbackRefreshTimer = window.setInterval(() => {
-      if (!realtimeConnected && document.visibilityState === "visible") void refreshSession(true);
-    }, 5000);
+      if (!realtimeConnected && document.visibilityState === "visible") {
+        const currentProfile = profileRef.current;
+        if (currentProfile) void refreshUsers(currentProfile, true);
+      }
+    }, 30000);
     const refreshWhenVisible = () => {
-      if (document.visibilityState === "visible") void refreshSession(true);
+      if (document.visibilityState === "visible" && Date.now() - lastRefreshAt.current > 30000) {
+        const currentProfile = profileRef.current;
+        if (currentProfile) void refreshUsers(currentProfile, false);
+      }
     };
     document.addEventListener("visibilitychange", refreshWhenVisible);
     window.addEventListener("focus", refreshWhenVisible);
@@ -361,8 +388,9 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
       window.removeEventListener("pageshow", refreshWhenVisible);
       if (realtimeRefreshTimer.current !== null) window.clearTimeout(realtimeRefreshTimer.current);
       realtimeRefreshTimer.current = null;
+      realtimeTables.current.clear();
     };
-  }, [profile]);
+  }, [activeProfileId, refreshUsers]);
 
   useEffect(() => {
     if (simulatedUser && !users.some((user) => user.id === simulatedUser.id)) setSimulatedUser(null);
@@ -589,7 +617,17 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
   }, [users, deferredSearch, roleFilter, categoryFilter, activityFilter, campaignFilter, campaignAssignments, campaignSupervisorAssignments, effectiveProfile?.role]);
   const categoryStats = useMemo(() => CATEGORY_OPTIONS.map((category) => ({ category, count: users.filter((user) => user.user_category === category).length })).filter((item) => item.count > 0), [users]);
   const donutGradient = useMemo(() => { const colors = ["#9ee9e8", "#b5ef8c", "#d3b5ff", "#ffca8a"]; const total = Math.max(users.length, 1); let cursor = 0; return `conic-gradient(${categoryStats.length ? categoryStats.map((item, index) => { const start = cursor; cursor += (item.count / total) * 100; return `${colors[index % colors.length]} ${start}% ${cursor}%`; }).join(", ") : "#29444b 0 100%"})`; }, [categoryStats, users.length]);
-  const campaignStats = useMemo(() => campaigns.map((campaign) => ({ campaign, count: new Set([...campaignAssignments.filter((assignment) => assignment.campaign_id === campaign.id && users.some((user) => user.id === assignment.user_id)).map((assignment) => assignment.user_id), ...campaignSupervisorAssignments.filter((assignment) => assignment.campaign_id === campaign.id && users.some((user) => user.id === assignment.agent_id)).map((assignment) => assignment.agent_id)]).size })).filter((item) => item.count > 0), [campaigns, campaignAssignments, campaignSupervisorAssignments, users]);
+  const campaignStats = useMemo(() => {
+    const userIds = new Set(users.map((user) => user.id));
+    const idsByCampaign = new Map<string, Set<string>>();
+    [...campaignAssignments.map((assignment) => ({ campaign_id: assignment.campaign_id, user_id: assignment.user_id })), ...campaignSupervisorAssignments.map((assignment) => ({ campaign_id: assignment.campaign_id, user_id: assignment.agent_id }))].forEach(({ campaign_id, user_id }) => {
+      if (!userIds.has(user_id)) return;
+      const ids = idsByCampaign.get(campaign_id) || new Set<string>();
+      ids.add(user_id);
+      idsByCampaign.set(campaign_id, ids);
+    });
+    return campaigns.map((campaign) => ({ campaign, count: idsByCampaign.get(campaign.id)?.size || 0 })).filter((item) => item.count > 0);
+  }, [campaigns, campaignAssignments, campaignSupervisorAssignments, users]);
   const campaignDonutGradient = useMemo(() => { const colors = ["#9ee9e8", "#b5ef8c", "#d3b5ff", "#ffca8a", "#f5cd78", "#ff9a8a"]; const total = Math.max(campaignStats.reduce((sum, item) => sum + item.count, 0), 1); let cursor = 0; return `conic-gradient(${campaignStats.length ? campaignStats.map((item, index) => { const start = cursor; cursor += (item.count / total) * 100; return `${colors[index % colors.length]} ${start}% ${cursor}%`; }).join(", ") : "#29444b 0 100%"})`; }, [campaignStats]);
   const campaignsByUserId = useMemo(() => {
     const byUser = new Map<string, Set<string>>();
@@ -603,6 +641,9 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
     byUser.forEach((campaignIds, userId) => result.set(userId, campaigns.filter((campaign) => campaignIds.has(campaign.id))));
     return result;
   }, [campaignAssignments, campaignSupervisorAssignments, campaigns]);
+
+  const shopsById = useMemo(() => new Map(shops.map((shop) => [shop.id, shop])), [shops]);
+  const limeNamesById = useMemo(() => new Map(users.map((user) => [user.id, user.full_name])), [users]);
 
   function campaignNamesForUser(userId: string): string {
     return (campaignsByUserId.get(userId) || []).map((campaign) => campaign.name).join(" · ");
@@ -626,8 +667,8 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
 
   function exportCsv(usersToExport = selectedExportUsers) {
     if (!usersToExport.length) return;
-    const headers = ["id", "full_name", "phone", "role", "user_category", "status", "campaigns", "lime", "permanent_shop_id"];
-    const rows = usersToExport.map((user) => [user.id, user.full_name, user.phone, user.role, user.user_category || "", user.is_active ? "Actif" : "Inactif", campaignNamesForUser(user.id), limeDisplayName(user.supervisor_id, users), user.permanent_shop_id || ""].map(escapeCsv).join(","));
+    const headers = ["id", "full_name", "phone", "role", "user_category", "status", "campaigns", "lime", "shop"];
+    const rows = usersToExport.map((user) => [user.id, user.full_name, user.phone, user.role, user.user_category || "", user.is_active ? "Actif" : "Inactif", campaignNamesForUser(user.id), limeNamesById.get(user.supervisor_id || '') || '—', shopsById.get(user.permanent_shop_id || "")?.name || "—"].map(escapeCsv).join(","));
     const blob = new Blob([`\ufeff${headers.join(",")}\n${rows.join("\n")}`], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
@@ -643,7 +684,7 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
     if (!usersToExport.length) return;
     const XLSX = await import("xlsx-js-style");
     const workbook = XLSX.utils.book_new();
-    const rows = usersToExport.map((user) => [user.id, user.full_name, user.phone, ROLE_LABELS[user.role], user.user_category ? categoryShortLabel(user.user_category) : "", user.is_active ? "Actif" : "Inactif", campaignNamesForUser(user.id), limeDisplayName(user.supervisor_id, users), user.permanent_shop_id || ""]);
+    const rows = usersToExport.map((user) => [user.id, user.full_name, user.phone, ROLE_LABELS[user.role], user.user_category ? categoryShortLabel(user.user_category) : "", user.is_active ? "Actif" : "Inactif", campaignNamesForUser(user.id), limeNamesById.get(user.supervisor_id || '') || '—', user.permanent_shop_id || ""]);
     const sheet = XLSX.utils.aoa_to_sheet([["BTL AFRICA · UTILISATEURS", "", "", "", "", "", "", "", ""], [`Filtre campagne : ${selectedCampaignName}`, "", "", "", "", "", "", "", ""], ["ID", "Nom complet", "MSISDN", "Rôle", "Catégorie", "Statut", "Campagnes", "Lime", "Shop"], ...rows]);
     sheet["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 8 } }, { s: { r: 1, c: 0 }, e: { r: 1, c: 8 } }];
     sheet["!cols"] = [22, 28, 17, 18, 28, 12, 32, 24, 18].map((wch) => ({ wch }));
@@ -666,8 +707,10 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
       setNotice({ kind: "error", message: "Le navigateur a bloqué la fenêtre PDF. Autorisez les fenêtres surgissantes pour ce site." });
       return;
     }
-    const rows = usersToExport.map((user) => `<tr><td>${escapeHtml(user.full_name)}</td><td>${escapeHtml(user.phone)}</td><td>${escapeHtml(ROLE_LABELS[user.role])}</td><td>${escapeHtml(user.user_category ? categoryShortLabel(user.user_category) : "—")}</td><td>${escapeHtml(user.is_active ? "Actif" : "Inactif")}</td><td>${escapeHtml(campaignNamesForUser(user.id) || "—")}</td><td>${escapeHtml(user.permanent_shop_id || "—")}</td></tr>`).join("");
-    popup.document.write(`<html><head><title>BTL Africa — Utilisateurs</title><style>@page{size:A4 landscape;margin:12mm}body{font-family:Arial,sans-serif;color:#17343a;font-size:11px}header{padding:18px 20px;background:#12383f;color:#fff;border-radius:12px}h1{margin:8px 0 3px;font-size:24px}p{margin:0;color:#c7e2e2}table{width:100%;margin-top:18px;border-collapse:collapse}th{padding:8px;background:#12383f;color:#fff;text-align:left;font-size:9px}td{padding:8px;border-bottom:1px solid #e2eded}tr:nth-child(even){background:#f7fbfa}.footer{margin-top:18px;color:#789095;font-size:9px;text-align:right}</style></head><body><header><div>BTL AFRICA · EXPORT UTILISATEURS</div><h1>${usersToExport.length} utilisateur${usersToExport.length > 1 ? "s" : ""}</h1><p>Campagne : ${escapeHtml(selectedCampaignName)} · Généré le ${new Date().toLocaleString("fr-FR")}</p></header><table><thead><tr><th>Nom complet</th><th>MSISDN</th><th>Rôle</th><th>Catégorie</th><th>Statut</th>{canViewPasswords && passwordAssistanceReady && <th>Mot de passe</th>}<th>Campagnes</th><th>Shop</th></tr></thead><tbody>${rows}</tbody></table><div class="footer">BTL Africa · Privilege Tracker</div></body></html>`);
+    const passwordColumn = canViewPasswords && passwordAssistanceReady;
+    const rows = usersToExport.map((user) => `<tr><td>${escapeHtml(user.full_name)}</td><td>${escapeHtml(user.phone)}</td><td>${escapeHtml(ROLE_LABELS[user.role])}</td><td>${escapeHtml(user.user_category ? categoryShortLabel(user.user_category) : "—")}</td><td>${escapeHtml(user.is_active ? "Actif" : "Inactif")}</td>${passwordColumn ? `<td>${escapeHtml(userPasswords[user.id] || "Non renseigné")}</td>` : ""}<td>${escapeHtml(campaignNamesForUser(user.id) || "—")}</td><td>${escapeHtml(shopsById.get(user.permanent_shop_id || "")?.name || "—")}</td></tr>`).join("");
+    const passwordHeader = passwordColumn ? "<th>Mot de passe</th>" : "";
+    popup.document.write(`<html><head><title>BTL Africa — Utilisateurs</title><style>@page{size:A4 landscape;margin:12mm}body{font-family:Arial,sans-serif;color:#17343a;font-size:11px}header{padding:18px 20px;background:#12383f;color:#fff;border-radius:12px}h1{margin:8px 0 3px;font-size:24px}p{margin:0;color:#c7e2e2}table{width:100%;margin-top:18px;border-collapse:collapse}th{padding:8px;background:#12383f;color:#fff;text-align:left;font-size:9px}td{padding:8px;border-bottom:1px solid #e2eded}tr:nth-child(even){background:#f7fbfa}.footer{margin-top:18px;color:#789095;font-size:9px;text-align:right}</style></head><body><header><div>BTL AFRICA · EXPORT UTILISATEURS</div><h1>${usersToExport.length} utilisateur${usersToExport.length > 1 ? "s" : ""}</h1><p>Campagne : ${escapeHtml(selectedCampaignName)} · Généré le ${new Date().toLocaleString("fr-FR")}</p></header><table><thead><tr><th>Nom complet</th><th>MSISDN</th><th>Rôle</th><th>Catégorie</th><th>Statut</th>${passwordHeader}<th>Campagnes</th><th>Shop</th></tr></thead><tbody>${rows}</tbody></table><div class="footer">BTL Africa · Privilege Tracker</div></body></html>`);
     popup.document.close(); popup.focus(); window.setTimeout(() => popup.print(), 250);
   }
 
@@ -812,7 +855,7 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
       {canManageCampaigns && campaignClaims.length > 0 && <section className="claim-inbox-card"><div><div className="card-kicker"><FileText size={14} /> Réclamations</div><h3>{campaignClaims.filter((claim) => claim.status === "pending").length ? `${campaignClaims.filter((claim) => claim.status === "pending").length} nouvelle${campaignClaims.filter((claim) => claim.status === "pending").length > 1 ? "s" : ""} réclamation${campaignClaims.filter((claim) => claim.status === "pending").length > 1 ? "s" : ""}` : "Dossiers à suivre"}</h3><p>Les dossiers sont regroupés dans un menu séparé pour garder l’accueil lisible.</p></div><button type="button" className="button secondary compact" onClick={() => setClaimsMenuOpen(true)}><FileText size={14} /> Voir les réclamations</button></section>}
       <div className="dashboard-toolbar"><div className="history-search"><Search size={16} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Rechercher un MSISDN ou un nom…" aria-label="Rechercher dans l’historique" /></div><div className="filter-control"><Filter size={14} /><CustomSelect value={roleFilter} onChange={setRoleFilter} ariaLabel="Filtrer par rôle" placeholder="Tous les rôles" options={[{ value: "all", label: "Tous les rôles" }, ...ROLE_OPTIONS.map((role) => ({ value: role, label: ROLE_LABELS[role] }))]} /></div><div className="compact-filter-group" role="group" aria-label="Filtrer par catégorie"><button type="button" className={`compact-filter-button ${categoryFilter === "hostess" ? "is-active" : ""}`} onClick={() => setCategoryFilter(categoryFilter === "hostess" ? "all" : "hostess")} title="Hôtesses" aria-label="Filtrer les hôtesses"><UserRound size={15} /></button><button type="button" className={`compact-filter-button ${categoryFilter === "brand_ambassador" ? "is-active" : ""}`} onClick={() => setCategoryFilter(categoryFilter === "brand_ambassador" ? "all" : "brand_ambassador")} title="Brand Ambassadors" aria-label="Filtrer les Brand Ambassadors"><BriefcaseBusiness size={15} /></button><button type="button" className={`compact-filter-button ${categoryFilter === "operations" ? "is-active" : ""}`} onClick={() => setCategoryFilter(categoryFilter === "operations" ? "all" : "operations")} title="Opérations" aria-label="Filtrer les opérations"><ServerCog size={15} /></button></div><div className="compact-filter-group" role="group" aria-label="Filtrer par statut"><button type="button" className={`compact-filter-button status-active ${activityFilter === "active" ? "is-active" : ""}`} onClick={() => setActivityFilter(activityFilter === "active" ? "all" : "active")} title="Actifs" aria-label="Afficher les actifs"><CheckCircle2 size={15} /></button><button type="button" className={`compact-filter-button status-inactive ${activityFilter === "inactive" ? "is-active" : ""}`} onClick={() => setActivityFilter(activityFilter === "inactive" ? "all" : "inactive")} title="Inactifs" aria-label="Afficher les inactifs"><XCircle size={15} /></button></div><div className="filter-control campaign-filter-control"><BriefcaseBusiness size={14} /><CustomSelect value={campaignFilter} onChange={setCampaignFilter} ariaLabel="Filtrer par campagne" placeholder="Toutes les campagnes" options={[{ value: "all", label: "Toutes les campagnes" }, ...campaignFilterOptions]} /></div><div className="view-toggle" role="group" aria-label="Mode d’affichage des utilisateurs"><button type="button" className={userView === "table" ? "is-active" : ""} onClick={() => setUserView("table")} aria-label="Afficher en liste" title="Vue liste"><List size={15} /></button><button type="button" className={userView === "cards" ? "is-active" : ""} onClick={() => setUserView("cards")} aria-label="Afficher en cartes" title="Vue cartes"><LayoutGrid size={15} /></button></div><button className="icon-button" type="button" onClick={() => void refreshUsers(profile, true)} disabled={loading} aria-label="Actualiser" title="Actualiser">{loading ? <LoaderCircle className="spin" size={15} /> : <RefreshCw size={15} />}</button>{canViewPasswords && <button className="button secondary compact password-assistance-button" type="button" onClick={() => passwordAssistanceReady ? clearPasswordAssistance() : openPasswordAssistance()} title={passwordAssistanceReady ? "Masquer les mots de passe" : "Réauthentification requise"}><LockKeyhole size={14} /> {passwordAssistanceReady ? "Masquer les mots de passe" : "Afficher les mots de passe"}</button>}{canCreateUsers && !isSimulation && <button className="button primary compact toolbar-create-user" type="button" onClick={() => onRequestCreate(!canManage)}><UserPlus size={14} /> {canManage ? "Nouvel utilisateur" : "Ajouter un agent"}</button>}{canManageCampaigns && campaignClaims.length > 0 && <button className="button secondary compact claims-menu-button" type="button" onClick={() => setClaimsMenuOpen(true)} title="Ouvrir les réclamations"><FileText size={14} /> Réclamations <span>{campaignClaims.filter((claim) => claim.status === "pending").length}</span></button>}<button className="icon-button primary-icon" type="button" onClick={openExportPreview} disabled={!filteredUsers.length} aria-label="Choisir le format d’export" title="Exporter"><Download size={15} /></button></div>
       <div className="dashboard-stats"><span><strong>{filteredUsers.length}</strong> résultat{filteredUsers.length > 1 ? "s" : ""}</span><span><strong>{users.length}</strong> utilisateur{users.length > 1 ? "s" : ""}</span>{campaignFilter !== "all" && <span className="active-filter"><BriefcaseBusiness size={12} /> {selectedCampaignName}</span>}<span className="secure-label"><ShieldCheck size={13} /> Sans password_hash</span></div>
-      {userView === "table" ? <div className="users-table-wrap"><table className="users-table"><thead><tr><th>Utilisateur</th><th>MSISDN</th><th>Rôle</th><th>Catégorie</th><th>Statut</th>{canViewPasswords && passwordAssistanceReady && <th>Mot de passe</th>}<th>Campagnes</th><th>Lime</th><th>Shop</th>{(canManage || canManageCampaigns) && <th aria-label="Actions" />}</tr></thead><tbody>{filteredUsers.map((user) => { const userCampaigns = campaignsByUserId.get(user.id) || []; const canAssign = canManageCampaigns && user.role === "agent" && ["hostess", "brand_ambassador", "brand_ambassador_youth"].includes(user.user_category || ""); const canViewActivity = canViewActivityStatus(user); const canToggleActivity = canToggleActivityStatus(user); return <tr key={user.id} className={canManage ? "row-clickable" : ""} onClick={() => handleUserRowClick(user)}><td><div className="table-user"><Avatar user={user} /><div><strong>{user.full_name}</strong><small>{user.id}</small></div></div></td><td><CopyablePhone value={user.phone} className="mono-value" /></td><td><span className={`role-badge role-${user.role}`}>{ROLE_LABELS[user.role]}</span></td><td>{user.user_category ? CATEGORY_LABELS[user.user_category].split(" — ")[0] : "—"}</td><td>{canViewActivity ? <button type="button" className={`activity-toggle ${user.is_active ? "is-active" : "is-inactive"}`} onClick={(event) => { event.stopPropagation(); if (canToggleActivity) void toggleUserActivity(user); }} disabled={!canToggleActivity || activityUpdatingId === user.id} aria-label={`${user.is_active ? "Désactiver" : "Activer"} ${user.full_name}`} title={canToggleActivity ? "Cliquer pour changer le statut" : "Statut en lecture seule"}>{activityUpdatingId === user.id ? <LoaderCircle className="spin" size={11} /> : user.is_active ? "Actif" : "Inactif"}</button> : <span className="activity-hidden">—</span>}</td>{canViewPasswords && passwordAssistanceReady && <td>{userPasswords[user.id] ? <CopyableValue value={userPasswords[user.id] || ""} label={`le mot de passe de ${user.full_name}`} /> : <span className="muted-note">Non renseigné</span>}</td>}<td><div className="campaign-pills">{userCampaigns.length ? userCampaigns.map((campaign) => <span className="campaign-pill" key={campaign.id} title={campaign.name}>{campaign.name}</span>) : <span className="muted-note">Aucune</span>}</div></td><td>{limeDisplayName(user.supervisor_id, users)}</td><td>{shopDisplayName(user.permanent_shop_id, shops)}</td>{(canManage || canManageCampaigns) && <td><div className="row-actions">{canManage && user.role === "agent" && <button type="button" className="icon-action profile-action" aria-label={`Ouvrir la fiche de ${user.full_name}`} title="Ouvrir la fiche agent" onClick={(event) => { event.stopPropagation(); setSelectedAgentProfile(user); }}><UserCircle2 size={14} /></button>}{canAssign && <button type="button" className="icon-action campaign-action" aria-label={`Affecter ${user.full_name} à une campagne`} title="Affecter aux campagnes" onClick={(event) => { event.stopPropagation(); beginCampaignAssignment(user); }}><BriefcaseBusiness size={14} /></button>}{canManage && <button type="button" className="icon-action edit" aria-label={`Modifier ${user.full_name}`} title="Modifier" onClick={(event) => { event.stopPropagation(); beginEdit(user); }}><FilePenLine size={14} /></button>}{canManage && <button type="button" className="icon-action delete" aria-label={`Supprimer ${user.full_name}`} title="Supprimer" onClick={(event) => { event.stopPropagation(); setDeleteCandidate(user); }}><Trash2 size={14} /></button>}</div></td>}</tr>; })}</tbody></table>{!filteredUsers.length && <div className="table-empty"><Search size={22} /><strong>Aucun utilisateur trouvé</strong><span>Essayez un MSISDN ou élargissez vos filtres.</span></div>}</div> : <div className="users-card-grid">{filteredUsers.map((user) => <UserGalleryCard
+      {userView === "table" ? <div className="users-table-wrap"><table className="users-table"><thead><tr><th>Utilisateur</th><th>MSISDN</th><th>Rôle</th><th>Catégorie</th><th>Statut</th>{canViewPasswords && passwordAssistanceReady && <th>Mot de passe</th>}<th>Campagnes</th><th>Lime</th><th>Shop</th>{(canManage || canManageCampaigns) && <th aria-label="Actions" />}</tr></thead><tbody>{filteredUsers.map((user) => { const userCampaigns = campaignsByUserId.get(user.id) || []; const canAssign = canManageCampaigns && user.role === "agent" && ["hostess", "brand_ambassador", "brand_ambassador_youth"].includes(user.user_category || ""); const canViewActivity = canViewActivityStatus(user); const canToggleActivity = canToggleActivityStatus(user); return <tr key={user.id} className={canManage ? "row-clickable" : ""} onClick={() => handleUserRowClick(user)}><td><div className="table-user"><Avatar user={user} /><div><strong>{user.full_name}</strong><small>{user.id}</small></div></div></td><td><CopyablePhone value={user.phone} className="mono-value" /></td><td><span className={`role-badge role-${user.role}`}>{ROLE_LABELS[user.role]}</span></td><td>{user.user_category ? CATEGORY_LABELS[user.user_category].split(" — ")[0] : "—"}</td><td>{canViewActivity ? <button type="button" className={`activity-toggle ${user.is_active ? "is-active" : "is-inactive"}`} onClick={(event) => { event.stopPropagation(); if (canToggleActivity) void toggleUserActivity(user); }} disabled={!canToggleActivity || activityUpdatingId === user.id} aria-label={`${user.is_active ? "Désactiver" : "Activer"} ${user.full_name}`} title={canToggleActivity ? "Cliquer pour changer le statut" : "Statut en lecture seule"}>{activityUpdatingId === user.id ? <LoaderCircle className="spin" size={11} /> : user.is_active ? "Actif" : "Inactif"}</button> : <span className="activity-hidden">—</span>}</td>{canViewPasswords && passwordAssistanceReady && <td>{userPasswords[user.id] ? <CopyableValue value={userPasswords[user.id] || ""} label={`le mot de passe de ${user.full_name}`} /> : <span className="muted-note">Non renseigné</span>}</td>}<td><div className="campaign-pills">{userCampaigns.length ? userCampaigns.map((campaign) => <span className="campaign-pill" key={campaign.id} title={campaign.name}>{campaign.name}</span>) : <span className="muted-note">Aucune</span>}</div></td><td>{limeNamesById.get(user.supervisor_id || '') || '—'}</td><td>{shopsById.get(user.permanent_shop_id || '')?.name || '—'}</td>{(canManage || canManageCampaigns) && <td><div className="row-actions">{canManage && user.role === "agent" && <button type="button" className="icon-action profile-action" aria-label={`Ouvrir la fiche de ${user.full_name}`} title="Ouvrir la fiche agent" onClick={(event) => { event.stopPropagation(); setSelectedAgentProfile(user); }}><UserCircle2 size={14} /></button>}{canAssign && <button type="button" className="icon-action campaign-action" aria-label={`Affecter ${user.full_name} à une campagne`} title="Affecter aux campagnes" onClick={(event) => { event.stopPropagation(); beginCampaignAssignment(user); }}><BriefcaseBusiness size={14} /></button>}{canManage && <button type="button" className="icon-action edit" aria-label={`Modifier ${user.full_name}`} title="Modifier" onClick={(event) => { event.stopPropagation(); beginEdit(user); }}><FilePenLine size={14} /></button>}{canManage && <button type="button" className="icon-action delete" aria-label={`Supprimer ${user.full_name}`} title="Supprimer" onClick={(event) => { event.stopPropagation(); setDeleteCandidate(user); }}><Trash2 size={14} /></button>}</div></td>}</tr>; })}</tbody></table>{!filteredUsers.length && <div className="table-empty"><Search size={22} /><strong>Aucun utilisateur trouvé</strong><span>Essayez un MSISDN ou élargissez vos filtres.</span></div>}</div> : <div className="users-card-grid">{filteredUsers.map((user) => <UserGalleryCard
         key={user.id}
         user={user}
         password={canViewPasswords && passwordAssistanceReady ? userPasswords[user.id] : undefined}

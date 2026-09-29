@@ -293,19 +293,20 @@ export async function refreshActiveProfile(): Promise<UserRecord | null> {
 
 export type RealtimeStatus = "SUBSCRIBED" | "TIMED_OUT" | "CLOSED" | "CHANNEL_ERROR";
 
-export function subscribeToDataChanges(onChange: () => void, onStatus?: (status: RealtimeStatus) => void): () => void {
+export function subscribeToDataChanges(onChange: (table: string) => void, onStatus?: (status: RealtimeStatus) => void): () => void {
   if (!supabaseClient) return () => undefined;
   const channel = supabaseClient.channel(`btl-dashboard-${Date.now()}`);
   [
     "users",
     "campaigns",
+    "shops",
     "user_campaign_assignments",
     "agent_campaign_supervisor_assignments",
     "campaign_assignment_requests",
     "campaign_claims",
     "user_registration_requests",
   ].forEach((table) => {
-    channel.on("postgres_changes", { event: "*", schema: "public", table }, onChange);
+    channel.on("postgres_changes", { event: "*", schema: "public", table }, () => onChange(table));
   });
   channel.subscribe((status) => {
     if (status === "SUBSCRIBED" || status === "TIMED_OUT" || status === "CLOSED" || status === "CHANNEL_ERROR") {
@@ -406,7 +407,10 @@ export async function loadAgentInsights(user: UserRecord, campaign: CampaignReco
   if (pausesError) throw pausesError;
   const pauses = (pausesData || []) as CampaignPause[];
   if (user.user_category === "hostess") {
-    const { data, error } = await supabaseClient.from("daily_reports").select("id, date, agent_name, shop_id, shop_name, priv, roam, bund, amount, comment, pdf_url, arrival_time, departure_time, pointage_photo").eq("agent_id", user.id).order("date");
+    let reportQuery = supabaseClient.from("daily_reports").select("id, date, agent_name, shop_id, shop_name, priv, roam, bund, amount, comment, pdf_url, arrival_time, departure_time, pointage_photo").eq("agent_id", user.id).order("date");
+    if (campaign.starts_on) reportQuery = reportQuery.gte("date", campaign.starts_on);
+    if (campaign.ends_on) reportQuery = reportQuery.lte("date", campaign.ends_on);
+    const { data, error } = await reportQuery;
     if (error) throw error;
     const rows = (data || []) as Array<Record<string, unknown>>;
     return {

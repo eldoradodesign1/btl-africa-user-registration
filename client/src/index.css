@@ -31,8 +31,8 @@ button:disabled { cursor: not-allowed; }
 code, .metric-value, .step-count, .brand-context, .field-helper, .mini-label { font-family: "DM Mono", monospace; }
 
 .app-shell { min-height: 100vh; overflow: hidden; position: relative; background: radial-gradient(circle at 15% 0%, rgba(32, 89, 99, .20), transparent 32%), radial-gradient(circle at 95% 15%, rgba(88, 121, 58, .11), transparent 27%), #071015; }
-.app-shell::before { content: ""; position: fixed; inset: 0; pointer-events: none; opacity: .24; background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 160 160' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.12'/%3E%3C/svg%3E"); mix-blend-mode: soft-light; }
-.ambient { position: absolute; border-radius: 999px; filter: blur(80px); pointer-events: none; opacity: .22; }
+.app-shell::before { content: ""; position: fixed; inset: 0; pointer-events: none; opacity: .08; background-image: radial-gradient(rgba(255,255,255,.3) .5px, transparent .5px); background-size: 4px 4px; }
+.ambient { position: absolute; border-radius: 999px; filter: blur(56px); pointer-events: none; opacity: .18; }
 .ambient-one { width: 300px; height: 300px; background: #116071; top: 280px; left: -160px; }
 .ambient-two { width: 260px; height: 260px; background: #688e3c; top: 530px; right: -140px; }
 .topbar, .page-content { width: min(1380px, calc(100% - 48px)); margin-inline: auto; position: relative; z-index: 1; }
@@ -58,7 +58,7 @@ h1 span { color: var(--cyan); }
 .metric-value { display: block; color: var(--cyan); font-size: 17px; font-weight: 500; letter-spacing: -.04em; }
 .metric-label { display: block; max-width: 90px; margin-top: 7px; color: var(--muted-2); font-size: 10px; line-height: 1.4; }
 .workspace-grid { display: grid; grid-template-columns: minmax(0, 1.33fr) minmax(320px, .67fr); gap: 18px; padding-bottom: 72px; }
-.glass-card, .side-card { border: 1px solid var(--line); background: linear-gradient(145deg, rgba(19, 35, 43, .84), rgba(11, 21, 26, .76)); box-shadow: 0 24px 80px rgba(0,0,0,.16), inset 0 1px 0 rgba(255,255,255,.045); backdrop-filter: blur(22px); }
+.glass-card, .side-card { border: 1px solid var(--line); background: linear-gradient(145deg, rgba(19, 35, 43, .92), rgba(11, 21, 26, .88)); box-shadow: 0 24px 80px rgba(0,0,0,.16), inset 0 1px 0 rgba(255,255,255,.045); backdrop-filter: blur(10px); }
 .form-card { border-radius: 22px; padding: 30px; }
 .card-heading { display: flex; align-items: center; gap: 13px; padding-bottom: 27px; border-bottom: 1px solid var(--line); }
 .heading-icon { width: 38px; height: 38px; display: grid; place-items: center; border: 1px solid rgba(158,233,232,.2); border-radius: 12px; color: var(--cyan); background: rgba(91,208,209,.08); }
