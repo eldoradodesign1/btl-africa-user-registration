@@ -2,7 +2,7 @@ import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, ty
 import { createPortal } from "react-dom";
 import { AlertCircle, BriefcaseBusiness, CalendarDays, CheckCircle2, ChevronDown, Clock3, Database, Download, FilePenLine, FileSpreadsheet, FileText, Filter, ImagePlus, LayoutGrid, List, LoaderCircle, LockKeyhole, LogIn, LogOut, MapPin, PieChart, RefreshCw, Search, ServerCog, ShieldCheck, Trash2, UserCheck, UserPlus, UserCircle2, UserRound, UserRoundPlus, X, XCircle } from "lucide-react";
 import { CopyablePhone, CopyableValue } from "@/components/CopyablePhone";
-import RoleWorkspace, { ATTENDANCE_STATE_LABELS, AgentDetailModal, Avatar, CampaignClaimCaseModal, ProfileModal, ProfilePhotoPreviewModal, UserDetailModal, buildAttendanceCalendar, renderAttendanceCalendarHtml } from "@/components/RoleWorkspace";
+import RoleWorkspace, { ATTENDANCE_STATE_LABELS, AgentDetailModal, Avatar, CampaignClaimCaseModal, ProfileModal, ProfilePhotoPreviewModal, UserDetailModal, buildAttendanceCalendar, getAttendanceCalendarMetrics, renderAttendanceCalendarHtml } from "@/components/RoleWorkspace";
 import SimulationBar from "@/components/SimulationBar";
 import { CATEGORY_LABELS, CATEGORY_OPTIONS, ROLE_LABELS, ROLE_OPTIONS, categoryShortLabel } from "@/lib/user-form";
 import { isValidMsisdn, normalizePhone } from "@/lib/phone";
@@ -732,22 +732,31 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
   }
 
   function attendanceRows(bundles: AttendanceExportBundle[]) {
-    return bundles.flatMap(({ user, campaign, insights }) => buildAttendanceCalendar(insights).flatMap((month) => month.days.map((day) => {
-      const entry = day.entry;
-      return [
-        user.full_name,
-        user.phone,
-        campaign.name,
-        campaign.code,
-        day.date,
-        ATTENDANCE_STATE_LABELS[day.state],
-        entry?.status || "—",
-        entry?.checkin_at ? new Date(entry.checkin_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }) : "—",
-        entry?.checkout_at ? new Date(entry.checkout_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }) : "—",
-        entry?.report ? (entry.report.comment?.trim() ? "Rapport envoyé" : "Rapport non envoyé") : "—",
-        entry?.note || entry?.report?.comment || "—",
-      ];
-    })));
+    return bundles.flatMap(({ user, campaign, insights }) => {
+      const metrics = getAttendanceCalendarMetrics(insights);
+      return buildAttendanceCalendar(insights).flatMap((month) => month.days.map((day) => {
+        const entry = day.entry;
+        return [
+          user.full_name,
+          user.phone,
+          campaign.name,
+          campaign.code,
+          day.date,
+          ATTENDANCE_STATE_LABELS[day.state],
+          entry?.status || "—",
+          entry?.checkin_at ? new Date(entry.checkin_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }) : "—",
+          entry?.checkout_at ? new Date(entry.checkout_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }) : "—",
+          entry?.report ? (entry.report.comment?.trim() ? "Rapport envoyé" : "Rapport non envoyé") : "—",
+          entry?.note || entry?.report?.comment || "—",
+          metrics.totalCampaignDays,
+          metrics.workedDays,
+          metrics.closedDays,
+          metrics.openDays,
+          metrics.absentDays,
+          metrics.inactiveDays,
+        ];
+      }));
+    });
   }
 
   async function exportUsersAttendanceCsv(usersToExport = selectedExportUsers) {
@@ -756,7 +765,7 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
     setAttendanceExportLoading(true);
     try {
       const rows = attendanceRows(await loadAttendanceExportBundles(usersToExport));
-      const headers = ["agent", "phone", "campagne", "code_campagne", "date", "etat", "statut_pointage", "arrivee", "depart", "rapport", "note"];
+      const headers = ["agent", "phone", "campagne", "code_campagne", "date", "etat", "statut_pointage", "arrivee", "depart", "rapport", "note", "jours_campagne", "jours_travailles", "jours_clotures", "jours_ouverts", "jours_non_travailles", "jours_hors_campagne_pause"];
       const blob = new Blob([`\ufeff${headers.join(",")}\n${rows.map((row) => row.map(escapeCsv).join(",")).join("\n")}`], { type: "text/csv;charset=utf-8" });
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
@@ -780,22 +789,22 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
       const XLSX = await import("xlsx-js-style");
       const workbook = XLSX.utils.book_new();
       const rows = attendanceRows(bundles);
-      const sheet = XLSX.utils.aoa_to_sheet([["BTL AFRICA · CALENDRIERS DE PRÉSENCE", "", "", "", "", "", "", "", "", "", ""], ["Agents et campagnes sélectionnés", usersToExport.length, "", "", "", "", "", "", "", "", ""], ["Agent", "Téléphone", "Campagne", "Code campagne", "Date", "État", "Statut pointage", "Arrivée", "Départ", "Rapport", "Note"], ...rows]);
-      sheet["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 10 } }];
-      sheet["!cols"] = [26, 17, 28, 18, 13, 28, 20, 12, 12, 20, 42].map((wch) => ({ wch }));
+      const sheet = XLSX.utils.aoa_to_sheet([["BTL AFRICA · CALENDRIERS DE PRÉSENCE", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""], ["Agents et campagnes sélectionnés", usersToExport.length, "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""], ["Agent", "Téléphone", "Campagne", "Code campagne", "Date", "État", "Statut pointage", "Arrivée", "Départ", "Rapport", "Note", "Jours campagne", "Jours travaillés", "Jours clôturés", "Jours ouverts", "Jours non travaillés", "Jours hors campagne / pause"], ...rows]);
+      sheet["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 16 } }];
+      sheet["!cols"] = [26, 17, 28, 18, 13, 28, 20, 12, 12, 20, 42, 15, 16, 15, 13, 18, 25].map((wch) => ({ wch }));
       sheet["!freeze"] = { xSplit: 0, ySplit: 3 };
       sheet["A1"].s = { fill: { fgColor: { rgb: "12383F" } }, font: { color: { rgb: "FFFFFF" }, bold: true, sz: 13 } };
       sheet["A2"].s = { fill: { fgColor: { rgb: "E9F7F5" } }, font: { color: { rgb: "27656A" }, italic: true } };
-      ["A3", "B3", "C3", "D3", "E3", "F3", "G3", "H3", "I3", "J3", "K3"].forEach((cell) => { sheet[cell].s = { fill: { fgColor: { rgb: "9EE9E8" } }, font: { color: { rgb: "082126" }, bold: true } }; });
-      sheet["!autofilter"] = { ref: `A3:K${Math.max(rows.length + 3, 3)}` };
+      ["A3", "B3", "C3", "D3", "E3", "F3", "G3", "H3", "I3", "J3", "K3", "L3", "M3", "N3", "O3", "P3", "Q3"].forEach((cell) => { sheet[cell].s = { fill: { fgColor: { rgb: "9EE9E8" } }, font: { color: { rgb: "082126" }, bold: true } }; });
+      sheet["!autofilter"] = { ref: `A3:Q${Math.max(rows.length + 3, 3)}` };
       XLSX.utils.book_append_sheet(workbook, sheet, "Présences");
       const summaryRows = bundles.map(({ user, campaign, insights }) => {
-        const days = buildAttendanceCalendar(insights).flatMap((month) => month.days);
-        return [user.full_name, campaign.name, days.filter((day) => day.state === "closed").length, days.filter((day) => day.state === "open").length, days.filter((day) => day.state === "absent").length, days.filter((day) => day.state === "off").length];
+        const metrics = getAttendanceCalendarMetrics(insights);
+        return [user.full_name, campaign.name, metrics.totalCampaignDays, metrics.workedDays, metrics.closedDays, metrics.openDays, metrics.absentDays, metrics.inactiveDays];
       });
-      const summary = XLSX.utils.aoa_to_sheet([["SYNTHÈSE DES CALENDRIERS", "", "", "", "", ""], ["Agent", "Campagne", "Clôturés", "Ouverts", "Non travaillés", "Hors campagne / pause"], ...summaryRows]);
-      summary["!cols"] = [26, 28, 13, 12, 17, 24].map((wch) => ({ wch }));
-      ["A1", "A2", "B2", "C2", "D2", "E2", "F2"].forEach((cell) => { summary[cell].s = { fill: { fgColor: { rgb: cell === "A1" ? "12383F" : "9EE9E8" } }, font: { color: { rgb: cell === "A1" ? "FFFFFF" : "082126" }, bold: true } }; });
+      const summary = XLSX.utils.aoa_to_sheet([["SYNTHÈSE DES CALENDRIERS", "", "", "", "", "", "", ""], ["Agent", "Campagne", "Jours campagne", "Jours travaillés", "Clôturés", "Ouverts", "Non travaillés", "Hors campagne / pause"], ...summaryRows]);
+      summary["!cols"] = [26, 28, 15, 16, 13, 12, 17, 24].map((wch) => ({ wch }));
+      ["A1", "A2", "B2", "C2", "D2", "E2", "F2", "G2", "H2"].forEach((cell) => { summary[cell].s = { fill: { fgColor: { rgb: cell === "A1" ? "12383F" : "9EE9E8" } }, font: { color: { rgb: cell === "A1" ? "FFFFFF" : "082126" }, bold: true } }; });
       XLSX.utils.book_append_sheet(workbook, summary, "Synthèse");
       XLSX.writeFile(workbook, `btl-calendriers-presences-${new Date().toISOString().slice(0, 10)}.xlsx`, { bookType: "xlsx", compression: true });
     } catch (error) {
@@ -814,7 +823,7 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
     try {
       const bundles = await loadAttendanceExportBundles(usersToExport);
       const sections = bundles.map(({ user, campaign, insights }) => `<article class="agent-calendar"><header><div class="brand">BTL Africa · Calendrier de présence</div><h2>${escapeHtml(user.full_name)}</h2><p>${escapeHtml(user.phone)} · ${escapeHtml(campaign.name)} · ${escapeHtml(campaign.code)}</p></header>${renderAttendanceCalendarHtml(insights)}</article>`).join("");
-      popup.document.write(`<html><head><title>Calendriers de présence · BTL Africa</title><style>@page{size:A4;margin:12mm}*{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;color:#17343a;margin:0;font-size:10px}.agent-calendar{break-after:page;page-break-after:always}.agent-calendar:last-child{break-after:auto;page-break-after:auto}.agent-calendar>header{margin-bottom:14px;padding:17px 19px;border-radius:12px;background:#12383f;color:#fff}.brand{color:#9ee9e8;font-size:9px;font-weight:700;letter-spacing:.14em;text-transform:uppercase}.agent-calendar h2{margin:9px 0 4px;font-size:22px}.agent-calendar header p{margin:0;color:#c7e2e2;font-size:10px}.attendance-export-calendar{margin-top:8px}.calendar-export-legend{display:flex;flex-wrap:wrap;gap:7px;margin:0 0 10px;padding:8px;border:1px solid #dce9e8;border-radius:8px;background:#f7fbfa}.calendar-export-legend span{display:inline-flex;align-items:center;gap:4px;color:#526d72;font-size:7px}.calendar-dot{width:7px;height:7px;display:inline-block;border-radius:50%}.calendar-dot.state-off{background:#a9b9bb}.calendar-dot.state-absent{background:#e27670}.calendar-dot.state-closed{background:#73b96b}.calendar-dot.state-open{background:#5ca9dd}.attendance-month{margin:0 0 14px;break-inside:avoid;page-break-inside:avoid}.attendance-month h3{margin:0 0 6px;padding:6px 8px;border-radius:7px;color:#12383f;background:#e8f4f3;font-size:11px;text-transform:capitalize}.calendar-weekdays,.calendar-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}.calendar-weekdays{margin-bottom:2px}.calendar-weekdays span{padding:2px;color:#789095;font-size:6px;text-align:center;text-transform:uppercase}.calendar-cell{min-height:36px;padding:3px;border:1px solid #dce9e8;border-radius:4px;background:#fff}.calendar-cell.empty{border-color:transparent;background:transparent}.calendar-cell strong,.calendar-cell small,.calendar-cell em{display:block}.calendar-cell strong{color:#17343a;font-size:8px}.calendar-cell small{margin-top:2px;color:#526d72;font-size:6px}.calendar-cell em{margin-top:2px;color:#789095;font-size:5px;font-style:normal;line-height:1.1}.calendar-cell.state-off{background:#eef2f2;border-color:#d9e0e0}.calendar-cell.state-absent{background:#fff1ef;border-color:#f0bbb5}.calendar-cell.state-closed{background:#eff9eb;border-color:#b8dcae}.calendar-cell.state-open{background:#eef7fd;border-color:#b3d5eb}.calendar-empty{padding:12px;border:1px dashed #c8d9d8;border-radius:8px;color:#789095;text-align:center}@media print{.agent-calendar>header,.calendar-cell,.calendar-export-legend,.attendance-month h3{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style></head><body>${sections}</body></html>`);
+      popup.document.write(`<html><head><title>Calendriers de présence · BTL Africa</title><style>@page{size:A4;margin:12mm}*{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;color:#17343a;margin:0;font-size:10px}.agent-calendar{break-after:page;page-break-after:always}.agent-calendar:last-child{break-after:auto;page-break-after:auto}.agent-calendar>header{margin-bottom:14px;padding:17px 19px;border-radius:12px;background:#12383f;color:#fff}.brand{color:#9ee9e8;font-size:9px;font-weight:700;letter-spacing:.14em;text-transform:uppercase}.agent-calendar h2{margin:9px 0 4px;font-size:22px}.agent-calendar header p{margin:0;color:#c7e2e2;font-size:10px}.attendance-export-calendar{margin-top:8px}.calendar-export-legend{display:flex;flex-wrap:wrap;gap:7px;margin:0 0 10px;padding:8px;border:1px solid #dce9e8;border-radius:8px;background:#f7fbfa}.calendar-export-legend span{display:inline-flex;align-items:center;gap:4px;color:#526d72;font-size:7px}.calendar-export-summary{display:flex;flex-wrap:wrap;gap:7px;margin:0 0 12px;padding:9px;border:1px solid #dce9e8;border-radius:10px;background:#f7fbfa}.calendar-export-summary span{color:#526d72;font-size:8px}.calendar-export-summary b{margin-right:3px;color:#12383f;font-size:10px}.calendar-dot{width:7px;height:7px;display:inline-block;border-radius:50%}.calendar-dot.state-off{background:#a9b9bb}.calendar-dot.state-absent{background:#e27670}.calendar-dot.state-closed{background:#73b96b}.calendar-dot.state-open{background:#5ca9dd}.attendance-month{margin:0 0 14px;break-inside:avoid;page-break-inside:avoid}.attendance-month h3{margin:0 0 6px;padding:6px 8px;border-radius:7px;color:#12383f;background:#e8f4f3;font-size:11px;text-transform:capitalize}.calendar-weekdays,.calendar-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}.calendar-weekdays{margin-bottom:2px}.calendar-weekdays span{padding:2px;color:#789095;font-size:6px;text-align:center;text-transform:uppercase}.calendar-cell{min-height:36px;padding:3px;border:1px solid #dce9e8;border-radius:4px;background:#fff}.calendar-cell.empty{border-color:transparent;background:transparent}.calendar-cell strong,.calendar-cell small,.calendar-cell em{display:block}.calendar-cell strong{color:#17343a;font-size:8px}.calendar-cell small{margin-top:2px;color:#526d72;font-size:6px}.calendar-cell em{margin-top:2px;color:#789095;font-size:5px;font-style:normal;line-height:1.1}.calendar-cell.state-off{background:#eef2f2;border-color:#d9e0e0}.calendar-cell.state-absent{background:#fff1ef;border-color:#f0bbb5}.calendar-cell.state-closed{background:#eff9eb;border-color:#b8dcae}.calendar-cell.state-open{background:#eef7fd;border-color:#b3d5eb}.calendar-empty{padding:12px;border:1px dashed #c8d9d8;border-radius:8px;color:#789095;text-align:center}@media print{.agent-calendar>header,.calendar-cell,.calendar-export-legend,.attendance-month h3{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style></head><body>${sections}</body></html>`);
       popup.document.close(); popup.focus(); window.setTimeout(() => popup.print(), 250);
     } catch (error) {
       popup.close();
