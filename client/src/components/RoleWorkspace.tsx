@@ -2,7 +2,7 @@ import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
 import { createPortal } from "react-dom";
 import { AlertTriangle, BriefcaseBusiness, CalendarDays, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock3, Download, FilePenLine, FileSpreadsheet, FileText, History, LoaderCircle, LockKeyhole, MessageCircle, PhoneCall, RefreshCw, Send, UserCircle2, Users, X, XCircle } from "lucide-react";
 import { CopyablePhone, CopyableValue } from "@/components/CopyablePhone";
-import { CATEGORY_LABELS, ROLE_LABELS, categoryShortLabel } from "@/lib/user-form";
+import { CATEGORY_LABELS, ROLE_LABELS, campaignTypeLabel, categoryShortLabel, isCampaignCompatibleWithCategory } from "@/lib/user-form";
 import { isValidMsisdn, normalizePhone } from "@/lib/phone";
 import { addCampaignClaimMessage, createCampaignClaim, loadAgentInsights, loadCampaignClaimMessages, markCampaignClaimRead, readableSupabaseError, requestCampaignAssignment, reviewCampaignAssignmentRequest, transitionCampaignClaim, updateMyProfile, type AgentInsights, type CampaignAssignment, type CampaignAssignmentRequest, type CampaignClaim, type CampaignClaimMessage, type CampaignClaimStatus, type CampaignRecord, type CampaignSupervisorAssignment, type DailyReport, type PresenceRecord, type UserRecord } from "@/lib/supabase";
 
@@ -61,7 +61,7 @@ type UserDetailProps = {
 
 function CampaignPicker({ campaigns, value, onChange }: { campaigns: CampaignRecord[]; value: CampaignRecord | null; onChange: (campaign: CampaignRecord) => void }) {
   const [open, setOpen] = useState(false);
-  return <div className={`agent-campaign-picker ${open ? "is-open" : ""}`}><button type="button" className="agent-campaign-picker-trigger" aria-haspopup="listbox" aria-expanded={open} onClick={() => setOpen((current) => !current)}><span><BriefcaseBusiness size={14} />{value ? value.name : "Choisir une campagne"}</span><ChevronRight className={`agent-campaign-picker-chevron ${open ? "is-open" : ""}`} size={15} /></button>{open && <><button type="button" className="agent-campaign-picker-backdrop" aria-label="Fermer la liste des campagnes" onClick={() => setOpen(false)} /><div className="agent-campaign-picker-menu" role="listbox">{campaigns.map((campaign) => <button type="button" role="option" aria-selected={campaign.id === value?.id} className={campaign.id === value?.id ? "is-selected" : ""} key={campaign.id} onClick={() => { onChange(campaign); setOpen(false); }}><span><strong>{campaign.name}</strong><small>{campaign.campaign_type === "hostess" ? "Hôtesse" : "Brand Ambassador"} · {campaign.status === "active" ? "Active" : "Brouillon"}</small></span>{campaign.id === value?.id && <CheckCircle2 size={14} />}</button>)}</div></>}</div>;
+  return <div className={`agent-campaign-picker ${open ? "is-open" : ""}`}><button type="button" className="agent-campaign-picker-trigger" aria-haspopup="listbox" aria-expanded={open} onClick={() => setOpen((current) => !current)}><span><BriefcaseBusiness size={14} />{value ? value.name : "Choisir une campagne"}</span><ChevronRight className={`agent-campaign-picker-chevron ${open ? "is-open" : ""}`} size={15} /></button>{open && <><button type="button" className="agent-campaign-picker-backdrop" aria-label="Fermer la liste des campagnes" onClick={() => setOpen(false)} /><div className="agent-campaign-picker-menu" role="listbox">{campaigns.map((campaign) => <button type="button" role="option" aria-selected={campaign.id === value?.id} className={campaign.id === value?.id ? "is-selected" : ""} key={campaign.id} onClick={() => { onChange(campaign); setOpen(false); }}><span><strong>{campaign.name}</strong><small>{campaignTypeLabel(campaign.campaign_type)} · {campaign.status === "active" ? "Active" : "Brouillon"}</small></span>{campaign.id === value?.id && <CheckCircle2 size={14} />}</button>)}</div></>}</div>;
 }
 
 export function Avatar({ user, size = "small" }: { user: UserRecord; size?: "small" | "large" }) {
@@ -84,7 +84,7 @@ export function UserDetailModal({ user, users = [], superiors, campaigns, assign
   const [requestedCampaignIds, setRequestedCampaignIds] = useState<string[]>([]);
   const requesterCategory = requester?.user_category;
   const compatibleCampaigns = requester?.role === "agent"
-    ? campaigns.filter((campaign) => (campaign.status === "active" || campaign.status === "draft") && campaign.campaign_type === (requesterCategory === "hostess" ? "hostess" : "brand_ambassador"))
+    ? campaigns.filter((campaign) => (campaign.status === "active" || campaign.status === "draft") && isCampaignCompatibleWithCategory(campaign.campaign_type, requesterCategory || null))
     : [];
   const assignedIds = new Set([
     ...assignments.filter((assignment) => assignment.user_id === requester?.id && assignment.is_active).map((assignment) => assignment.campaign_id),
@@ -416,7 +416,7 @@ export function AgentDetailModal({ agent, password, users, campaigns, assignment
     ...campaignSupervisorAssignments.filter((assignment) => assignment.agent_id === agent.id && assignment.is_active).map((assignment) => assignment.campaign_id),
   ]);
   const assigned = campaigns.filter((campaign) => assignedIds.has(campaign.id));
-  const compatible = campaigns.filter((campaign) => (campaign.status === "active" || campaign.status === "draft") && campaign.campaign_type === (agent.user_category === "hostess" ? "hostess" : "brand_ambassador"));
+  const compatible = campaigns.filter((campaign) => (campaign.status === "active" || campaign.status === "draft") && isCampaignCompatibleWithCategory(campaign.campaign_type, agent.user_category));
   const [selectedCampaign, setSelectedCampaign] = useState<CampaignRecord | null>(assigned[0] || null);
   const [insights, setInsights] = useState<AgentInsights | null>(null);
   const [loadingInsights, setLoadingInsights] = useState(false);

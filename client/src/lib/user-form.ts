@@ -65,3 +65,18 @@ export function categoryShortLabel(category: UserCategory | null): string {
   if (!category) return "Aucune catégorie";
   return CATEGORY_LABELS[category].split(" — ")[0];
 }
+
+/**
+ * Les événements peuvent accueillir des hôtesses comme les campagnes dédiées
+ * aux hôtesses. Les campagnes BA restent réservées aux catégories BA.
+ */
+export function isCampaignCompatibleWithCategory(campaignType: string, category: UserCategory | null): boolean {
+  if (category === "hostess") return campaignType === "hostess" || campaignType === "event";
+  return campaignType === "brand_ambassador";
+}
+
+export function campaignTypeLabel(campaignType: string): string {
+  if (campaignType === "hostess") return "Hôtesse";
+  if (campaignType === "event") return "Event";
+  return "Brand Ambassador";
+}
