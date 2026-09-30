@@ -4,7 +4,7 @@ import { AlertTriangle, BriefcaseBusiness, CalendarDays, CheckCircle2, ChevronDo
 import { CopyablePhone, CopyableValue } from "@/components/CopyablePhone";
 import { CATEGORY_LABELS, ROLE_LABELS, categoryShortLabel } from "@/lib/user-form";
 import { isValidMsisdn, normalizePhone } from "@/lib/phone";
-import { addCampaignClaimMessage, createCampaignClaim, loadAgentInsights, loadCampaignClaimMessages, markCampaignClaimRead, readableSupabaseError, requestCampaignAssignment, reviewCampaignAssignmentRequest, transitionCampaignClaim, updateMyProfile, type AgentInsights, type CampaignAssignment, type CampaignAssignmentRequest, type CampaignClaim, type CampaignClaimMessage, type CampaignClaimStatus, type CampaignRecord, type CampaignSupervisorAssignment, type DailyReport, type UserRecord } from "@/lib/supabase";
+import { addCampaignClaimMessage, createCampaignClaim, loadAgentInsights, loadCampaignClaimMessages, markCampaignClaimRead, readableSupabaseError, requestCampaignAssignment, reviewCampaignAssignmentRequest, transitionCampaignClaim, updateMyProfile, type AgentInsights, type CampaignAssignment, type CampaignAssignmentRequest, type CampaignClaim, type CampaignClaimMessage, type CampaignClaimStatus, type CampaignRecord, type CampaignSupervisorAssignment, type DailyReport, type PresenceRecord, type UserRecord } from "@/lib/supabase";
 
 type Notice = { kind: "error" | "success"; message: string };
 
@@ -243,6 +243,85 @@ function formatExportClock(value: string | null | undefined) {
   return formatClock(value);
 }
 
+type AttendanceCalendarState = "off" | "absent" | "closed" | "open";
+type AttendanceCalendarDay = { date: string; state: AttendanceCalendarState; entry: PresenceRecord | null };
+type AttendanceCalendarMonth = { key: string; label: string; offset: number; days: AttendanceCalendarDay[] };
+
+export const ATTENDANCE_STATE_LABELS: Record<AttendanceCalendarState, string> = {
+  off: "Non active / hors campagne",
+  absent: "Non travaillé",
+  closed: "Travail clôturé",
+  open: "Travail non clôturé",
+};
+
+function dayKey(value: string | null | undefined) {
+  return value ? value.slice(0, 10) : null;
+}
+
+function hasPointage(entry: PresenceRecord) {
+  return Boolean(entry.checkin_at || entry.checkout_at || entry.report?.checkinPhotoPath);
+}
+
+function isClosedPresence(entry: PresenceRecord) {
+  return Boolean(entry.checkout_at) || ["closed", "présent", "rapport"].includes(entry.status);
+}
+
+export function buildAttendanceCalendar(insights: AgentInsights): AttendanceCalendarMonth[] {
+  const presence = insights.presence.reduce((byDate, entry) => {
+    const date = dayKey(entry.date);
+    if (!date) return byDate;
+    const previous = byDate.get(date);
+    if (!previous || (hasPointage(entry) && !hasPointage(previous))) byDate.set(date, entry);
+    return byDate;
+  }, new Map<string, PresenceRecord>());
+  const isPause = (date: string) => insights.pauses.some((pause) => {
+    const start = dayKey(pause.starts_on);
+    const end = dayKey(pause.ends_on) || start;
+    return Boolean(start && date >= start && date <= end!);
+  });
+  const sortedDates = Array.from(presence.keys()).sort();
+  const campaignStart = dayKey(insights.campaignStart) || sortedDates[0];
+  const campaignEnd = dayKey(insights.campaignEnd) || sortedDates.at(-1) || campaignStart;
+  if (!campaignStart || !campaignEnd || campaignStart > campaignEnd) return [];
+  const months: AttendanceCalendarMonth[] = [];
+  const cursor = new Date(`${campaignStart.slice(0, 7)}-01T00:00:00`);
+  const lastMonth = new Date(`${campaignEnd.slice(0, 7)}-01T00:00:00`);
+  while (cursor <= lastMonth) {
+    const year = cursor.getFullYear();
+    const monthIndex = cursor.getMonth();
+    const month = `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
+    const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+    const offset = (new Date(year, monthIndex, 1).getDay() + 6) % 7;
+    const days = Array.from({ length: daysInMonth }, (_, index) => {
+      const date = `${month}-${String(index + 1).padStart(2, "0")}`;
+      const entry = presence.get(date) || null;
+      const inCampaign = date >= campaignStart && date <= campaignEnd && !isPause(date);
+      const state: AttendanceCalendarState = !inCampaign ? "off" : !entry || !hasPointage(entry) ? "absent" : isClosedPresence(entry) ? "closed" : "open";
+      return { date, state, entry };
+    });
+    months.push({ key: month, label: cursor.toLocaleDateString("fr-FR", { month: "long", year: "numeric" }), offset, days });
+    cursor.setMonth(monthIndex + 1);
+  }
+  return months;
+}
+
+export function renderAttendanceCalendarHtml(insights: AgentInsights) {
+  const months = buildAttendanceCalendar(insights);
+  if (!months.length) return '<div class="calendar-empty">Aucune période de campagne exploitable.</div>';
+  const legend = Object.entries(ATTENDANCE_STATE_LABELS).map(([state, label]) => `<span><i class="calendar-dot state-${state}"></i>${escapeHtml(label)}</span>`).join("");
+  const monthHtml = months.map((month) => {
+    const emptyCells = Array.from({ length: month.offset }, () => '<span class="calendar-cell empty"></span>').join("");
+    const cells = month.days.map((day) => {
+      const time = day.entry?.checkin_at ? `<small>${escapeHtml(formatExportClock(day.entry.checkin_at))}</small>` : "";
+      const report = day.entry?.report ? (day.entry.report.comment?.trim() ? "Rapport envoyé" : "Rapport non envoyé") : "";
+      const title = `${formatExportDate(day.date)} · ${ATTENDANCE_STATE_LABELS[day.state]}${report ? ` · ${report}` : ""}`;
+      return `<div class="calendar-cell state-${day.state}" title="${escapeHtml(title)}"><strong>${Number(day.date.slice(-2))}</strong>${time}${report ? `<em>${escapeHtml(report)}</em>` : ""}</div>`;
+    }).join("");
+    return `<section class="attendance-month"><h3>${escapeHtml(month.label)}</h3><div class="calendar-weekdays"><span>Lun</span><span>Mar</span><span>Mer</span><span>Jeu</span><span>Ven</span><span>Sam</span><span>Dim</span></div><div class="calendar-grid">${emptyCells}${cells}</div></section>`;
+  }).join("");
+  return `<div class="attendance-export-calendar"><div class="calendar-export-legend">${legend}</div><div class="attendance-months">${monthHtml}</div></div>`;
+}
+
 async function exportXlsx(agent: UserRecord, campaign: CampaignRecord, insights: AgentInsights) {
   const XLSX = await import("xlsx-js-style");
   const closed = insights.presence.filter((entry) => ["closed", "présent", "rapport"].includes(entry.status)).length;
@@ -304,8 +383,8 @@ function exportPdf(agent: UserRecord, campaign: CampaignRecord, insights: AgentI
   const popup = window.open("", "_blank", "width=900,height=700");
   if (!popup) return;
   const closed = insights.presence.filter((entry) => ["closed", "présent", "rapport"].includes(entry.status)).length;
-  popup.document.write(`<html><head><title>Suivi ${escapeHtml(agent.full_name)} — ${escapeHtml(campaign.name)}</title><style>@page{size:A4;margin:14mm}*{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;color:#17343a;margin:0;font-size:11px}header{padding:22px 24px;border-radius:14px;background:#12383f;color:#fff}header .brand{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:#9ee9e8;font-weight:700}h1{font-size:26px;margin:12px 0 5px;letter-spacing:-.04em}header p{margin:0;color:#c7e2e2;font-size:11px}.meta{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:16px 0}.meta div,.kpi{padding:12px;border:1px solid #dce9e8;border-radius:10px;background:#f7fbfa}.meta b,.kpi b{display:block;margin-bottom:5px;color:#6c8588;font-size:8px;text-transform:uppercase;letter-spacing:.08em}.meta span{font-weight:700}.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:12px 0 24px}.kpi strong{font-size:20px;color:#12383f}.section-title{display:flex;align-items:center;gap:8px;margin:22px 0 8px;padding-bottom:7px;border-bottom:2px solid #9ee9e8;color:#12383f;font-size:14px}.section-title:before{content:"";width:6px;height:6px;border-radius:50%;background:#b5ef8c}table{width:100%;border-collapse:collapse;page-break-inside:auto}thead{display:table-header-group}tr{page-break-inside:avoid}th{padding:8px 9px;background:#12383f;color:#fff;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:.05em}td{padding:8px 9px;border-bottom:1px solid #e2eded;color:#385257}tbody tr:nth-child(even){background:#f7fbfa}.footer{margin-top:25px;padding-top:9px;border-top:1px solid #dce9e8;color:#789095;font-size:9px;text-align:right}@media print{header{-webkit-print-color-adjust:exact;print-color-adjust:exact}th{ -webkit-print-color-adjust:exact;print-color-adjust:exact}}
-</style></head><body><header><div class="brand">BTL Africa · Rapport de suivi</div><h1>${escapeHtml(agent.full_name)}</h1><p>${escapeHtml(campaign.name)} · ${escapeHtml(campaign.code)}</p></header><div class="meta"><div><b>Téléphone</b><span>${escapeHtml(agent.phone)}</span></div><div><b>Période</b><span>${escapeHtml(formatExportDate(insights.campaignStart))} → ${escapeHtml(formatExportDate(insights.campaignEnd))}</span></div><div><b>Indicateur</b><span>${escapeHtml(insights.metricLabel)}</span></div></div><div class="kpis"><div class="kpi"><b>Performances</b><strong>${insights.performance.length}</strong></div><div class="kpi"><b>Pointages</b><strong>${insights.presence.length}</strong></div><div class="kpi"><b>Clôturés</b><strong>${closed}</strong></div></div><div class="section-title">${escapeHtml(insights.metricLabel)}</div><table><thead><tr><th>Date</th><th>Valeur</th><th>Détail</th></tr></thead><tbody>${insights.performance.map((point) => `<tr><td>${escapeHtml(formatExportDate(point.date))}</td><td>${escapeHtml(point.value)}</td><td>${escapeHtml(point.label)}</td></tr>`).join("") || '<tr><td colspan="3">Aucune performance enregistrée.</td></tr>'}</tbody></table><div class="section-title">Registre de présence</div><table><thead><tr><th>Date</th><th>Statut</th><th>Arrivée</th><th>Départ</th><th>Note</th></tr></thead><tbody>${insights.presence.map((entry) => `<tr><td>${escapeHtml(formatExportDate(entry.date))}</td><td>${escapeHtml(entry.status)}</td><td>${escapeHtml(formatExportClock(entry.checkin_at))}</td><td>${escapeHtml(formatExportClock(entry.checkout_at))}</td><td>${escapeHtml(entry.note || "—")}</td></tr>`).join("") || '<tr><td colspan="5">Aucun pointage enregistré.</td></tr>'}</tbody></table><div class="footer">Généré le ${escapeHtml(new Date().toLocaleString("fr-FR"))} · BTL Africa</div></body></html>`);
+  popup.document.write(`<html><head><title>Suivi ${escapeHtml(agent.full_name)} — ${escapeHtml(campaign.name)}</title><style>@page{size:A4;margin:14mm}*{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;color:#17343a;margin:0;font-size:11px}header{padding:22px 24px;border-radius:14px;background:#12383f;color:#fff}header .brand{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:#9ee9e8;font-weight:700}h1{font-size:26px;margin:12px 0 5px;letter-spacing:-.04em}header p{margin:0;color:#c7e2e2;font-size:11px}.meta{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:16px 0}.meta div,.kpi{padding:12px;border:1px solid #dce9e8;border-radius:10px;background:#f7fbfa}.meta b,.kpi b{display:block;margin-bottom:5px;color:#6c8588;font-size:8px;text-transform:uppercase;letter-spacing:.08em}.meta span{font-weight:700}.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:12px 0 24px}.kpi strong{font-size:20px;color:#12383f}.section-title{display:flex;align-items:center;gap:8px;margin:22px 0 8px;padding-bottom:7px;border-bottom:2px solid #9ee9e8;color:#12383f;font-size:14px}.section-title:before{content:"";width:6px;height:6px;border-radius:50%;background:#b5ef8c}table{width:100%;border-collapse:collapse;page-break-inside:auto}thead{display:table-header-group}tr{page-break-inside:avoid}th{padding:8px 9px;background:#12383f;color:#fff;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:.05em}td{padding:8px 9px;border-bottom:1px solid #e2eded;color:#385257}tbody tr:nth-child(even){background:#f7fbfa}.attendance-export-calendar{margin-top:10px}.calendar-export-legend{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px;padding:9px;border:1px solid #dce9e8;border-radius:10px;background:#f7fbfa}.calendar-export-legend span{display:inline-flex;align-items:center;gap:5px;color:#526d72;font-size:8px}.calendar-dot{width:8px;height:8px;display:inline-block;border-radius:50%}.calendar-dot.state-off{background:#a9b9bb}.calendar-dot.state-absent{background:#e27670}.calendar-dot.state-closed{background:#73b96b}.calendar-dot.state-open{background:#5ca9dd}.attendance-month{margin:0 0 18px;break-inside:avoid;page-break-inside:avoid}.attendance-month h3{margin:0 0 7px;padding:7px 9px;border-radius:8px;color:#12383f;background:#e8f4f3;font-size:12px;text-transform:capitalize}.calendar-weekdays,.calendar-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}.calendar-weekdays{margin-bottom:3px}.calendar-weekdays span{padding:3px;color:#789095;font-size:7px;text-align:center}.calendar-cell{min-height:42px;padding:4px;border:1px solid #dce9e8;border-radius:5px;background:#fff}.calendar-cell.empty{border-color:transparent;background:transparent}.calendar-cell strong,.calendar-cell small,.calendar-cell em{display:block}.calendar-cell strong{color:#17343a;font-size:9px}.calendar-cell small{margin-top:3px;color:#526d72;font-size:7px}.calendar-cell em{margin-top:3px;color:#789095;font-size:6px;font-style:normal;line-height:1.1}.calendar-cell.state-off{background:#eef2f2;border-color:#d9e0e0}.calendar-cell.state-absent{background:#fff1ef;border-color:#f0bbb5}.calendar-cell.state-closed{background:#eff9eb;border-color:#b8dcae}.calendar-cell.state-open{background:#eef7fd;border-color:#b3d5eb}.calendar-cell.state-closed strong{color:#2f7130}.calendar-cell.state-open strong{color:#2c6e9c}.calendar-cell.state-absent strong{color:#a64942}.calendar-empty{padding:14px;border:1px dashed #c8d9d8;border-radius:10px;color:#789095;text-align:center}.footer{margin-top:25px;padding-top:9px;border-top:1px solid #dce9e8;color:#789095;font-size:9px;text-align:right}@media print{header{-webkit-print-color-adjust:exact;print-color-adjust:exact}th{ -webkit-print-color-adjust:exact;print-color-adjust:exact}}
+</style></head><body><header><div class="brand">BTL Africa · Rapport de suivi</div><h1>${escapeHtml(agent.full_name)}</h1><p>${escapeHtml(campaign.name)} · ${escapeHtml(campaign.code)}</p></header><div class="meta"><div><b>Téléphone</b><span>${escapeHtml(agent.phone)}</span></div><div><b>Période</b><span>${escapeHtml(formatExportDate(insights.campaignStart))} → ${escapeHtml(formatExportDate(insights.campaignEnd))}</span></div><div><b>Indicateur</b><span>${escapeHtml(insights.metricLabel)}</span></div></div><div class="kpis"><div class="kpi"><b>Performances</b><strong>${insights.performance.length}</strong></div><div class="kpi"><b>Pointages</b><strong>${insights.presence.length}</strong></div><div class="kpi"><b>Clôturés</b><strong>${closed}</strong></div></div><div class="section-title">${escapeHtml(insights.metricLabel)}</div><table><thead><tr><th>Date</th><th>Valeur</th><th>Détail</th></tr></thead><tbody>${insights.performance.map((point) => `<tr><td>${escapeHtml(formatExportDate(point.date))}</td><td>${escapeHtml(point.value)}</td><td>${escapeHtml(point.label)}</td></tr>`).join("") || '<tr><td colspan="3">Aucune performance enregistrée.</td></tr>'}</tbody></table><div class="section-title">Calendrier des présences</div>${renderAttendanceCalendarHtml(insights)}<div class="footer">Généré le ${escapeHtml(new Date().toLocaleString("fr-FR"))} · BTL Africa</div></body></html>`);
   popup.document.close(); popup.focus(); window.setTimeout(() => popup.print(), 250);
 }
 

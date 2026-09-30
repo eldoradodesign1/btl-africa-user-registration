@@ -2,7 +2,7 @@ import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, ty
 import { createPortal } from "react-dom";
 import { AlertCircle, BriefcaseBusiness, CalendarDays, CheckCircle2, ChevronDown, Clock3, Database, Download, FilePenLine, FileSpreadsheet, FileText, Filter, ImagePlus, LayoutGrid, List, LoaderCircle, LockKeyhole, LogIn, LogOut, MapPin, PieChart, RefreshCw, Search, ServerCog, ShieldCheck, Trash2, UserCheck, UserPlus, UserCircle2, UserRound, UserRoundPlus, X, XCircle } from "lucide-react";
 import { CopyablePhone, CopyableValue } from "@/components/CopyablePhone";
-import RoleWorkspace, { AgentDetailModal, Avatar, CampaignClaimCaseModal, ProfileModal, ProfilePhotoPreviewModal, UserDetailModal } from "@/components/RoleWorkspace";
+import RoleWorkspace, { ATTENDANCE_STATE_LABELS, AgentDetailModal, Avatar, CampaignClaimCaseModal, ProfileModal, ProfilePhotoPreviewModal, UserDetailModal, buildAttendanceCalendar, renderAttendanceCalendarHtml } from "@/components/RoleWorkspace";
 import SimulationBar from "@/components/SimulationBar";
 import { CATEGORY_LABELS, CATEGORY_OPTIONS, ROLE_LABELS, ROLE_OPTIONS, categoryShortLabel } from "@/lib/user-form";
 import { isValidMsisdn, normalizePhone } from "@/lib/phone";
@@ -22,6 +22,7 @@ import {
   loadMyCampaignClaims,
   loadCampaigns,
   loadCampaignAssignmentRequests,
+  loadAgentInsights,
   loadShops,
   loadPendingRegistrationRequests,
   loadSuperAdminPasswords,
@@ -41,6 +42,7 @@ import {
   type CampaignAssignmentRequest,
   type CampaignClaim,
   type CampaignRecord,
+  type AgentInsights,
   type RegistrationRequest,
   type UserCategory,
   type UserRecord,
@@ -190,6 +192,8 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
   const [campaignFilter, setCampaignFilter] = useState("all");
   const [userView, setUserView] = useState<"table" | "cards">("table");
   const [exportOpen, setExportOpen] = useState(false);
+  const [exportMode, setExportMode] = useState<"users" | "attendance">("users");
+  const [attendanceExportLoading, setAttendanceExportLoading] = useState(false);
   const [exportSelection, setExportSelection] = useState<string[]>([]);
   const [showConfig, setShowConfig] = useState(!configured);
   const [setupUrl, setSetupUrl] = useState(getSupabaseConnection()?.url || "");
@@ -651,9 +655,22 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
 
   const selectedCampaignName = campaignFilter === "all" ? "Toutes les campagnes" : campaigns.find((campaign) => campaign.id === campaignFilter)?.name || "Campagne sélectionnée";
   const selectedExportUsers = filteredUsers.filter((user) => exportSelection.includes(user.id));
+  type AttendanceExportBundle = { user: UserRecord; campaign: CampaignRecord; insights: AgentInsights };
+
+  function attendanceExportTargets(usersToExport: UserRecord[]) {
+    return usersToExport.filter((user) => user.role === "agent").flatMap((user) => (campaignsByUserId.get(user.id) || []).map((campaign) => ({ user, campaign })));
+  }
+
+  const selectedAttendanceTargets = attendanceExportTargets(selectedExportUsers);
+
+  async function loadAttendanceExportBundles(usersToExport: UserRecord[]) {
+    const targets = attendanceExportTargets(usersToExport);
+    return Promise.all(targets.map(async ({ user, campaign }) => ({ user, campaign, insights: await loadAgentInsights(user, campaign) })));
+  }
 
   function openExportPreview() {
     setExportSelection(filteredUsers.map((user) => user.id));
+    setExportMode("users");
     setExportOpen(true);
   }
 
@@ -714,6 +731,99 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
     popup.document.close(); popup.focus(); window.setTimeout(() => popup.print(), 250);
   }
 
+  function attendanceRows(bundles: AttendanceExportBundle[]) {
+    return bundles.flatMap(({ user, campaign, insights }) => buildAttendanceCalendar(insights).flatMap((month) => month.days.map((day) => {
+      const entry = day.entry;
+      return [
+        user.full_name,
+        user.phone,
+        campaign.name,
+        campaign.code,
+        day.date,
+        ATTENDANCE_STATE_LABELS[day.state],
+        entry?.status || "—",
+        entry?.checkin_at ? new Date(entry.checkin_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }) : "—",
+        entry?.checkout_at ? new Date(entry.checkout_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }) : "—",
+        entry?.report ? (entry.report.comment?.trim() ? "Rapport envoyé" : "Rapport non envoyé") : "—",
+        entry?.note || entry?.report?.comment || "—",
+      ];
+    })));
+  }
+
+  async function exportUsersAttendanceCsv(usersToExport = selectedExportUsers) {
+    const targets = attendanceExportTargets(usersToExport);
+    if (!targets.length) { setNotice({ kind: "error", message: "Aucun calendrier de campagne disponible pour les lignes sélectionnées." }); return; }
+    setAttendanceExportLoading(true);
+    try {
+      const rows = attendanceRows(await loadAttendanceExportBundles(usersToExport));
+      const headers = ["agent", "phone", "campagne", "code_campagne", "date", "etat", "statut_pointage", "arrivee", "depart", "rapport", "note"];
+      const blob = new Blob([`\ufeff${headers.join(",")}\n${rows.map((row) => row.map(escapeCsv).join(",")).join("\n")}`], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `btl-calendriers-presences-${new Date().toISOString().slice(0, 10)}.csv`;
+      anchor.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (error) {
+      setNotice({ kind: "error", message: readableSupabaseError(error, "Impossible de charger les calendriers de présence.") });
+    } finally {
+      setAttendanceExportLoading(false);
+    }
+  }
+
+  async function exportUsersAttendanceXlsx(usersToExport = selectedExportUsers) {
+    const targets = attendanceExportTargets(usersToExport);
+    if (!targets.length) { setNotice({ kind: "error", message: "Aucun calendrier de campagne disponible pour les lignes sélectionnées." }); return; }
+    setAttendanceExportLoading(true);
+    try {
+      const bundles = await loadAttendanceExportBundles(usersToExport);
+      const XLSX = await import("xlsx-js-style");
+      const workbook = XLSX.utils.book_new();
+      const rows = attendanceRows(bundles);
+      const sheet = XLSX.utils.aoa_to_sheet([["BTL AFRICA · CALENDRIERS DE PRÉSENCE", "", "", "", "", "", "", "", "", "", ""], ["Agents et campagnes sélectionnés", usersToExport.length, "", "", "", "", "", "", "", "", ""], ["Agent", "Téléphone", "Campagne", "Code campagne", "Date", "État", "Statut pointage", "Arrivée", "Départ", "Rapport", "Note"], ...rows]);
+      sheet["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 10 } }];
+      sheet["!cols"] = [26, 17, 28, 18, 13, 28, 20, 12, 12, 20, 42].map((wch) => ({ wch }));
+      sheet["!freeze"] = { xSplit: 0, ySplit: 3 };
+      sheet["A1"].s = { fill: { fgColor: { rgb: "12383F" } }, font: { color: { rgb: "FFFFFF" }, bold: true, sz: 13 } };
+      sheet["A2"].s = { fill: { fgColor: { rgb: "E9F7F5" } }, font: { color: { rgb: "27656A" }, italic: true } };
+      ["A3", "B3", "C3", "D3", "E3", "F3", "G3", "H3", "I3", "J3", "K3"].forEach((cell) => { sheet[cell].s = { fill: { fgColor: { rgb: "9EE9E8" } }, font: { color: { rgb: "082126" }, bold: true } }; });
+      sheet["!autofilter"] = { ref: `A3:K${Math.max(rows.length + 3, 3)}` };
+      XLSX.utils.book_append_sheet(workbook, sheet, "Présences");
+      const summaryRows = bundles.map(({ user, campaign, insights }) => {
+        const days = buildAttendanceCalendar(insights).flatMap((month) => month.days);
+        return [user.full_name, campaign.name, days.filter((day) => day.state === "closed").length, days.filter((day) => day.state === "open").length, days.filter((day) => day.state === "absent").length, days.filter((day) => day.state === "off").length];
+      });
+      const summary = XLSX.utils.aoa_to_sheet([["SYNTHÈSE DES CALENDRIERS", "", "", "", "", ""], ["Agent", "Campagne", "Clôturés", "Ouverts", "Non travaillés", "Hors campagne / pause"], ...summaryRows]);
+      summary["!cols"] = [26, 28, 13, 12, 17, 24].map((wch) => ({ wch }));
+      ["A1", "A2", "B2", "C2", "D2", "E2", "F2"].forEach((cell) => { summary[cell].s = { fill: { fgColor: { rgb: cell === "A1" ? "12383F" : "9EE9E8" } }, font: { color: { rgb: cell === "A1" ? "FFFFFF" : "082126" }, bold: true } }; });
+      XLSX.utils.book_append_sheet(workbook, summary, "Synthèse");
+      XLSX.writeFile(workbook, `btl-calendriers-presences-${new Date().toISOString().slice(0, 10)}.xlsx`, { bookType: "xlsx", compression: true });
+    } catch (error) {
+      setNotice({ kind: "error", message: readableSupabaseError(error, "Impossible de générer le fichier XLSX des calendriers.") });
+    } finally {
+      setAttendanceExportLoading(false);
+    }
+  }
+
+  async function exportUsersAttendancePdf(usersToExport = selectedExportUsers) {
+    const targets = attendanceExportTargets(usersToExport);
+    if (!targets.length) { setNotice({ kind: "error", message: "Aucun calendrier de campagne disponible pour les lignes sélectionnées." }); return; }
+    const popup = window.open("", "_blank", "width=1100,height=820");
+    if (!popup) { setNotice({ kind: "error", message: "Le navigateur a bloqué la fenêtre PDF. Autorisez les fenêtres surgissantes pour ce site." }); return; }
+    setAttendanceExportLoading(true);
+    try {
+      const bundles = await loadAttendanceExportBundles(usersToExport);
+      const sections = bundles.map(({ user, campaign, insights }) => `<article class="agent-calendar"><header><div class="brand">BTL Africa · Calendrier de présence</div><h2>${escapeHtml(user.full_name)}</h2><p>${escapeHtml(user.phone)} · ${escapeHtml(campaign.name)} · ${escapeHtml(campaign.code)}</p></header>${renderAttendanceCalendarHtml(insights)}</article>`).join("");
+      popup.document.write(`<html><head><title>Calendriers de présence · BTL Africa</title><style>@page{size:A4;margin:12mm}*{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;color:#17343a;margin:0;font-size:10px}.agent-calendar{break-after:page;page-break-after:always}.agent-calendar:last-child{break-after:auto;page-break-after:auto}.agent-calendar>header{margin-bottom:14px;padding:17px 19px;border-radius:12px;background:#12383f;color:#fff}.brand{color:#9ee9e8;font-size:9px;font-weight:700;letter-spacing:.14em;text-transform:uppercase}.agent-calendar h2{margin:9px 0 4px;font-size:22px}.agent-calendar header p{margin:0;color:#c7e2e2;font-size:10px}.attendance-export-calendar{margin-top:8px}.calendar-export-legend{display:flex;flex-wrap:wrap;gap:7px;margin:0 0 10px;padding:8px;border:1px solid #dce9e8;border-radius:8px;background:#f7fbfa}.calendar-export-legend span{display:inline-flex;align-items:center;gap:4px;color:#526d72;font-size:7px}.calendar-dot{width:7px;height:7px;display:inline-block;border-radius:50%}.calendar-dot.state-off{background:#a9b9bb}.calendar-dot.state-absent{background:#e27670}.calendar-dot.state-closed{background:#73b96b}.calendar-dot.state-open{background:#5ca9dd}.attendance-month{margin:0 0 14px;break-inside:avoid;page-break-inside:avoid}.attendance-month h3{margin:0 0 6px;padding:6px 8px;border-radius:7px;color:#12383f;background:#e8f4f3;font-size:11px;text-transform:capitalize}.calendar-weekdays,.calendar-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}.calendar-weekdays{margin-bottom:2px}.calendar-weekdays span{padding:2px;color:#789095;font-size:6px;text-align:center;text-transform:uppercase}.calendar-cell{min-height:36px;padding:3px;border:1px solid #dce9e8;border-radius:4px;background:#fff}.calendar-cell.empty{border-color:transparent;background:transparent}.calendar-cell strong,.calendar-cell small,.calendar-cell em{display:block}.calendar-cell strong{color:#17343a;font-size:8px}.calendar-cell small{margin-top:2px;color:#526d72;font-size:6px}.calendar-cell em{margin-top:2px;color:#789095;font-size:5px;font-style:normal;line-height:1.1}.calendar-cell.state-off{background:#eef2f2;border-color:#d9e0e0}.calendar-cell.state-absent{background:#fff1ef;border-color:#f0bbb5}.calendar-cell.state-closed{background:#eff9eb;border-color:#b8dcae}.calendar-cell.state-open{background:#eef7fd;border-color:#b3d5eb}.calendar-empty{padding:12px;border:1px dashed #c8d9d8;border-radius:8px;color:#789095;text-align:center}@media print{.agent-calendar>header,.calendar-cell,.calendar-export-legend,.attendance-month h3{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style></head><body>${sections}</body></html>`);
+      popup.document.close(); popup.focus(); window.setTimeout(() => popup.print(), 250);
+    } catch (error) {
+      popup.close();
+      setNotice({ kind: "error", message: readableSupabaseError(error, "Impossible de générer le PDF des calendriers.") });
+    } finally {
+      setAttendanceExportLoading(false);
+    }
+  }
+
   useEffect(() => {
     if (!exportOpen || !selectedExportUsers.length) return;
     const onKeyDown = (event: KeyboardEvent) => {
@@ -721,13 +831,13 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
       if (target?.isContentEditable || (target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))) return;
       if (event.ctrlKey || event.metaKey || event.altKey) return;
       const key = event.key.toLowerCase();
-      if (key === "c") { event.preventDefault(); exportCsv(); setExportOpen(false); }
-      if (key === "x") { event.preventDefault(); void exportUsersXlsx().catch((error) => setNotice({ kind: "error", message: readableSupabaseError(error, "Impossible de générer le fichier XLSX.") })); setExportOpen(false); }
-      if (key === "p") { event.preventDefault(); exportUsersPdf(); setExportOpen(false); }
+      if (key === "c") { event.preventDefault(); if (exportMode === "attendance") void exportUsersAttendanceCsv(); else exportCsv(); setExportOpen(false); }
+      if (key === "x") { event.preventDefault(); if (exportMode === "attendance") void exportUsersAttendanceXlsx(); else void exportUsersXlsx().catch((error) => setNotice({ kind: "error", message: readableSupabaseError(error, "Impossible de générer le fichier XLSX.") })); setExportOpen(false); }
+      if (key === "p") { event.preventDefault(); if (exportMode === "attendance") void exportUsersAttendancePdf(); else exportUsersPdf(); setExportOpen(false); }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [exportOpen, filteredUsers, exportSelection]);
+  }, [exportOpen, exportMode, filteredUsers, exportSelection]);
 
   function beginEdit(user: UserRecord) {
     if (!canManage) return;
@@ -826,6 +936,19 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
     }
   }
 
+  function renderExportChoices() {
+    if (exportMode === "users") return <div className="export-choice-grid">
+      <button type="button" className="export-choice" onClick={() => { exportCsv(selectedExportUsers); setExportOpen(false); }} disabled={!selectedExportUsers.length}><span className="export-choice-icon csv-icon">C</span><span><strong>CSV</strong><small>Données brutes compatibles partout</small></span><kbd>C</kbd></button>
+      <button type="button" className="export-choice" onClick={() => { void exportUsersXlsx(selectedExportUsers).catch((error) => setNotice({ kind: "error", message: readableSupabaseError(error, "Impossible de générer le fichier XLSX.") })); setExportOpen(false); }} disabled={!selectedExportUsers.length}><span className="export-choice-icon xlsx-icon"><FileSpreadsheet size={15} /></span><span><strong>XLSX</strong><small>Classeur structuré avec synthèse</small></span><kbd>X</kbd></button>
+      <button type="button" className="export-choice" onClick={() => { exportUsersPdf(selectedExportUsers); setExportOpen(false); }} disabled={!selectedExportUsers.length}><span className="export-choice-icon pdf-icon"><FileText size={15} /></span><span><strong>PDF</strong><small>Mise en page prête à imprimer</small></span><kbd>P</kbd></button>
+    </div>;
+    return <div className="export-choice-grid">
+      <button type="button" className="export-choice" onClick={() => { void exportUsersAttendanceCsv(selectedExportUsers); setExportOpen(false); }} disabled={!selectedAttendanceTargets.length || attendanceExportLoading}><span className="export-choice-icon csv-icon">C</span><span><strong>CSV</strong><small>Une ligne par jour et par campagne</small></span><kbd>C</kbd></button>
+      <button type="button" className="export-choice" onClick={() => { void exportUsersAttendanceXlsx(selectedExportUsers); setExportOpen(false); }} disabled={!selectedAttendanceTargets.length || attendanceExportLoading}><span className="export-choice-icon xlsx-icon"><FileSpreadsheet size={15} /></span><span><strong>XLSX</strong><small>Calendriers compilés et synthèse</small></span><kbd>X</kbd></button>
+      <button type="button" className="export-choice" onClick={() => { void exportUsersAttendancePdf(selectedExportUsers); setExportOpen(false); }} disabled={!selectedAttendanceTargets.length || attendanceExportLoading}><span className="export-choice-icon pdf-icon"><FileText size={15} /></span><span><strong>PDF</strong><small>Un calendrier visuel par agent et campagne</small></span><kbd>P</kbd></button>
+    </div>;
+  }
+
   if (effectiveProfile?.role === "agent") {
     return <section className="admin-dashboard glass-card role-dashboard">{simulationControl}<div className="dashboard-header"><div className="dashboard-title"><div className="heading-icon"><ServerCog size={19} /></div><div><div className="eyebrow"><ShieldCheck size={13} /> Console sécurisée</div><h2>Tableau de bord</h2></div></div><div className="dashboard-actions"><span className="session-chip"><span className="session-dot" />{effectiveProfile.full_name} · {ROLE_LABELS[effectiveProfile.role]}</span><button className="icon-button" type="button" onClick={() => void handleLogout()} aria-label="Se déconnecter" title="Se déconnecter"><LogOut size={15} /></button></div></div>{notice && <div className={`dashboard-notice ${notice.kind}`}><span>{notice.kind === "success" ? <CheckCircle2 size={15} /> : <AlertCircle size={15} />}</span>{notice.message}<button type="button" onClick={() => setNotice(null)} aria-label="Fermer"><X size={14} /></button></div>}<RoleWorkspace profile={effectiveProfile} users={users} superiors={superiors} campaigns={campaigns} assignments={campaignAssignments} campaignSupervisorAssignments={campaignSupervisorAssignments} assignmentRequests={assignmentRequests} campaignClaims={campaignClaims} onNotice={handleWorkspaceNotice} onProfileUpdated={handleProfileSaved} onProfileOpen={() => isSimulation ? setNotice({ kind: "error", message: "Le profil est indisponible pendant une simulation." }) : setProfileOpen(true)} onRequestReviewed={() => void refreshUsers(profile, true)} simulation={isSimulation} />{profileOpen && !isSimulation && profile && <ProfileModal profile={profile} onClose={() => setProfileOpen(false)} onSaved={handleProfileSaved} />}{profilePhotoPreviewOpen && effectiveProfile && <ProfilePhotoPreviewModal user={effectiveProfile} onClose={() => setProfilePhotoPreviewOpen(false)} />}</section>;
   }
@@ -874,7 +997,7 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
         activityUpdatingId={activityUpdatingId}
         onToggleActivity={(selectedUser) => void toggleUserActivity(selectedUser)}
       />)}{!filteredUsers.length && <div className="table-empty"><Search size={22} /><strong>Aucun utilisateur trouvé</strong><span>Essayez un MSISDN ou élargissez vos filtres.</span></div>}</div>}
-    {exportOpen && <ModalLayer><button className="modal-backdrop" type="button" aria-label="Fermer l’aperçu d’export" onClick={() => setExportOpen(false)} /><div className="modal-card export-preview-modal"><div className="modal-header"><div><div className="eyebrow"><Download size={13} /> Aperçu de l’export</div><h3>{selectedExportUsers.length} ligne{selectedExportUsers.length > 1 ? "s" : ""} sélectionnée{selectedExportUsers.length > 1 ? "s" : ""}</h3><span>Cochez les lignes à conserver avant de choisir le format.</span></div><button type="button" className="modal-close" onClick={() => setExportOpen(false)} aria-label="Fermer"><X size={16} /></button></div><div className="export-selection-toolbar"><label className="export-select-all"><input type="checkbox" checked={filteredUsers.length > 0 && selectedExportUsers.length === filteredUsers.length} onChange={toggleAllExportUsers} /><span className="toggle-visual"><CheckCircle2 size={11} /></span><span>Tout sélectionner</span></label><small>{filteredUsers.length - selectedExportUsers.length} ligne{filteredUsers.length - selectedExportUsers.length > 1 ? "s" : ""} désélectionnée{filteredUsers.length - selectedExportUsers.length > 1 ? "s" : ""}</small></div><div className="export-preview-table export-selection-list"><div className="export-preview-head"><span>Sélection</span><span>Nom</span><span>Statut</span><span>MSISDN</span></div>{filteredUsers.map((user) => <label className={`export-preview-row ${exportSelection.includes(user.id) ? "is-selected" : ""}`} key={user.id}><input type="checkbox" checked={exportSelection.includes(user.id)} onChange={() => toggleExportUser(user.id)} /><span className="toggle-visual"><CheckCircle2 size={10} /></span><strong>{user.full_name}</strong><span className={`activity-text ${user.is_active ? "is-active" : "is-inactive"}`}>{user.is_active ? "Actif" : "Inactif"}</span><span>{user.phone}</span></label>)}</div><div className="export-choice-grid"><button type="button" className="export-choice" onClick={() => { exportCsv(selectedExportUsers); setExportOpen(false); }} disabled={!selectedExportUsers.length}><span className="export-choice-icon csv-icon">C</span><span><strong>CSV</strong><small>Données brutes compatibles partout</small></span><kbd>C</kbd></button><button type="button" className="export-choice" onClick={() => { void exportUsersXlsx(selectedExportUsers).catch((error) => setNotice({ kind: "error", message: readableSupabaseError(error, "Impossible de générer le fichier XLSX.") })); setExportOpen(false); }} disabled={!selectedExportUsers.length}><span className="export-choice-icon xlsx-icon"><FileSpreadsheet size={15} /></span><span><strong>XLSX</strong><small>Classeur structuré avec synthèse</small></span><kbd>X</kbd></button><button type="button" className="export-choice" onClick={() => { exportUsersPdf(selectedExportUsers); setExportOpen(false); }} disabled={!selectedExportUsers.length}><span className="export-choice-icon pdf-icon"><FileText size={15} /></span><span><strong>PDF</strong><small>Mise en page prête à imprimer</small></span><kbd>P</kbd></button></div></div></ModalLayer>}
+    {exportOpen && <ModalLayer><button className="modal-backdrop" type="button" aria-label="Fermer l’aperçu d’export" onClick={() => setExportOpen(false)} /><div className="modal-card export-preview-modal"><div className="modal-header"><div><div className="eyebrow"><Download size={13} /> Aperçu de l’export</div><h3>{selectedExportUsers.length} ligne{selectedExportUsers.length > 1 ? "s" : ""} sélectionnée{selectedExportUsers.length > 1 ? "s" : ""}</h3><span>Cochez les lignes à conserver avant de choisir le format.</span></div><button type="button" className="modal-close" onClick={() => setExportOpen(false)} aria-label="Fermer"><X size={16} /></button></div><div className="export-mode-switch" role="tablist" aria-label="Type d’export"><button type="button" role="tab" aria-selected={exportMode === "users"} className={exportMode === "users" ? "is-active" : ""} onClick={() => setExportMode("users")}><List size={13} /> Liste des utilisateurs</button><button type="button" role="tab" aria-selected={exportMode === "attendance"} className={exportMode === "attendance" ? "is-active" : ""} onClick={() => setExportMode("attendance")}><CalendarDays size={13} /> Calendriers de présence</button></div><div className="export-selection-toolbar"><label className="export-select-all"><input type="checkbox" checked={filteredUsers.length > 0 && selectedExportUsers.length === filteredUsers.length} onChange={toggleAllExportUsers} /><span className="toggle-visual"><CheckCircle2 size={11} /></span><span>Tout sélectionner</span></label><small>{filteredUsers.length - selectedExportUsers.length} ligne{filteredUsers.length - selectedExportUsers.length > 1 ? "s" : ""} désélectionnée{filteredUsers.length - selectedExportUsers.length > 1 ? "s" : ""}</small></div><div className="export-preview-table export-selection-list"><div className="export-preview-head"><span>Sélection</span><span>Nom</span><span>Statut</span><span>MSISDN</span></div>{filteredUsers.map((user) => <label className={`export-preview-row ${exportSelection.includes(user.id) ? "is-selected" : ""}`} key={user.id}><input type="checkbox" checked={exportSelection.includes(user.id)} onChange={() => toggleExportUser(user.id)} /><span className="toggle-visual"><CheckCircle2 size={10} /></span><strong>{user.full_name}</strong><span className={`activity-text ${user.is_active ? "is-active" : "is-inactive"}`}>{user.is_active ? "Actif" : "Inactif"}</span><span>{user.phone}</span></label>)}</div>{renderExportChoices()}</div></ModalLayer>}
     {passwordAssistOpen && <ModalLayer><button className="modal-backdrop" type="button" aria-label="Fermer l’assistance mot de passe" onClick={() => { setPasswordAssistOpen(false); setPasswordAssistError(""); }} /><form className="modal-card password-assistance-modal" onSubmit={unlockPasswordAssistance}><div className="modal-header"><div><div className="eyebrow"><LockKeyhole size={13} /> Assistance superadmin</div><h3>Afficher les mots de passe</h3><span>Une réauthentification est requise à chaque déverrouillage.</span></div><button type="button" className="modal-close" onClick={() => { setPasswordAssistOpen(false); setPasswordAssistError(""); }} aria-label="Fermer"><X size={16} /></button></div><div className="password-assistance-warning"><LockKeyhole size={15} /><p>Cette action affiche les valeurs enregistrées dans <code>public.users</code> uniquement pour le superadmin réel. Elles ne sont jamais chargées dans la liste standard.</p></div><label>Mot de passe actuel du superadmin<input value={passwordAssistInput} onChange={(event) => setPasswordAssistInput(event.target.value)} type="password" autoComplete="current-password" autoFocus required /></label>{passwordAssistError && <div className="connection-test error">{passwordAssistError}</div>}<div className="modal-actions"><button type="button" className="button secondary" onClick={() => { setPasswordAssistOpen(false); setPasswordAssistError(""); }}>Annuler</button><button type="submit" className="button primary" disabled={passwordAssistLoading}>{passwordAssistLoading ? <LoaderCircle className="spin" size={14} /> : <LockKeyhole size={14} />} Déverrouiller</button></div></form></ModalLayer>}
     {showConfig && <ModalLayer><button className="modal-backdrop" type="button" aria-label="Fermer" onClick={() => configured && setShowConfig(false)} /><form className="modal-card config-modal" onSubmit={handleSetup}><div className="modal-header"><div><div className="eyebrow"><Database size={13} /> Connexion</div><h3>Base Supabase</h3></div>{configured && <button type="button" className="modal-close" onClick={() => setShowConfig(false)} aria-label="Fermer"><X size={16} /></button>}</div><label>URL du projet<input value={setupUrl} onChange={(event) => setSetupUrl(event.target.value)} placeholder="https://votre-projet.supabase.co" required /></label><label>Clé publishable<input value={setupKey} onChange={(event) => setSetupKey(event.target.value)} placeholder="Clé publishable / anon" type="password" autoComplete="off" required /></label>{connectionTest && <div className={`connection-test ${connectionTest.kind}`}><span>{connectionTest.kind === "success" ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}</span>{connectionTest.message}</div>}<div className="modal-actions"><button type="button" className="button secondary" onClick={() => void handleTestConnection()} disabled={testingConnection}>{testingConnection ? <LoaderCircle className="spin" size={14} /> : <Database size={14} />} Tester</button><button type="submit" className="button primary" disabled={testingConnection}><CheckCircle2 size={14} /> Enregistrer</button></div>{configured && <button type="button" className="text-button danger config-disconnect" onClick={handleDisconnect}>Déconnecter ce projet</button>}</form></ModalLayer>}
     {deleteCandidate && <ModalLayer><button className="modal-backdrop" type="button" aria-label="Fermer" onClick={() => setDeleteCandidate(null)} /><div className="modal-card confirm-card"><div className="danger-icon"><Trash2 size={19} /></div><h3>Supprimer cet utilisateur ?</h3><p><strong>{deleteCandidate.full_name}</strong> · <CopyablePhone value={deleteCandidate.phone} />La ligne sera supprimée définitivement de <code>public.users</code>.</p><div className="modal-actions"><button type="button" className="button secondary" onClick={() => setDeleteCandidate(null)}>Annuler</button><button type="button" className="button danger-button" onClick={() => void confirmDelete()} disabled={actionLoading}>{actionLoading ? <LoaderCircle className="spin" size={14} /> : <Trash2 size={14} />} Confirmer</button></div></div></ModalLayer>}
