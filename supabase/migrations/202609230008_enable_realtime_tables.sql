@@ -11,7 +11,7 @@ begin
     'user_campaign_assignments',
     'agent_campaign_supervisor_assignments',
     'campaign_assignment_requests',
-    'campaign_claims',
+    'attendance_claims',
     'user_registration_requests'
   ] loop
     if exists (

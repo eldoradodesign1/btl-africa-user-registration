@@ -66,26 +66,24 @@ export type CampaignAssignmentRequest = {
   reviewed_by: string | null;
   review_note: string | null;
 };
-export type CampaignClaim = {
+export type AttendanceClaim = {
   id: string;
   user_id: string;
   campaign_id: string;
-  description: string;
-  status: "pending" | "acknowledged" | "in_review" | "awaiting_agent" | "resolved" | "rejected";
-  priority: "low" | "normal" | "high" | "critical";
-  category: "attendance" | "payment" | "performance" | "technical" | "assignment" | "other";
-  assigned_to: string | null;
+  claim_date: string;
+  arrival_time: string;
+  departure_time: string;
+  activation_count: number;
+  activation_details: string;
+  closing_comment: string;
+  shop_id: string | null;
+  status: "pending" | "approved" | "rejected";
+  can_review?: boolean;
   created_at: string;
-  updated_at: string;
   reviewed_at: string | null;
   reviewed_by: string | null;
   review_note: string | null;
-  last_message_at: string | null;
-  resolved_at: string | null;
-  unread_count?: number;
 };
-export type CampaignClaimMessage = { id: string; claim_id: string; author_id: string; body: string; visibility: "shared" | "internal"; message_type: "message" | "request_information" | "status_change" | "system"; created_at: string };
-export type CampaignClaimStatus = CampaignClaim["status"];
 export type CampaignRun = { id: string; campaign_id: string; name: string; starts_on: string; ends_on: string | null; status: string };
 export type CampaignPause = { starts_on: string; ends_on: string; reason: string | null };
 export type PerformancePoint = { date: string; value: number; label: string };
@@ -101,6 +99,8 @@ export type DailyReport = {
   roam: number | null;
   bund: number | null;
   amount: number | null;
+  activationCount: number;
+  activationDetails: string | null;
   comment: string | null;
   pdfUrl: string | null;
   photos: unknown[];
@@ -248,6 +248,8 @@ function mapDailyReport(row: Record<string, unknown>, source: DailyReport["sourc
     roam: asNumber(row.roam),
     bund: asNumber(row.bund),
     amount: asNumber(row.amount),
+    activationCount: asNumber(row.activation_count) ?? 0,
+    activationDetails: typeof row.activation_details === "string" ? row.activation_details : null,
     comment: typeof row.comment === "string" ? row.comment : typeof row.closing_comment === "string" ? row.closing_comment : null,
     pdfUrl: typeof row.pdf_url === "string" && row.pdf_url ? row.pdf_url : null,
     photos: asPhotos(row.photos),
@@ -303,7 +305,7 @@ export function subscribeToDataChanges(onChange: (table: string) => void, onStat
     "user_campaign_assignments",
     "agent_campaign_supervisor_assignments",
     "campaign_assignment_requests",
-    "campaign_claims",
+    "attendance_claims",
     "user_registration_requests",
   ].forEach((table) => {
     channel.on("postgres_changes", { event: "*", schema: "public", table }, () => onChange(table));
@@ -407,7 +409,7 @@ export async function loadAgentInsights(user: UserRecord, campaign: CampaignReco
   if (pausesError) throw pausesError;
   const pauses = (pausesData || []) as CampaignPause[];
   if (user.user_category === "hostess") {
-    let reportQuery = supabaseClient.from("daily_reports").select("id, date, agent_name, shop_id, shop_name, priv, roam, bund, amount, comment, pdf_url, arrival_time, departure_time, pointage_photo").eq("agent_id", user.id).order("date");
+    let reportQuery = supabaseClient.from("daily_reports").select("id, date, agent_name, shop_id, shop_name, priv, roam, bund, amount, activation_count, activation_details, comment, pdf_url, arrival_time, departure_time, pointage_photo").eq("agent_id", user.id).order("date");
     if (campaign.starts_on) reportQuery = reportQuery.gte("date", campaign.starts_on);
     if (campaign.ends_on) reportQuery = reportQuery.lte("date", campaign.ends_on);
     const { data, error } = await reportQuery;
@@ -415,7 +417,7 @@ export async function loadAgentInsights(user: UserRecord, campaign: CampaignReco
     const rows = (data || []) as Array<Record<string, unknown>>;
     return {
       metricLabel: "Activations",
-      performance: rows.map((row) => { const amount = asNumber(row.amount) ?? ((asNumber(row.priv) || 0) + (asNumber(row.roam) || 0) + (asNumber(row.bund) || 0)); return { date: String(row.date), value: amount, label: `${amount} activations` }; }),
+      performance: rows.map((row) => { const claimedActivations = asNumber(row.activation_count); const amount = claimedActivations && claimedActivations > 0 ? claimedActivations : asNumber(row.amount) ?? ((asNumber(row.priv) || 0) + (asNumber(row.roam) || 0) + (asNumber(row.bund) || 0)); return { date: String(row.date), value: amount, label: `${amount} activations` }; }),
       presence: rows.map((row) => { const report = mapDailyReport(row, "daily_report"); return { date: report.date, status: row.arrival_time || row.departure_time || row.pointage_photo ? "présent" : "rapport", checkin_at: typeof row.arrival_time === "string" ? row.arrival_time : null, checkout_at: typeof row.departure_time === "string" ? row.departure_time : null, note: report.comment, report }; }),
       campaignStart: campaign.starts_on,
       campaignEnd: campaign.ends_on,
@@ -427,7 +429,7 @@ export async function loadAgentInsights(user: UserRecord, campaign: CampaignReco
   if (runsError) throw runsError;
   const runIds = ((runsData || []) as Array<{ id: string }>).map((run) => run.id);
   if (!runIds.length) return { performance: [], presence: [], metricLabel: "Heures terrain", campaignStart: campaign.starts_on, campaignEnd: campaign.ends_on, pauses };
-  const { data, error } = await supabaseClient.from("ba_daily_attendance").select("id, activity_date, status, checkin_at, checkout_at, closing_comment, checkin_photo_path").eq("ba_id", user.id).in("campaign_run_id", runIds).order("activity_date");
+  const { data, error } = await supabaseClient.from("ba_daily_attendance").select("id, activity_date, status, checkin_at, checkout_at, closing_comment, activation_count, activation_details, checkin_photo_path").eq("ba_id", user.id).in("campaign_run_id", runIds).order("activity_date");
   if (error) throw error;
   const rows = (data || []) as Array<Record<string, unknown>>;
   return {
@@ -449,68 +451,38 @@ export async function requestCampaignAssignment(userId: string, campaignId: stri
   return request as CampaignAssignmentRequest;
 }
 
-export async function createCampaignClaim(userId: string, campaignId: string, description: string, priority: CampaignClaim["priority"] = "normal", category: CampaignClaim["category"] = "other"): Promise<CampaignClaim> {
-  if (!supabaseClient) throw new Error("Configurez Supabase avant d’envoyer une réclamation.");
-  const { data, error } = await supabaseClient.rpc("create_campaign_claim", { p_user_id: userId, p_campaign_id: campaignId, p_description: description, p_priority: priority, p_category: category });
+export async function createAttendanceClaim(input: { userId: string; campaignId: string; date: string; arrivalTime: string; departureTime: string; activationCount: number; activationDetails: string; closingComment: string; shopId?: string | null }): Promise<AttendanceClaim> {
+  if (!supabaseClient) throw new Error("Configurez Supabase avant d’envoyer une demande de présence.");
+  const { data, error } = await supabaseClient.rpc("create_attendance_claim", { p_user_id: input.userId, p_campaign_id: input.campaignId, p_claim_date: input.date, p_arrival_time: input.arrivalTime, p_departure_time: input.departureTime, p_activation_count: input.activationCount, p_activation_details: input.activationDetails, p_closing_comment: input.closingComment, p_shop_id: input.shopId || null });
   if (error) throw error;
   const claim = Array.isArray(data) ? data[0] : data;
-  if (!claim) throw new Error("La réclamation n’a pas été créée.");
-  return claim as CampaignClaim;
+  if (!claim) throw new Error("La demande de présence n’a pas été créée.");
+  return claim as AttendanceClaim;
 }
 
-export async function loadCampaignClaims(): Promise<CampaignClaim[]> {
+export async function loadAttendanceClaims(): Promise<AttendanceClaim[]> {
   const manager = assertCampaignManager();
   if (!supabaseClient) return [];
-  const { data, error } = await supabaseClient.rpc("list_campaign_claims", { p_manager_id: manager.id });
+  const { data, error } = await supabaseClient.rpc("list_attendance_claims", { p_viewer_id: manager.id });
   if (error) throw error;
-  return (data || []) as CampaignClaim[];
+  return (data || []) as AttendanceClaim[];
 }
 
-export async function loadMyCampaignClaims(userId: string): Promise<CampaignClaim[]> {
+export async function loadMyAttendanceClaims(userId: string): Promise<AttendanceClaim[]> {
   if (!supabaseClient) return [];
-  const { data, error } = await supabaseClient.rpc("list_my_campaign_claims", { p_agent_id: userId });
+  const { data, error } = await supabaseClient.rpc("list_my_attendance_claims", { p_agent_id: userId });
   if (error) throw error;
-  return (data || []) as CampaignClaim[];
+  return (data || []) as AttendanceClaim[];
 }
 
-export async function loadCampaignClaimMessages(viewerId: string, claimId: string): Promise<CampaignClaimMessage[]> {
-  if (!supabaseClient) return [];
-  const request = supabaseClient.rpc("list_campaign_claim_messages", { p_viewer_id: viewerId, p_claim_id: claimId });
-  const timeout = new Promise<never>((_, reject) => {
-    window.setTimeout(() => reject(new Error("Le serveur Supabase ne répond pas pour le moment. Réessayez dans quelques instants.")), 12000);
-  });
-  const { data, error } = await Promise.race([request, timeout]);
-  if (error) throw error;
-  return (data || []) as CampaignClaimMessage[];
-}
-
-export async function addCampaignClaimMessage(authorId: string, claimId: string, body: string, visibility: "shared" | "internal" = "shared", messageType: CampaignClaimMessage["message_type"] = "message"): Promise<CampaignClaimMessage> {
-  if (!supabaseClient) throw new Error("Configurez Supabase avant d’ajouter un message.");
-  const { data, error } = await supabaseClient.rpc("add_campaign_claim_message", { p_author_id: authorId, p_claim_id: claimId, p_body: body, p_visibility: visibility, p_message_type: messageType });
-  if (error) throw error;
-  const message = Array.isArray(data) ? data[0] : data;
-  if (!message) throw new Error("Le message n’a pas été ajouté.");
-  return message as CampaignClaimMessage;
-}
-
-export async function transitionCampaignClaim(claimId: string, status: CampaignClaimStatus, note = ""): Promise<CampaignClaim> {
+export async function reviewAttendanceClaim(claimId: string, status: "approved" | "rejected", note = "", shopId: string | null = null): Promise<AttendanceClaim> {
   const manager = assertCampaignManager();
-  if (!supabaseClient) throw new Error("Configurez Supabase avant de traiter la réclamation.");
-  const { data, error } = await supabaseClient.rpc("transition_campaign_claim", { p_claim_id: claimId, p_manager_id: manager.id, p_to_status: status, p_note: note || null });
+  if (!supabaseClient) throw new Error("Configurez Supabase avant de traiter la demande de présence.");
+  const { data, error } = await supabaseClient.rpc("review_attendance_claim", { p_claim_id: claimId, p_manager_id: manager.id, p_status: status, p_review_note: note || null, p_shop_id: shopId });
   if (error) throw error;
   const claim = Array.isArray(data) ? data[0] : data;
-  if (!claim) throw new Error("Le dossier n’a pas pu être mis à jour.");
-  return claim as CampaignClaim;
-}
-
-export async function markCampaignClaimRead(userId: string, claimId: string): Promise<void> {
-  if (!supabaseClient) return;
-  const { error } = await supabaseClient.rpc("mark_campaign_claim_read", { p_user_id: userId, p_claim_id: claimId });
-  if (error) throw error;
-}
-
-export async function reviewCampaignClaim(claimId: string, status: Extract<CampaignClaim["status"], "acknowledged" | "resolved" | "rejected">, note = ""): Promise<CampaignClaim> {
-  return transitionCampaignClaim(claimId, status, note);
+  if (!claim) throw new Error("La demande de présence n’a pas pu être mise à jour.");
+  return claim as AttendanceClaim;
 }
 
 export async function loadCampaignAssignmentRequests(): Promise<CampaignAssignmentRequest[]> {
@@ -711,7 +683,7 @@ export function readableSupabaseError(error: unknown, fallback: string): string 
     return `${fallback} Le service Supabase est momentanément indisponible. Réessayez dans quelques instants.`;
   }
   if (candidate?.code === "PGRST202" || candidate?.code === "42883" || detail.toLowerCase().includes("could not find the function")) {
-    return `${fallback} La fonction Supabase de réclamation n’est pas disponible : exécutez la migration campaign_claims dans le SQL Editor.`;
+    return `${fallback} La fonction Supabase de présence n’est pas disponible : vérifiez que la migration des demandes de présence a été appliquée.`;
   }
   return `${fallback} ${detail}`;
 }
