@@ -409,7 +409,9 @@ export async function loadAgentInsights(user: UserRecord, campaign: CampaignReco
   if (pausesError) throw pausesError;
   const pauses = (pausesData || []) as CampaignPause[];
   if (user.user_category === "hostess") {
-    let reportQuery = supabaseClient.from("daily_reports").select("id, date, agent_name, shop_id, shop_name, priv, roam, bund, amount, activation_count, activation_details, comment, pdf_url, arrival_time, departure_time, pointage_photo").eq("agent_id", user.id).order("date");
+    // pdf_url peut contenir des valeurs volumineuses et faire expirer la lecture
+    // de toute la liste. Le lien est chargé à la demande dans la modale du rapport.
+    let reportQuery = supabaseClient.from("daily_reports").select("id, date, agent_name, shop_id, shop_name, priv, roam, bund, amount, activation_count, activation_details, comment, arrival_time, departure_time, pointage_photo").eq("agent_id", user.id).order("date");
     if (campaign.starts_on) reportQuery = reportQuery.gte("date", campaign.starts_on);
     if (campaign.ends_on) reportQuery = reportQuery.lte("date", campaign.ends_on);
     const { data, error } = await reportQuery;
@@ -440,6 +442,13 @@ export async function loadAgentInsights(user: UserRecord, campaign: CampaignReco
     campaignEnd: campaign.ends_on,
     pauses,
   };
+}
+
+export async function loadDailyReportPdfUrl(reportId: string): Promise<string | null> {
+  if (!supabaseClient || !reportId) return null;
+  const { data, error } = await supabaseClient.from("daily_reports").select("pdf_url").eq("id", reportId).maybeSingle();
+  if (error) throw error;
+  return typeof data?.pdf_url === "string" && data.pdf_url ? data.pdf_url : null;
 }
 
 export async function requestCampaignAssignment(userId: string, campaignId: string): Promise<CampaignAssignmentRequest> {
