@@ -293,7 +293,7 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
           shouldRefresh("user_campaign_assignments") ? loadCampaignAssignments() : Promise.resolve(null),
           shouldRefresh("agent_campaign_supervisor_assignments") ? loadCampaignSupervisorAssignments().catch(() => []) : Promise.resolve(null),
           shouldRefresh("campaign_assignment_requests") && isManager ? loadCampaignAssignmentRequests().catch(() => []) : Promise.resolve(null),
-          shouldRefresh("attendance_claims") ? currentProfile?.role === "agent" ? loadMyAttendanceClaims(currentProfile.id).catch(() => []) : isManager ? loadAttendanceClaims().catch(() => []) : Promise.resolve(null) : Promise.resolve(null),
+          shouldRefresh("attendance_claims") ? currentProfile?.role === "agent" ? loadMyAttendanceClaims(currentProfile.id).catch(() => []) : isManager ? loadAttendanceClaims() : Promise.resolve(null) : Promise.resolve(null),
           shouldRefresh("user_registration_requests") && currentProfile?.role === "super_admin" ? loadPendingRegistrationRequests().catch(() => []) : Promise.resolve(null),
         ]);
         if (nextUsers) {
