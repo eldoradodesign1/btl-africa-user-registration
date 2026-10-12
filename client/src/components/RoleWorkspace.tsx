@@ -1,10 +1,10 @@
 import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
 import { createPortal } from "react-dom";
-import { AlertTriangle, BriefcaseBusiness, CalendarDays, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock3, Download, FilePenLine, FileSpreadsheet, FileText, History, LoaderCircle, LockKeyhole, MessageCircle, PhoneCall, RefreshCw, Send, UserCircle2, Users, X, XCircle } from "lucide-react";
+import { AlertTriangle, BriefcaseBusiness, CalendarDays, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock3, Download, FilePenLine, FileSpreadsheet, FileText, History, ImagePlus, LoaderCircle, LockKeyhole, MessageCircle, PhoneCall, RefreshCw, Send, UserCircle2, Users, X, XCircle } from "lucide-react";
 import { CopyablePhone, CopyableValue } from "@/components/CopyablePhone";
 import { CATEGORY_LABELS, ROLE_LABELS, campaignTypeLabel, categoryShortLabel, isCampaignCompatibleWithCategory } from "@/lib/user-form";
 import { isValidMsisdn, normalizePhone } from "@/lib/phone";
-import { createAttendanceClaim, loadAgentInsights, loadDailyReportPdfUrl, readableSupabaseError, requestCampaignAssignment, reviewAttendanceClaim, reviewCampaignAssignmentRequest, updateMyProfile, type AgentInsights, type AttendanceClaim, type CampaignAssignment, type CampaignAssignmentRequest, type CampaignRecord, type CampaignSupervisorAssignment, type DailyReport, type PresenceRecord, type ShopRecord, type UserRecord } from "@/lib/supabase";
+import { createAttendanceClaim, loadAgentInsights, loadDailyReportPdfUrl, loadLeadActionTypes, readableSupabaseError, requestCampaignAssignment, reviewAttendanceClaim, reviewCampaignAssignmentRequest, updateMyProfile, type AgentInsights, type AttendanceClaim, type AttendanceClaimActivation, type CampaignAssignment, type CampaignAssignmentRequest, type CampaignRecord, type CampaignSupervisorAssignment, type DailyReport, type PresenceRecord, type ShopRecord, type UserRecord } from "@/lib/supabase";
 
 type Notice = { kind: "error" | "success"; message: string };
 
@@ -161,19 +161,68 @@ function ShopChoice({ value, shops, onChange }: { value: string; shops: ShopReco
   return <div className={`claim-choice ${open ? "is-open" : ""}`}><span>Shop concerné <small>(facultatif)</small></span><button type="button" onClick={() => setOpen((current) => !current)} aria-haspopup="listbox" aria-expanded={open}>{label}<ChevronDown size={13} /></button>{open && <><button type="button" className="claim-choice-backdrop" aria-label="Fermer les shops" onClick={() => setOpen(false)} /><div className="claim-choice-menu" role="listbox"><button type="button" role="option" onClick={() => { onChange(""); setOpen(false); }}>Aucun shop</button>{shops.map((shop) => <button type="button" role="option" aria-selected={shop.id === value} key={shop.id} onClick={() => { onChange(shop.id); setOpen(false); }}>{shop.name}{shop.id === value && <CheckCircle2 size={12} />}</button>)}</div></>}</div>;
 }
 
+function ActivationTypeChoice({ value, options, onChange }: { value: string; options: string[]; onChange: (value: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const label = value || "Choisir le type";
+  return <div className={`claim-choice activation-type-choice ${open ? "is-open" : ""}`}><button type="button" onClick={() => setOpen((current) => !current)} aria-haspopup="listbox" aria-expanded={open}>{label}<ChevronDown size={13} /></button>{open && <><button type="button" className="claim-choice-backdrop" aria-label="Fermer les types d’activation" onClick={() => setOpen(false)} /><div className="claim-choice-menu" role="listbox">{options.map((option) => <button type="button" role="option" aria-selected={option === value} key={option} onClick={() => { onChange(option); setOpen(false); }}>{option}{option === value && <CheckCircle2 size={12} />}</button>)}{!options.length && <span className="claim-choice-empty">Aucun type existant dans la base.</span>}</div></>}</div>;
+}
+
+function ClaimPhotoChoice({ value, onChange }: { value: string | null; onChange: (value: string | null) => void }) {
+  function choose(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) return;
+    if (file.size > 1500000) return;
+    const reader = new FileReader();
+    reader.onload = () => onChange(String(reader.result));
+    reader.readAsDataURL(file);
+  }
+  return <div className="claim-photo-field"><span className="claim-field-label">Photo de pointage</span><div className="claim-photo-picker">{value ? <img src={value} alt="Aperçu de la photo de pointage" /> : <span className="claim-photo-placeholder"><ImagePlus size={18} /> Ajouter depuis la galerie</span>}<label className="button secondary compact"><ImagePlus size={13} /> {value ? "Changer" : "Choisir une photo"}<input type="file" accept="image/png,image/jpeg,image/webp" onChange={choose} hidden /></label>{value && <button type="button" className="icon-button claim-photo-remove" onClick={() => onChange(null)} aria-label="Retirer la photo" title="Retirer la photo"><XCircle size={14} /></button>}</div><small>JPG, PNG ou WebP · 1,5 Mo maximum</small></div>;
+}
+
 export function AttendanceClaimFormModal({ agent, campaign, date, shops, onNotice, onCreated, onClose }: { agent: UserRecord; campaign: CampaignRecord; date: string; shops: ShopRecord[]; onNotice: (notice: Notice) => void; onCreated: (claim: AttendanceClaim) => void; onClose: () => void }) {
+  const isPrivilege = campaign.code === "vodacom-privilege";
   const [arrivalTime, setArrivalTime] = useState("08:00");
   const [departureTime, setDepartureTime] = useState("17:00");
   const [activationCount, setActivationCount] = useState("0");
   const [activationDetails, setActivationDetails] = useState("");
+  const [activationEntries, setActivationEntries] = useState<AttendanceClaimActivation[]>([]);
+  const [activationTypes, setActivationTypes] = useState<string[]>([]);
   const [closingComment, setClosingComment] = useState("");
+  const [pointagePhoto, setPointagePhoto] = useState<string | null>(null);
   const [shopId, setShopId] = useState(agent.permanent_shop_id || "");
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!isPrivilege) return;
+    void loadLeadActionTypes().then(setActivationTypes).catch(() => setActivationTypes([]));
+  }, [isPrivilege]);
+
+  function changeActivationCount(value: string) {
+    const digits = value.replace(/\D/g, "").slice(0, 2);
+    setActivationCount(digits);
+    const count = digits === "" ? 0 : Number.parseInt(digits, 10);
+    setActivationEntries((current) => Array.from({ length: count }, (_, index) => current[index] || { msisdn: "", action_type: "" }));
+  }
+
+  function updateActivation(index: number, field: keyof AttendanceClaimActivation, value: string) {
+    setActivationEntries((current) => current.map((entry, entryIndex) => entryIndex === index ? { ...entry, [field]: value } : entry));
+  }
+
   async function submit(event: FormEvent) {
     event.preventDefault();
-    const count = Number.parseInt(activationCount, 10);
-    if (!Number.isInteger(count) || count < 0 || activationDetails.trim().length < 3 || closingComment.trim().length < 3) {
-      onNotice({ kind: "error", message: "Renseignez un nombre d’activations valide, leur détail et le commentaire de clôture." });
+    const count = Number.parseInt(activationCount || "0", 10);
+    const normalizedEntries = activationEntries.map((entry) => ({ ...entry, msisdn: normalizePhone(entry.msisdn), action_type: entry.action_type.trim() }));
+    if (!Number.isInteger(count) || count < 0 || (isPrivilege && (normalizedEntries.length !== count || normalizedEntries.some((entry) => !isValidMsisdn(entry.msisdn) || !entry.action_type)))) {
+      onNotice({ kind: "error", message: isPrivilege ? "Renseignez le MSISDN et le type de chaque activation." : "Renseignez un nombre d’activations valide et leur détail." });
+      return;
+    }
+    if (!isPrivilege && activationDetails.trim().length < 3) {
+      onNotice({ kind: "error", message: "Précisez le détail des activations réalisées." });
+      return;
+    }
+    if (closingComment.trim().length < 3) {
+      onNotice({ kind: "error", message: "Renseignez le commentaire de clôture." });
       return;
     }
     if (departureTime <= arrivalTime) {
@@ -182,7 +231,8 @@ export function AttendanceClaimFormModal({ agent, campaign, date, shops, onNotic
     }
     setSaving(true);
     try {
-      const claim = await createAttendanceClaim({ userId: agent.id, campaignId: campaign.id, date, arrivalTime, departureTime, activationCount: count, activationDetails, closingComment, shopId: shopId || null });
+      const details = isPrivilege ? normalizedEntries.map((entry, index) => `${index + 1}. ${entry.msisdn} · ${entry.action_type}`).join("\n") : activationDetails.trim();
+      const claim = await createAttendanceClaim({ userId: agent.id, campaignId: campaign.id, date, arrivalTime, departureTime, activationCount: count, activationDetails: details, activationEntries: normalizedEntries, closingComment, pointagePhoto, shopId: shopId || null });
       onCreated(claim);
       onNotice({ kind: "success", message: `Demande envoyée pour le ${formatExportDate(date)}. Elle sera vérifiée par les responsables autorisés.` });
       onClose();
@@ -190,13 +240,15 @@ export function AttendanceClaimFormModal({ agent, campaign, date, shops, onNotic
       onNotice({ kind: "error", message: readableSupabaseError(error, "Impossible d’envoyer la demande de présence.") });
     } finally { setSaving(false); }
   }
-  return <ViewportModal><div className="modal-layer"><button className="modal-backdrop" type="button" aria-label="Fermer la demande" onClick={onClose} /><form className="modal-card attendance-claim-modal" onSubmit={submit}><div className="modal-header"><div><div className="eyebrow"><CalendarDays size={13} /> Demander la validation d’une journée</div><h3>{formatExportDate(date)}</h3><span>{agent.full_name} · {campaign.name}</span></div><button type="button" className="modal-close" onClick={onClose} aria-label="Fermer"><X size={16} /></button></div><p className="modal-helper">Cette demande créera les pointages et le rapport uniquement après acceptation par un administrateur ou le superviseur opérationnel de cette campagne.</p><div className="attendance-claim-time-grid"><label>Heure d’arrivée<input type="time" value={arrivalTime} onChange={(event) => setArrivalTime(event.target.value)} required /></label><label>Heure de départ<input type="time" value={departureTime} onChange={(event) => setDepartureTime(event.target.value)} required /></label></div><ShopChoice value={shopId} shops={shops} onChange={setShopId} /><label>Nombre total d’activations<input type="number" min="0" step="1" value={activationCount} onChange={(event) => setActivationCount(event.target.value)} required /></label><label>Détail des activations<textarea value={activationDetails} onChange={(event) => setActivationDetails(event.target.value)} placeholder="Précisez les activations réalisées…" rows={3} required /></label><label>Commentaire de clôture<textarea value={closingComment} onChange={(event) => setClosingComment(event.target.value)} placeholder="Expliquez la journée et les éventuelles difficultés…" rows={3} required /></label><div className="modal-actions"><button type="button" className="button secondary" onClick={onClose}>Annuler</button><button type="submit" className="button primary" disabled={saving}>{saving ? <LoaderCircle className="spin" size={14} /> : <Send size={14} />} Envoyer la demande</button></div></form></div></ViewportModal>;
+
+  return <ViewportModal><div className="modal-layer"><button className="modal-backdrop" type="button" aria-label="Fermer la demande" onClick={onClose} /><form className="modal-card attendance-claim-modal" onSubmit={submit}><div className="modal-header"><div><div className="eyebrow"><CalendarDays size={13} /> Demander la validation d’une journée</div><h3>{formatExportDate(date)}</h3><span>{agent.full_name} · {campaign.name}</span></div><button type="button" className="modal-close" onClick={onClose} aria-label="Fermer"><X size={16} /></button></div><p className="modal-helper">Cette demande créera les pointages, le rapport et les activations uniquement après acceptation par un responsable autorisé.</p><div className="attendance-claim-time-grid"><label>Heure d’arrivée<input type="time" value={arrivalTime} onChange={(event) => setArrivalTime(event.target.value)} required /></label><label>Heure de départ<input type="time" value={departureTime} onChange={(event) => setDepartureTime(event.target.value)} required /></label></div><ShopChoice value={shopId} shops={shops} onChange={setShopId} /><ClaimPhotoChoice value={pointagePhoto} onChange={setPointagePhoto} /><div className="claim-count-field"><span className="claim-field-label">Nombre total d’activations</span><div className="claim-count-control"><button type="button" onClick={() => changeActivationCount(String(Math.max(0, Number.parseInt(activationCount || "0", 10) - 1)))} aria-label="Réduire le nombre d’activations">−</button><input type="text" inputMode="numeric" pattern="[0-9]*" value={activationCount} onChange={(event) => changeActivationCount(event.target.value)} aria-label="Nombre total d’activations" /><button type="button" onClick={() => changeActivationCount(String(Math.min(99, Number.parseInt(activationCount || "0", 10) + 1)))} aria-label="Augmenter le nombre d’activations">+</button></div></div>{isPrivilege ? <div className="activation-entry-list"><div className="claim-field-label">Détail des activations</div>{activationEntries.length ? activationEntries.map((entry, index) => <div className="activation-entry" key={index}><strong>Activation {index + 1}</strong><label>Numéro de téléphone<input type="tel" inputMode="tel" value={entry.msisdn} onChange={(event) => updateActivation(index, "msisdn", event.target.value)} placeholder="081 234 5678" required /></label><label>Type d’activation<ActivationTypeChoice value={entry.action_type} options={activationTypes} onChange={(value) => updateActivation(index, "action_type", value)} /></label></div>) : <div className="workspace-empty">Indiquez le nombre d’activations pour renseigner leurs détails.</div>}</div> : <label>Détail des activations<textarea value={activationDetails} onChange={(event) => setActivationDetails(event.target.value)} placeholder="Précisez les activations réalisées…" rows={3} required /></label>}<label>Commentaire de clôture<textarea value={closingComment} onChange={(event) => setClosingComment(event.target.value)} placeholder="Expliquez la journée et les éventuelles difficultés…" rows={3} required /></label><div className="modal-actions"><button type="button" className="button secondary" onClick={onClose}>Annuler</button><button type="submit" className="button primary" disabled={saving}>{saving ? <LoaderCircle className="spin" size={14} /> : <Send size={14} />} Envoyer la demande</button></div></form></div></ViewportModal>;
 }
 
 export function AttendanceClaimReviewModal({ claim, agent, campaign, shops, canReview, onNotice, onChanged, onClose }: { claim: AttendanceClaim; agent?: UserRecord; campaign?: CampaignRecord; shops: ShopRecord[]; canReview: boolean; onNotice: (notice: Notice) => void; onChanged?: (claim: AttendanceClaim) => void; onClose: () => void }) {
   const [reviewNote, setReviewNote] = useState(claim.review_note || "");
   const [shopId, setShopId] = useState(claim.shop_id || agent?.permanent_shop_id || "");
   const [saving, setSaving] = useState(false);
+  const activationEntries = Array.isArray(claim.activation_entries) ? claim.activation_entries : [];
   async function review(status: "approved" | "rejected") {
     if (status === "rejected" && reviewNote.trim().length < 3) { onNotice({ kind: "error", message: "Ajoutez une justification avant de rejeter la demande." }); return; }
     setSaving(true);
@@ -207,7 +259,7 @@ export function AttendanceClaimReviewModal({ claim, agent, campaign, shops, canR
       onClose();
     } catch (error) { onNotice({ kind: "error", message: readableSupabaseError(error, "Impossible de traiter la demande de présence.") }); } finally { setSaving(false); }
   }
-  return <ViewportModal><div className="modal-layer"><button className="modal-backdrop" type="button" aria-label="Fermer la demande" onClick={onClose} /><div className="modal-card attendance-claim-review-modal"><div className="modal-header"><div><div className="eyebrow"><CalendarDays size={13} /> Demande de présence</div><h3>{formatExportDate(claim.claim_date)}</h3><span>{agent?.full_name || "Agent"} · {campaign?.name || "Campagne"}</span></div><button type="button" className="modal-close" onClick={onClose} aria-label="Fermer"><X size={16} /></button></div><div className={`attendance-claim-status is-${claim.status}`}><strong>{ATTENDANCE_CLAIM_STATUS_LABELS[claim.status]}</strong><span>{claim.reviewed_at ? `Traitée le ${new Date(claim.reviewed_at).toLocaleDateString("fr-FR")}` : "En attente de vérification"}</span></div><div className="report-summary-grid"><div><small>Horaires demandés</small><strong>{claim.arrival_time} → {claim.departure_time}</strong></div><div><small>Activations</small><strong>{claim.activation_count}</strong></div><div><small>Shop</small><strong>{shops.find((shop) => shop.id === (shopId || claim.shop_id))?.name || "—"}</strong></div></div><div className="attendance-claim-detail"><div><small>Détail des activations</small><p>{claim.activation_details}</p></div><div><small>Commentaire de clôture</small><p>{claim.closing_comment}</p></div></div>{claim.review_note && <div className="attendance-claim-note"><small>Note du responsable</small><p>{claim.review_note}</p></div>}{canReview && claim.status === "pending" && <div className="attendance-claim-review-form"><ShopChoice value={shopId} shops={shops} onChange={setShopId} /><label>Complément ou justification <textarea value={reviewNote} onChange={(event) => setReviewNote(event.target.value)} placeholder="Facultatif pour accepter, obligatoire pour rejeter…" rows={3} /></label><div className="modal-actions"><button type="button" className="button danger-button" onClick={() => void review("rejected")} disabled={saving}><XCircle size={14} /> Rejeter</button><button type="button" className="button primary" onClick={() => void review("approved")} disabled={saving}>{saving ? <LoaderCircle className="spin" size={14} /> : <CheckCircle2 size={14} />} Accepter et générer</button></div></div>}{!canReview && claim.status === "pending" && <div className="workspace-empty">Vous pouvez consulter cette demande, mais seul l’administrateur ou le superviseur opérationnel de l’agent peut la traiter.</div>}</div></div></ViewportModal>;
+  return <ViewportModal><div className="modal-layer"><button className="modal-backdrop" type="button" aria-label="Fermer la demande" onClick={onClose} /><div className="modal-card attendance-claim-review-modal"><div className="modal-header"><div><div className="eyebrow"><CalendarDays size={13} /> Demande de présence</div><h3>{formatExportDate(claim.claim_date)}</h3><span>{agent?.full_name || "Agent"} · {campaign?.name || "Campagne"}</span></div><button type="button" className="modal-close" onClick={onClose} aria-label="Fermer"><X size={16} /></button></div><div className={`attendance-claim-status is-${claim.status}`}><strong>{ATTENDANCE_CLAIM_STATUS_LABELS[claim.status]}</strong><span>{claim.reviewed_at ? `Traitée le ${new Date(claim.reviewed_at).toLocaleDateString("fr-FR")}` : "En attente de vérification"}</span></div><div className="report-summary-grid"><div><small>Horaires demandés</small><strong>{claim.arrival_time} → {claim.departure_time}</strong></div><div><small>Activations</small><strong>{claim.activation_count}</strong></div><div><small>Shop</small><strong>{shops.find((shop) => shop.id === (shopId || claim.shop_id))?.name || "—"}</strong></div></div><div className="attendance-claim-detail"><div><small>Détail des activations</small>{activationEntries.length ? <ul className="claim-activation-list">{activationEntries.map((entry, index) => <li key={`${entry.msisdn}-${index}`}><strong>{entry.msisdn}</strong><span>{entry.action_type}</span></li>)}</ul> : <p>{claim.activation_details}</p>}</div><div><small>Commentaire de clôture</small><p>{claim.closing_comment}</p></div></div>{claim.pointage_photo && <div className="claim-review-photo"><small>Photo de pointage</small><a href={claim.pointage_photo} target="_blank" rel="noreferrer"><img src={claim.pointage_photo} alt="Photo de pointage de la demande" /></a></div>}{claim.review_note && <div className="attendance-claim-note"><small>Note du responsable</small><p>{claim.review_note}</p></div>}{canReview && claim.status === "pending" && <div className="attendance-claim-review-form"><ShopChoice value={shopId} shops={shops} onChange={setShopId} /><label>Complément ou justification <textarea value={reviewNote} onChange={(event) => setReviewNote(event.target.value)} placeholder="Facultatif pour accepter, obligatoire pour rejeter…" rows={3} /></label><div className="modal-actions"><button type="button" className="button danger-button" onClick={() => void review("rejected")} disabled={saving}><XCircle size={14} /> Rejeter</button><button type="button" className="button primary" onClick={() => void review("approved")} disabled={saving}>{saving ? <LoaderCircle className="spin" size={14} /> : <CheckCircle2 size={14} />} Accepter et générer</button></div></div>}{!canReview && claim.status === "pending" && <div className="workspace-empty">Vous pouvez consulter cette demande, mais seul l’administrateur ou le superviseur opérationnel de l’agent peut la traiter.</div>}</div></div></ViewportModal>;
 }
 
 function AttendanceCalendar({ insights, claims = [], canClaim = false, onRequestClaim, onOpenClaim }: { insights: AgentInsights; claims?: AttendanceClaim[]; canClaim?: boolean; onRequestClaim?: (date: string) => void; onOpenClaim?: (claim: AttendanceClaim) => void }) {

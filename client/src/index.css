@@ -1102,3 +1102,33 @@ html { scrollbar-width: thin; scrollbar-color: rgba(158,233,232,.35) rgba(3,11,1
 .attendance-claim-modal .claim-choice-menu, .attendance-claim-review-form .claim-choice-menu { position: absolute; z-index: 1002; right: 0; bottom: calc(100% + 6px); left: 0; display: grid; gap: 2px; max-height: 220px; overflow-y: auto; padding: 5px; border: 1px solid rgba(158,233,232,.24); border-radius: 9px; background: #092336; box-shadow: 0 18px 40px rgba(0,0,0,.34); }
 .attendance-claim-modal .claim-choice-menu button, .attendance-claim-review-form .claim-choice-menu button { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 8px; border: 0; border-radius: 6px; color: #b8cccf; background: transparent; font-size: 9px; text-align: left; }
 .attendance-claim-modal .claim-choice-menu button:hover, .attendance-claim-review-form .claim-choice-menu button:hover { color: #efffff; background: rgba(91,208,209,.12); }
+
+/* Structured attendance claim fields */
+.claim-field-label { display: block; margin-bottom: 6px; color: var(--muted-2); font-size: 8px; text-transform: uppercase; letter-spacing: .06em; }
+.claim-count-field, .activation-entry-list, .claim-photo-field { display: grid; gap: 6px; }
+.claim-count-control { display: grid; grid-template-columns: 34px minmax(0, 1fr) 34px; min-height: 36px; border: 1px solid rgba(188,220,228,.15); border-radius: 9px; overflow: hidden; background: rgba(3,11,14,.35); }
+.claim-count-control button { border: 0; color: var(--cyan); background: rgba(91,208,209,.07); font-size: 18px; line-height: 1; cursor: pointer; }
+.claim-count-control button:hover { background: rgba(91,208,209,.16); }
+.claim-count-control input { width: 100%; min-width: 0; border: 0; border-right: 1px solid rgba(188,220,228,.12); border-left: 1px solid rgba(188,220,228,.12); border-radius: 0; text-align: center; }
+.claim-photo-picker { position: relative; display: flex; align-items: center; gap: 9px; min-height: 78px; padding: 8px; border: 1px dashed rgba(158,233,232,.24); border-radius: 9px; background: rgba(255,255,255,.022); }
+.claim-photo-picker img { width: 64px; height: 60px; border-radius: 7px; object-fit: cover; border: 1px solid rgba(181,239,140,.32); }
+.claim-photo-placeholder { display: flex; align-items: center; gap: 7px; color: var(--muted-2); font-size: 9px; }
+.claim-photo-remove { margin-left: auto; color: #ffc1b5; }
+.claim-photo-field > small { color: var(--muted-2); font-size: 8px; }
+.activation-entry-list { padding: 10px; border: 1px solid rgba(158,233,232,.13); border-radius: 10px; background: rgba(91,208,209,.025); }
+.activation-entry { display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr); align-items: end; gap: 8px; padding: 9px; border: 1px solid rgba(188,220,228,.09); border-radius: 8px; background: rgba(3,11,14,.23); }
+.activation-entry + .activation-entry { margin-top: 6px; }
+.activation-entry > strong { align-self: center; color: var(--lime); font-family: "DM Mono", monospace; font-size: 8px; white-space: nowrap; }
+.activation-entry label { display: grid; gap: 4px; color: var(--muted-2); font-size: 8px; text-transform: uppercase; letter-spacing: .04em; }
+.activation-entry .claim-choice { position: relative; }
+.activation-entry .claim-choice > button { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 6px; min-height: 34px; padding: 0 9px; border: 1px solid rgba(188,220,228,.15); border-radius: 8px; color: #d7e9ea; background: rgba(3,11,14,.35); font-size: 9px; text-align: left; }
+.activation-entry .claim-choice-menu { bottom: auto; top: calc(100% + 6px); }
+.claim-choice-empty { padding: 8px; color: var(--muted-2); font-size: 8px; }
+.claim-review-photo { display: grid; gap: 6px; margin-top: 10px; padding: 10px; border: 1px solid rgba(158,233,232,.12); border-radius: 9px; background: rgba(255,255,255,.022); }
+.claim-review-photo small { color: var(--muted-2); font-size: 8px; text-transform: uppercase; letter-spacing: .06em; }
+.claim-review-photo img { display: block; width: min(100%, 320px); max-height: 220px; border-radius: 8px; object-fit: contain; object-position: left center; background: rgba(0,0,0,.18); }
+.claim-activation-list { display: grid; gap: 5px; margin: 7px 0 0; padding: 0; list-style: none; }
+.claim-activation-list li { display: flex; justify-content: space-between; gap: 8px; padding: 5px 7px; border-radius: 6px; background: rgba(91,208,209,.06); font-size: 9px; }
+.claim-activation-list li strong { color: #d8f8f2; font-family: "DM Mono", monospace; font-size: 8px; }
+.claim-activation-list li span { color: var(--lime); text-align: right; }
+@media (max-width: 560px) { .activation-entry { grid-template-columns: 1fr; align-items: stretch; } .activation-entry > strong { align-self: start; } .claim-photo-picker { flex-wrap: wrap; } }

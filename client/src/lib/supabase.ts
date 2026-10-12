@@ -66,6 +66,7 @@ export type CampaignAssignmentRequest = {
   reviewed_by: string | null;
   review_note: string | null;
 };
+export type AttendanceClaimActivation = { msisdn: string; action_type: string };
 export type AttendanceClaim = {
   id: string;
   user_id: string;
@@ -75,8 +76,10 @@ export type AttendanceClaim = {
   departure_time: string;
   activation_count: number;
   activation_details: string;
+  activation_entries: AttendanceClaimActivation[];
   closing_comment: string;
   shop_id: string | null;
+  pointage_photo: string | null;
   status: "pending" | "approved" | "rejected";
   can_review?: boolean;
   created_at: string;
@@ -460,13 +463,20 @@ export async function requestCampaignAssignment(userId: string, campaignId: stri
   return request as CampaignAssignmentRequest;
 }
 
-export async function createAttendanceClaim(input: { userId: string; campaignId: string; date: string; arrivalTime: string; departureTime: string; activationCount: number; activationDetails: string; closingComment: string; shopId?: string | null }): Promise<AttendanceClaim> {
+export async function createAttendanceClaim(input: { userId: string; campaignId: string; date: string; arrivalTime: string; departureTime: string; activationCount: number; activationDetails: string; activationEntries?: AttendanceClaimActivation[]; closingComment: string; pointagePhoto?: string | null; shopId?: string | null }): Promise<AttendanceClaim> {
   if (!supabaseClient) throw new Error("Configurez Supabase avant d’envoyer une demande de présence.");
-  const { data, error } = await supabaseClient.rpc("create_attendance_claim", { p_user_id: input.userId, p_campaign_id: input.campaignId, p_claim_date: input.date, p_arrival_time: input.arrivalTime, p_departure_time: input.departureTime, p_activation_count: input.activationCount, p_activation_details: input.activationDetails, p_closing_comment: input.closingComment, p_shop_id: input.shopId || null });
+  const { data, error } = await supabaseClient.rpc("create_attendance_claim", { p_user_id: input.userId, p_campaign_id: input.campaignId, p_claim_date: input.date, p_arrival_time: input.arrivalTime, p_departure_time: input.departureTime, p_activation_count: input.activationCount, p_activation_details: input.activationDetails, p_activation_entries: input.activationEntries || [], p_closing_comment: input.closingComment, p_pointage_photo: input.pointagePhoto || null, p_shop_id: input.shopId || null });
   if (error) throw error;
   const claim = Array.isArray(data) ? data[0] : data;
   if (!claim) throw new Error("La demande de présence n’a pas été créée.");
   return claim as AttendanceClaim;
+}
+
+export async function loadLeadActionTypes(): Promise<string[]> {
+  if (!supabaseClient) return [];
+  const { data, error } = await supabaseClient.rpc("list_lead_action_types");
+  if (error) throw error;
+  return ((data || []) as Array<{ action_type?: unknown }>).map((row) => typeof row.action_type === "string" ? row.action_type.trim() : "").filter(Boolean);
 }
 
 export async function loadAttendanceClaims(): Promise<AttendanceClaim[]> {
