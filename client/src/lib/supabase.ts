@@ -67,6 +67,8 @@ export type CampaignAssignmentRequest = {
   review_note: string | null;
 };
 export type AttendanceClaimActivation = { msisdn: string; action_type: string };
+export type AttendanceOverrideStatus = "sick" | "non_working";
+export type AttendanceStatusOverride = { id: string; campaign_id: string; agent_id: string; activity_date: string; status: AttendanceOverrideStatus; reason: string | null; created_by: string | null; created_at: string; updated_at: string };
 export type AttendanceClaim = {
   id: string;
   user_id: string;
@@ -116,8 +118,8 @@ export type DailyReport = {
   checkoutLatitude: number | null;
   checkoutLongitude: number | null;
 };
-export type PresenceRecord = { date: string; status: string; checkin_at: string | null; checkout_at: string | null; note: string | null; lead_count?: number; report?: DailyReport };
-export type AgentInsights = { performance: PerformancePoint[]; presence: PresenceRecord[]; metricLabel: string; campaignStart: string | null; campaignEnd: string | null; pauses: CampaignPause[] };
+export type PresenceRecord = { date: string; status: string; checkin_at: string | null; checkout_at: string | null; note: string | null; lead_count?: number; attendance_override?: AttendanceStatusOverride; report?: DailyReport };
+export type AgentInsights = { performance: PerformancePoint[]; presence: PresenceRecord[]; attendanceOverrides: AttendanceStatusOverride[]; metricLabel: string; campaignStart: string | null; campaignEnd: string | null; pauses: CampaignPause[] };
 export type RegistrationRequest = {
   id: string;
   full_name: string;
@@ -289,6 +291,23 @@ function mergeLeadPresence(entries: PresenceRecord[], leadPresence: Map<string, 
   return Array.from(byDate.values()).sort((a, b) => a.date.localeCompare(b.date));
 }
 
+async function loadAttendanceOverrides(userId: string, campaignId: string): Promise<AttendanceStatusOverride[]> {
+  if (!supabaseClient) return [];
+  const { data, error } = await supabaseClient.rpc("list_campaign_attendance_overrides", { p_viewer_id: activeProfile?.id || userId, p_campaign_id: campaignId, p_agent_id: userId });
+  if (error) throw error;
+  return (data || []) as AttendanceStatusOverride[];
+}
+
+function mergeAttendanceOverrides(entries: PresenceRecord[], overrides: AttendanceStatusOverride[]): PresenceRecord[] {
+  const byDate = new Map(entries.map((entry) => [entry.date.slice(0, 10), { ...entry }] as const));
+  for (const override of overrides) {
+    const date = override.activity_date.slice(0, 10);
+    const previous = byDate.get(date);
+    byDate.set(date, previous ? { ...previous, attendance_override: override } : { date, status: "override", checkin_at: null, checkout_at: null, note: override.reason, attendance_override: override });
+  }
+  return Array.from(byDate.values()).sort((a, b) => a.date.localeCompare(b.date));
+}
+
 function assertSuperAdmin(): UserRecord {
   if (!activeProfile) throw new Error("Connexion administrateur requise avant cette opération.");
   if (activeProfile.role !== "super_admin") throw new Error("Cette opération est réservée au super_admin.");
@@ -331,6 +350,7 @@ export function subscribeToDataChanges(onChange: (table: string) => void, onStat
     "agent_campaign_supervisor_assignments",
     "campaign_assignment_requests",
     "attendance_claims",
+    "campaign_attendance_overrides",
     "user_registration_requests",
   ].forEach((table) => {
     channel.on("postgres_changes", { event: "*", schema: "public", table }, () => onChange(table));
@@ -429,11 +449,12 @@ export async function loadSupervisors(): Promise<UserRecord[]> {
 }
 
 export async function loadAgentInsights(user: UserRecord, campaign: CampaignRecord): Promise<AgentInsights> {
-  if (!supabaseClient) return { performance: [], presence: [], metricLabel: "Performance", campaignStart: campaign.starts_on, campaignEnd: campaign.ends_on, pauses: [] };
+  if (!supabaseClient) return { performance: [], presence: [], attendanceOverrides: [], metricLabel: "Performance", campaignStart: campaign.starts_on, campaignEnd: campaign.ends_on, pauses: [] };
   const { data: pausesData, error: pausesError } = await supabaseClient.from("campaign_pauses").select("starts_on, ends_on, reason").eq("campaign_id", campaign.id).order("starts_on");
   if (pausesError) throw pausesError;
   const pauses = (pausesData || []) as CampaignPause[];
   const leadPresence = await loadLeadPresence(user.id, campaign);
+  const attendanceOverrides = await loadAttendanceOverrides(user.id, campaign.id);
   if (user.user_category === "hostess") {
     // pdf_url peut contenir des valeurs volumineuses et faire expirer la lecture
     // de toute la liste. Le lien est chargé à la demande dans la modale du rapport.
@@ -447,7 +468,8 @@ export async function loadAgentInsights(user: UserRecord, campaign: CampaignReco
     return {
       metricLabel: "Activations",
       performance: rows.map((row) => { const claimedActivations = asNumber(row.activation_count); const amount = claimedActivations && claimedActivations > 0 ? claimedActivations : asNumber(row.amount) ?? ((asNumber(row.priv) || 0) + (asNumber(row.roam) || 0) + (asNumber(row.bund) || 0)); return { date: String(row.date), value: amount, label: `${amount} activations` }; }),
-      presence: mergeLeadPresence(reportPresence, leadPresence),
+      presence: mergeAttendanceOverrides(mergeLeadPresence(reportPresence, leadPresence), attendanceOverrides),
+      attendanceOverrides,
       campaignStart: campaign.starts_on,
       campaignEnd: campaign.ends_on,
       pauses,
@@ -457,7 +479,7 @@ export async function loadAgentInsights(user: UserRecord, campaign: CampaignReco
   const { data: runsData, error: runsError } = await supabaseClient.from("campaign_runs").select("id").eq("campaign_id", campaign.id);
   if (runsError) throw runsError;
   const runIds = ((runsData || []) as Array<{ id: string }>).map((run) => run.id);
-  if (!runIds.length) return { performance: [], presence: mergeLeadPresence([], leadPresence), metricLabel: "Heures terrain", campaignStart: campaign.starts_on, campaignEnd: campaign.ends_on, pauses };
+  if (!runIds.length) return { performance: [], presence: mergeAttendanceOverrides(mergeLeadPresence([], leadPresence), attendanceOverrides), attendanceOverrides, metricLabel: "Heures terrain", campaignStart: campaign.starts_on, campaignEnd: campaign.ends_on, pauses };
   const { data, error } = await supabaseClient.from("ba_daily_attendance").select("id, activity_date, status, checkin_at, checkout_at, closing_comment, activation_count, activation_details, checkin_photo_path").eq("ba_id", user.id).in("campaign_run_id", runIds).order("activity_date");
   if (error) throw error;
   const rows = (data || []) as Array<Record<string, unknown>>;
@@ -465,7 +487,8 @@ export async function loadAgentInsights(user: UserRecord, campaign: CampaignReco
   return {
     metricLabel: "Heures terrain",
     performance: rows.map((row) => { const checkin = typeof row.checkin_at === "string" ? row.checkin_at : null; const checkout = typeof row.checkout_at === "string" ? row.checkout_at : null; const hours = checkin && checkout ? Math.max(0, (new Date(checkout).getTime() - new Date(checkin).getTime()) / 3600000) : row.status === "closed" ? 1 : 0; return { date: String(row.activity_date), value: Number(hours.toFixed(1)), label: `${Number(hours.toFixed(1))} h` }; }),
-    presence: mergeLeadPresence(attendancePresence, leadPresence),
+    presence: mergeAttendanceOverrides(mergeLeadPresence(attendancePresence, leadPresence), attendanceOverrides),
+    attendanceOverrides,
     campaignStart: campaign.starts_on,
     campaignEnd: campaign.ends_on,
     pauses,
@@ -519,10 +542,10 @@ export async function loadMyAttendanceClaims(userId: string): Promise<Attendance
   return (data || []) as AttendanceClaim[];
 }
 
-export async function reviewAttendanceClaim(claimId: string, status: "approved" | "rejected", note = "", shopId: string | null = null): Promise<AttendanceClaim> {
+export async function reviewAttendanceClaim(claimId: string, status: "approved" | "rejected", note = "", shopId: string | null = null, attendanceStatus: AttendanceOverrideStatus | null = null): Promise<AttendanceClaim> {
   const manager = assertCampaignManager();
   if (!supabaseClient) throw new Error("Configurez Supabase avant de traiter la demande de présence.");
-  const { data, error } = await supabaseClient.rpc("review_attendance_claim", { p_claim_id: claimId, p_manager_id: manager.id, p_status: status, p_review_note: note || null, p_shop_id: shopId });
+  const { data, error } = await supabaseClient.rpc("review_attendance_claim", { p_claim_id: claimId, p_manager_id: manager.id, p_status: status, p_review_note: note || null, p_shop_id: shopId, p_attendance_status: attendanceStatus });
   if (error) throw error;
   const claim = Array.isArray(data) ? data[0] : data;
   if (!claim) throw new Error("La demande de présence n’a pas pu être mise à jour.");

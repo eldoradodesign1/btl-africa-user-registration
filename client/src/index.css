@@ -601,6 +601,8 @@ html { scrollbar-width: thin; scrollbar-color: rgba(158,233,232,.35) rgba(3,11,1
 .calendar-day.is-absent { color: #ffc1b5; border-color: rgba(255,154,138,.24); background: rgba(255,154,138,.10); }
 .calendar-day.is-open { color: #bceeed; border-color: rgba(91,208,209,.32); background: rgba(91,208,209,.14); }
 .calendar-day.is-closed { color: #d5f4bd; border-color: rgba(181,239,140,.32); background: rgba(181,239,140,.15); }
+.calendar-day.is-sick { color: #e8d5ff; border-color: rgba(211,181,255,.38); background: rgba(211,181,255,.14); }
+.calendar-day.is-non-working { color: #c2d0d4; border-color: rgba(188,220,228,.22); background: rgba(188,220,228,.10); }
 .calendar-day:not(.is-empty):hover { transform: translateY(-1px); filter: brightness(1.12); }
 .calendar-legend { display: flex; flex-wrap: wrap; gap: 8px 12px; margin-top: 13px; color: var(--muted-2); font-size: 8px; }
 .calendar-legend span { display: inline-flex; align-items: center; gap: 5px; }
@@ -609,6 +611,8 @@ html { scrollbar-width: thin; scrollbar-color: rgba(158,233,232,.35) rgba(3,11,1
 .legend-dot.is-closed { background: var(--lime); }
 .legend-dot.is-open { background: var(--cyan-strong); }
 .legend-dot.is-absent { background: var(--red); }
+.legend-dot.is-sick { background: #d3b5ff; }
+.legend-dot.is-non-working { background: #a7b8bd; }
 .calendar-summary { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 12px; padding-top: 10px; border-top: 1px solid rgba(188,220,228,.08); color: var(--muted-2); font-family: "DM Mono", monospace; font-size: 8px; }
 .calendar-summary b { color: #dbeceb; font-weight: 500; }
 @media (max-width: 560px) { .calendar-day { min-height: 34px; } .calendar-day small { display: none; } .calendar-heading { align-items: flex-start; flex-direction: column; } .calendar-nav { align-self: stretch; justify-content: space-between; } .calendar-nav strong { flex: 1; } }
@@ -1084,6 +1088,11 @@ html { scrollbar-width: thin; scrollbar-color: rgba(158,233,232,.35) rgba(3,11,1
 .attendance-claim-note { margin-top: 9px; border-color: rgba(245,205,120,.18); background: rgba(245,205,120,.045); }
 .attendance-claim-note small { color: var(--amber); }
 .attendance-claim-review-form { display: grid; gap: 9px; margin-top: 13px; padding-top: 12px; border-top: 1px solid rgba(188,220,228,.10); }
+.attendance-resolution-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.attendance-resolution-option { min-height: 34px; padding: 7px 8px; border: 1px solid rgba(188,220,228,.15); border-radius: 8px; color: var(--muted); background: rgba(3,11,14,.3); font-size: 8px; }
+.attendance-resolution-option:hover, .attendance-resolution-option.is-selected { color: #efffff; border-color: rgba(158,233,232,.5); background: rgba(91,208,209,.12); }
+.attendance-resolution-option.is-sick.is-selected { color: #f1e5ff; border-color: rgba(211,181,255,.65); background: rgba(211,181,255,.15); }
+.attendance-resolution-option.is-non_working.is-selected { color: #e8f1f3; border-color: rgba(188,220,228,.45); background: rgba(188,220,228,.13); }
 .attendance-claim-queue .request-queue-row { text-align: left; }
 .calendar-day.claim-pending { border-color: rgba(245,205,120,.70); box-shadow: 0 0 0 1px rgba(245,205,120,.18), 0 0 12px rgba(245,205,120,.12); }
 .calendar-day.claim-approved { border-color: rgba(181,239,140,.72); }
@@ -1091,6 +1100,10 @@ html { scrollbar-width: thin; scrollbar-color: rgba(158,233,232,.35) rgba(3,11,1
 .calendar-day .calendar-claim-mark { position: absolute; top: 3px; right: 5px; color: var(--amber); font-family: "DM Mono", monospace; font-size: 11px; font-weight: 700; }
 .calendar-day { position: relative; }
 .legend-dot.is-claim { background: var(--amber); box-shadow: 0 0 7px rgba(245,205,120,.7); }
+.calendar-cell.state-sick { background: #f5efff; border-color: #d7c3f1; }
+.calendar-cell.state-non_working { background: #eef2f2; border-color: #d9e0e0; }
+.calendar-cell.state-sick strong { color: #76549f; }
+.calendar-cell.state-non_working strong { color: #617479; }
 .calendar-claim-hint { margin-top: 9px; color: var(--muted-2); font-size: 8px; line-height: 1.45; }
 @media (max-width: 560px) { .attendance-claim-time-grid, .attendance-claim-detail { grid-template-columns: 1fr; } .attendance-claim-status { align-items: flex-start; flex-direction: column; } }
 .attendance-claim-modal .claim-choice, .attendance-claim-review-form .claim-choice { position: relative; min-width: 0; }
