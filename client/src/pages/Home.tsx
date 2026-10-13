@@ -50,6 +50,7 @@ import {
 } from "@/lib/supabase";
 import { CopyablePhone } from "@/components/CopyablePhone";
 import BrandLogo from "@/components/BrandLogo";
+import AddressFields, { addressLabel, EMPTY_ADDRESS_DRAFT, type AddressDraft } from "@/components/AddressFields";
 
 type PhoneState = "idle" | "checking" | "valid" | "invalid" | "duplicate" | "error";
 type ToastState = { kind: "success" | "error" | "info"; title: string; message: string; action?: () => void } | null;
@@ -66,7 +67,7 @@ type FormState = {
   whatsappPhone: string;
   whatsappSameAsPhone: boolean;
   dateOfBirth: string;
-  address: string;
+  addressDetails: AddressDraft;
   avatarUrl: string | null;
   role: UserRole;
   category: UserCategory;
@@ -82,7 +83,7 @@ const INITIAL_FORM: FormState = {
   whatsappPhone: "",
   whatsappSameAsPhone: true,
   dateOfBirth: "",
-  address: "",
+  addressDetails: { ...EMPTY_ADDRESS_DRAFT },
   avatarUrl: null,
   role: "agent",
   category: "hostess",
@@ -324,7 +325,14 @@ function Home({ onUserCreated, onNavigateDashboard, agentsOnly = false }: { onUs
         whatsappPhone: normalizedWhatsappPhone,
         whatsappSameAsPhone: form.whatsappSameAsPhone,
         dateOfBirth: form.dateOfBirth || null,
-        address: form.address.trim() || null,
+        address: addressLabel(form.addressDetails),
+        addressProvince: form.addressDetails.provinceName || null,
+        addressCommune: form.addressDetails.commune || null,
+        addressQuartier: form.addressDetails.quartier || null,
+        addressAvenue: form.addressDetails.avenue || null,
+        addressNumber: form.addressDetails.number || null,
+        addressLatitude: form.addressDetails.latitude,
+        addressLongitude: form.addressDetails.longitude,
         avatarUrl: form.avatarUrl,
         password: form.useDefaultPassword ? defaultPasswordForRole(creationRole) : form.password,
         role: creationRole,
@@ -436,7 +444,8 @@ function Home({ onUserCreated, onNavigateDashboard, agentsOnly = false }: { onUs
               </div>
               <label className="password-toggle signup-whatsapp-toggle"><input type="checkbox" checked={form.whatsappSameAsPhone} onChange={(event) => updateForm("whatsappSameAsPhone", event.target.checked)} /><span className="toggle-visual"><Check size={13} /></span><span><strong>WhatsApp</strong><small>Utiliser le numéro M-Pesa</small></span></label>
               {!form.whatsappSameAsPhone && <div className="field-grid two-columns"><div className="field"><label htmlFor="whatsappPhone">Numéro WhatsApp <b>*</b></label><input id="whatsappPhone" value={form.whatsappPhone} onChange={(event) => updateForm("whatsappPhone", event.target.value)} placeholder="081 234 5678" type="tel" inputMode="tel" autoComplete="tel" /></div></div>}
-              <div className="field-grid two-columns profile-extra-fields"><div className="field"><label htmlFor="dateOfBirth">Date de naissance</label><div className="input-wrap"><CalendarDays size={17} /><input id="dateOfBirth" value={form.dateOfBirth} onChange={(event) => updateForm("dateOfBirth", event.target.value)} type="date" /></div></div><div className="field"><label htmlFor="address">Adresse</label><div className="input-wrap"><MapPin size={17} /><input id="address" value={form.address} onChange={(event) => updateForm("address", event.target.value)} placeholder="Quartier, commune, ville" autoComplete="street-address" /></div></div></div>
+              <div className="field-grid two-columns profile-extra-fields"><div className="field"><label htmlFor="dateOfBirth">Date de naissance</label><div className="input-wrap"><CalendarDays size={17} /><input id="dateOfBirth" value={form.dateOfBirth} onChange={(event) => updateForm("dateOfBirth", event.target.value)} type="date" /></div></div></div>
+              <AddressFields value={form.addressDetails} onChange={(addressDetails) => updateForm("addressDetails", addressDetails)} />
               <div className="field profile-photo-field"><label htmlFor="profilePhoto">Photo de profil</label><label className="file-input-control"><ImagePlus size={16} /><span>{form.avatarUrl ? "Photo sélectionnée" : "Choisir une photo"}</span><input id="profilePhoto" type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; if (!file.type.startsWith("image/") || file.size > 520000) { setToast({ kind: "error", title: "Photo invalide", message: "La photo doit être une image de moins de 500 Ko." }); return; } const reader = new FileReader(); reader.onload = () => updateForm("avatarUrl", String(reader.result)); reader.readAsDataURL(file); }} /></label></div>
             </div>
 

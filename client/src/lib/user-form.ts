@@ -32,6 +32,13 @@ export function buildUserPayload(input: {
   whatsappSameAsPhone: boolean;
   dateOfBirth: string | null;
   address: string | null;
+  addressProvince: string | null;
+  addressCommune: string | null;
+  addressQuartier: string | null;
+  addressAvenue: string | null;
+  addressNumber: string | null;
+  addressLatitude: number | null;
+  addressLongitude: number | null;
   avatarUrl?: string | null;
   password: string;
   role: UserRole;
@@ -47,6 +54,13 @@ export function buildUserPayload(input: {
     whatsapp_same_as_phone: input.whatsappSameAsPhone,
     date_of_birth: input.dateOfBirth,
     address: input.address,
+    address_province: input.addressProvince,
+    address_commune: input.addressCommune,
+    address_quartier: input.addressQuartier,
+    address_avenue: input.addressAvenue,
+    address_number: input.addressNumber,
+    address_latitude: input.addressLatitude,
+    address_longitude: input.addressLongitude,
     password_hash: input.password,
     role: input.role,
     user_category: input.category || null,

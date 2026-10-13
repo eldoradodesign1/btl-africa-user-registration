@@ -13,6 +13,13 @@ export type UserRecord = {
   whatsapp_same_as_phone: boolean;
   date_of_birth: string | null;
   address: string | null;
+  address_province: string | null;
+  address_commune: string | null;
+  address_quartier: string | null;
+  address_avenue: string | null;
+  address_number: string | null;
+  address_latitude: number | null;
+  address_longitude: number | null;
   password_hash: string | null;
   role: UserRole;
   user_category: UserCategory | null;
@@ -128,6 +135,13 @@ export type RegistrationRequest = {
   whatsapp_same_as_phone: boolean;
   date_of_birth: string | null;
   address: string | null;
+  address_province: string | null;
+  address_commune: string | null;
+  address_quartier: string | null;
+  address_avenue: string | null;
+  address_number: string | null;
+  address_latitude: number | null;
+  address_longitude: number | null;
   avatar_url: string | null;
   role: "agent";
   user_category: UserCategory | null;
@@ -137,6 +151,9 @@ export type RegistrationRequest = {
   reviewed_by: string | null;
   review_note: string | null;
 };
+export type AddressProvince = { id: string; name: string; code: string | null };
+export type AddressCommune = { id: string; name: string };
+export type AddressQuartier = { id: string; name: string };
 export type SupabaseConnection = { url: string; publishableKey: string };
 export type AdminContext = { profile: UserRecord };
 
@@ -220,7 +237,7 @@ export async function testSupabaseConnection(url: string, publishableKey: string
   if (![200, 206, 403].includes(response.status)) throw new Error(`Connexion refusée (${response.status}).`);
 }
 
-const safeUserColumns = "id, full_name, phone, whatsapp_phone, whatsapp_same_as_phone, date_of_birth, address, role, user_category, is_active, supervisor_id, permanent_shop_id, avatar_url, profile_updated_at";
+const safeUserColumns = "id, full_name, phone, whatsapp_phone, whatsapp_same_as_phone, date_of_birth, address, address_province, address_commune, address_quartier, address_avenue, address_number, address_latitude, address_longitude, role, user_category, is_active, supervisor_id, permanent_shop_id, avatar_url, profile_updated_at";
 const safeCampaignColumns = "id, code, name, campaign_type, status, starts_on, ends_on";
 const safeShopColumns = "id, name, city, type";
 const safeAssignmentColumns = "id, user_id, campaign_id, is_active, assigned_at, assigned_by";
@@ -427,6 +444,27 @@ export async function loadShops(): Promise<ShopRecord[]> {
   return (data || []) as ShopRecord[];
 }
 
+export async function loadAddressProvinces(): Promise<AddressProvince[]> {
+  if (!supabaseClient) return [];
+  const { data, error } = await supabaseClient.rpc("list_address_provinces");
+  if (error) throw error;
+  return (data || []) as AddressProvince[];
+}
+
+export async function loadAddressCommunes(provinceId: string): Promise<AddressCommune[]> {
+  if (!supabaseClient || !provinceId) return [];
+  const { data, error } = await supabaseClient.rpc("list_address_communes", { p_province_id: provinceId });
+  if (error) throw error;
+  return (data || []) as AddressCommune[];
+}
+
+export async function loadAddressQuartiers(provinceId: string, communeName: string): Promise<AddressQuartier[]> {
+  if (!supabaseClient || !provinceId || !communeName) return [];
+  const { data, error } = await supabaseClient.rpc("list_address_quartiers", { p_province_id: provinceId, p_commune_name: communeName });
+  if (error) throw error;
+  return (data || []) as AddressQuartier[];
+}
+
 export async function loadCampaignAssignments(): Promise<CampaignAssignment[]> {
   if (!supabaseClient) return [];
   const { data, error } = await supabaseClient.from("user_campaign_assignments").select(safeAssignmentColumns).eq("is_active", true);
@@ -570,12 +608,12 @@ export async function reviewCampaignAssignmentRequest(requestId: string, approve
   return request as CampaignAssignmentRequest;
 }
 
-export async function updateMyProfile(input: { fullName: string; phone: string; currentPassword: string; password?: string; avatarUrl?: string | null; avatarChanged?: boolean }): Promise<UserRecord> {
+export async function updateMyProfile(input: { fullName: string; phone: string; currentPassword: string; password?: string; avatarUrl?: string | null; avatarChanged?: boolean; address?: string | null; addressProvince?: string | null; addressCommune?: string | null; addressQuartier?: string | null; addressAvenue?: string | null; addressNumber?: string | null; addressLatitude?: number | null; addressLongitude?: number | null }): Promise<UserRecord> {
   if (!activeProfile || !supabaseClient) throw new Error("Connexion requise avant de modifier votre profil.");
   const normalizedPhone = normalizePhone(input.phone);
   if (!isValidMsisdn(normalizedPhone)) throw new Error("Le MSISDN fourni est invalide.");
   if (!input.currentPassword) throw new Error("Le mot de passe actuel est requis pour confirmer cette modification.");
-  const { data, error } = await supabaseClient.rpc("update_my_profile", { p_user_id: activeProfile.id, p_full_name: input.fullName.trim(), p_phone: normalizedPhone, p_password: input.password || null, p_avatar_url: input.avatarChanged ? input.avatarUrl ?? null : activeProfile.avatar_url, p_current_password: input.currentPassword });
+  const { data, error } = await supabaseClient.rpc("update_my_profile", { p_user_id: activeProfile.id, p_full_name: input.fullName.trim(), p_phone: normalizedPhone, p_password: input.password || null, p_avatar_url: input.avatarChanged ? input.avatarUrl ?? null : activeProfile.avatar_url, p_current_password: input.currentPassword, p_address: input.address ?? activeProfile.address, p_address_province: input.addressProvince ?? activeProfile.address_province, p_address_commune: input.addressCommune ?? activeProfile.address_commune, p_address_quartier: input.addressQuartier ?? activeProfile.address_quartier, p_address_avenue: input.addressAvenue ?? activeProfile.address_avenue, p_address_number: input.addressNumber ?? activeProfile.address_number, p_address_latitude: input.addressLatitude ?? activeProfile.address_latitude, p_address_longitude: input.addressLongitude ?? activeProfile.address_longitude });
   if (error) throw error;
   const row = Array.isArray(data) ? data[0] : data;
   if (!row) throw new Error("Le profil n’a pas pu être mis à jour.");
@@ -612,6 +650,13 @@ export async function insertUser(payload: UserInsert): Promise<UserRecord> {
     p_whatsapp_same_as_phone: payload.whatsapp_same_as_phone,
     p_date_of_birth: payload.date_of_birth,
     p_address: payload.address,
+    p_address_province: payload.address_province,
+    p_address_commune: payload.address_commune,
+    p_address_quartier: payload.address_quartier,
+    p_address_avenue: payload.address_avenue,
+    p_address_number: payload.address_number,
+    p_address_latitude: payload.address_latitude,
+    p_address_longitude: payload.address_longitude,
     p_avatar_url: payload.avatar_url,
   });
   if (error) throw error;
@@ -620,7 +665,7 @@ export async function insertUser(payload: UserInsert): Promise<UserRecord> {
   return { ...row, password_hash: null } as UserRecord;
 }
 
-export async function createRegistrationRequest(input: { fullName: string; phone: string; whatsappPhone: string | null; whatsappSameAsPhone: boolean; dateOfBirth: string | null; address: string | null; avatarUrl: string | null; password: string; category: UserCategory }): Promise<RegistrationRequest> {
+export async function createRegistrationRequest(input: { fullName: string; phone: string; whatsappPhone: string | null; whatsappSameAsPhone: boolean; dateOfBirth: string | null; address: string | null; addressProvince: string | null; addressCommune: string | null; addressQuartier: string | null; addressAvenue: string | null; addressNumber: string | null; addressLatitude: number | null; addressLongitude: number | null; avatarUrl: string | null; password: string; category: UserCategory }): Promise<RegistrationRequest> {
   if (!supabaseClient) throw new Error("Configurez Supabase avant de créer une demande.");
   const normalizedPhone = normalizePhone(input.phone);
   if (!isValidMsisdn(normalizedPhone)) throw new Error("Le MSISDN fourni est invalide.");
@@ -633,13 +678,20 @@ export async function createRegistrationRequest(input: { fullName: string; phone
     p_whatsapp_same_as_phone: input.whatsappSameAsPhone,
     p_date_of_birth: input.dateOfBirth,
     p_address: input.address,
+    p_address_province: input.addressProvince,
+    p_address_commune: input.addressCommune,
+    p_address_quartier: input.addressQuartier,
+    p_address_avenue: input.addressAvenue,
+    p_address_number: input.addressNumber,
+    p_address_latitude: input.addressLatitude,
+    p_address_longitude: input.addressLongitude,
     p_avatar_url: input.avatarUrl,
     p_password_hash: input.password,
     p_user_category: input.category,
   });
   if (error) throw error;
   const request = Array.isArray(data) ? data[0] : data;
-  return request ? mapRequest(request) : { id, full_name: input.fullName.trim(), phone: normalizedPhone, whatsapp_phone: input.whatsappPhone, whatsapp_same_as_phone: input.whatsappSameAsPhone, date_of_birth: input.dateOfBirth, address: input.address, avatar_url: input.avatarUrl, role: "agent", user_category: input.category, status: "pending", created_at: new Date().toISOString(), reviewed_at: null, reviewed_by: null, review_note: null };
+  return request ? mapRequest(request) : { id, full_name: input.fullName.trim(), phone: normalizedPhone, whatsapp_phone: input.whatsappPhone, whatsapp_same_as_phone: input.whatsappSameAsPhone, date_of_birth: input.dateOfBirth, address: input.address, address_province: input.addressProvince, address_commune: input.addressCommune, address_quartier: input.addressQuartier, address_avenue: input.addressAvenue, address_number: input.addressNumber, address_latitude: input.addressLatitude, address_longitude: input.addressLongitude, avatar_url: input.avatarUrl, role: "agent", user_category: input.category, status: "pending", created_at: new Date().toISOString(), reviewed_at: null, reviewed_by: null, review_note: null };
 }
 
 export async function loadPendingRegistrationRequests(): Promise<RegistrationRequest[]> {
