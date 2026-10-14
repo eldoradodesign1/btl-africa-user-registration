@@ -40,6 +40,22 @@ export type CampaignRecord = {
   starts_on: string | null;
   ends_on: string | null;
 };
+export type EventDay = {
+  id: string;
+  campaign_id: string;
+  event_date: string;
+  arrival_from: string;
+  arrival_until: string;
+  departure_from: string;
+  departure_until: string;
+};
+export type CreateEventInput = {
+  code: string;
+  name: string;
+  startsOn: string;
+  endsOn: string;
+  days: Array<Pick<EventDay, "event_date" | "arrival_from" | "arrival_until" | "departure_from" | "departure_until">>;
+};
 export type ShopRecord = {
   id: string;
   name: string;
@@ -126,7 +142,7 @@ export type DailyReport = {
   checkoutLongitude: number | null;
 };
 export type PresenceRecord = { date: string; status: string; checkin_at: string | null; checkout_at: string | null; note: string | null; lead_count?: number; attendance_override?: AttendanceStatusOverride; report?: DailyReport };
-export type AgentInsights = { performance: PerformancePoint[]; presence: PresenceRecord[]; attendanceOverrides: AttendanceStatusOverride[]; metricLabel: string; campaignStart: string | null; campaignEnd: string | null; pauses: CampaignPause[] };
+export type AgentInsights = { performance: PerformancePoint[]; presence: PresenceRecord[]; attendanceOverrides: AttendanceStatusOverride[]; metricLabel: string; campaignStart: string | null; campaignEnd: string | null; pauses: CampaignPause[]; eventDays: EventDay[] };
 export type RegistrationRequest = {
   id: string;
   full_name: string;
@@ -437,6 +453,30 @@ export async function loadCampaigns(): Promise<CampaignRecord[]> {
   return (data || []) as CampaignRecord[];
 }
 
+export async function loadEventDays(campaignId: string): Promise<EventDay[]> {
+  if (!supabaseClient || !campaignId) return [];
+  const { data, error } = await supabaseClient.rpc("list_event_days", { p_campaign_id: campaignId });
+  if (error) throw error;
+  return (data || []) as EventDay[];
+}
+
+export async function createEventCampaign(input: CreateEventInput): Promise<CampaignRecord> {
+  if (!activeProfile || !supabaseClient) throw new Error("Connexion administrative requise avant de créer un événement.");
+  if (!["admin", "super_admin", "sub_admin"].includes(activeProfile.role)) throw new Error("Seuls les administrateurs et la coordination peuvent créer un événement.");
+  const { data, error } = await supabaseClient.rpc("create_event_campaign", {
+    p_creator_id: activeProfile.id,
+    p_code: input.code.trim(),
+    p_name: input.name.trim(),
+    p_starts_on: input.startsOn,
+    p_ends_on: input.endsOn,
+    p_days: input.days,
+  });
+  if (error) throw error;
+  const campaign = Array.isArray(data) ? data[0] : data;
+  if (!campaign) throw new Error("La création de l’événement n’a pas été confirmée.");
+  return campaign as CampaignRecord;
+}
+
 export async function loadShops(): Promise<ShopRecord[]> {
   if (!supabaseClient) return [];
   const { data, error } = await supabaseClient.from("shops").select(safeShopColumns).order("name");
@@ -487,10 +527,11 @@ export async function loadSupervisors(): Promise<UserRecord[]> {
 }
 
 export async function loadAgentInsights(user: UserRecord, campaign: CampaignRecord): Promise<AgentInsights> {
-  if (!supabaseClient) return { performance: [], presence: [], attendanceOverrides: [], metricLabel: "Performance", campaignStart: campaign.starts_on, campaignEnd: campaign.ends_on, pauses: [] };
+  if (!supabaseClient) return { performance: [], presence: [], attendanceOverrides: [], metricLabel: "Performance", campaignStart: campaign.starts_on, campaignEnd: campaign.ends_on, pauses: [], eventDays: [] };
   const { data: pausesData, error: pausesError } = await supabaseClient.from("campaign_pauses").select("starts_on, ends_on, reason").eq("campaign_id", campaign.id).order("starts_on");
   if (pausesError) throw pausesError;
   const pauses = (pausesData || []) as CampaignPause[];
+  const eventDays = campaign.campaign_type === "event" ? await loadEventDays(campaign.id) : [];
   const leadPresence = await loadLeadPresence(user.id, campaign);
   const attendanceOverrides = await loadAttendanceOverrides(user.id, campaign.id);
   if (user.user_category === "hostess") {
@@ -511,13 +552,14 @@ export async function loadAgentInsights(user: UserRecord, campaign: CampaignReco
       campaignStart: campaign.starts_on,
       campaignEnd: campaign.ends_on,
       pauses,
+      eventDays,
     };
   }
 
   const { data: runsData, error: runsError } = await supabaseClient.from("campaign_runs").select("id").eq("campaign_id", campaign.id);
   if (runsError) throw runsError;
   const runIds = ((runsData || []) as Array<{ id: string }>).map((run) => run.id);
-  if (!runIds.length) return { performance: [], presence: mergeAttendanceOverrides(mergeLeadPresence([], leadPresence), attendanceOverrides), attendanceOverrides, metricLabel: "Heures terrain", campaignStart: campaign.starts_on, campaignEnd: campaign.ends_on, pauses };
+  if (!runIds.length) return { performance: [], presence: mergeAttendanceOverrides(mergeLeadPresence([], leadPresence), attendanceOverrides), attendanceOverrides, metricLabel: "Heures terrain", campaignStart: campaign.starts_on, campaignEnd: campaign.ends_on, pauses, eventDays };
   const { data, error } = await supabaseClient.from("ba_daily_attendance").select("id, activity_date, status, checkin_at, checkout_at, closing_comment, activation_count, activation_details, checkin_photo_path").eq("ba_id", user.id).in("campaign_run_id", runIds).order("activity_date");
   if (error) throw error;
   const rows = (data || []) as Array<Record<string, unknown>>;
@@ -530,6 +572,7 @@ export async function loadAgentInsights(user: UserRecord, campaign: CampaignReco
     campaignStart: campaign.starts_on,
     campaignEnd: campaign.ends_on,
     pauses,
+    eventDays,
   };
 }
 

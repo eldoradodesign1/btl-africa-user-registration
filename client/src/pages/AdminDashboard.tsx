@@ -1,6 +1,6 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type FormEvent, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { createPortal } from "react-dom";
-import { AlertCircle, BriefcaseBusiness, CalendarDays, CheckCircle2, ChevronDown, Clock3, Database, Download, FilePenLine, FileSpreadsheet, FileText, Filter, ImagePlus, LayoutGrid, List, LoaderCircle, LockKeyhole, LogIn, LogOut, MapPin, PieChart, RefreshCw, Search, ServerCog, ShieldCheck, Trash2, UserCheck, UserPlus, UserCircle2, UserRound, UserRoundPlus, X, XCircle } from "lucide-react";
+import { AlertCircle, BriefcaseBusiness, CalendarDays, CalendarPlus, CheckCircle2, ChevronDown, Clock3, Database, Download, FilePenLine, FileSpreadsheet, FileText, Filter, ImagePlus, LayoutGrid, List, LoaderCircle, LockKeyhole, LogIn, LogOut, MapPin, PieChart, RefreshCw, Search, ServerCog, ShieldCheck, Trash2, UserCheck, UserPlus, UserCircle2, UserRound, UserRoundPlus, X, XCircle } from "lucide-react";
 import { CopyablePhone, CopyableValue } from "@/components/CopyablePhone";
 import RoleWorkspace, { ATTENDANCE_STATE_LABELS, AgentDetailModal, Avatar, AttendanceClaimReviewModal, ProfileModal, ProfilePhotoPreviewModal, UserDetailModal, buildAttendanceCalendar, getAttendanceCalendarMetrics, renderAttendanceCalendarHtml } from "@/components/RoleWorkspace";
 import AddressFields, { addressCompletionPercent, addressLabel, EMPTY_ADDRESS_DRAFT, type AddressDraft } from "@/components/AddressFields";
@@ -11,6 +11,7 @@ import {
   approveRegistrationRequest,
   clearSupabaseConnection,
   configureSupabase,
+  createEventCampaign,
   createRegistrationRequest,
   deleteUser,
   getAdminContext,
@@ -44,6 +45,7 @@ import {
   type AttendanceClaim,
   type CampaignRecord,
   type AgentInsights,
+  type CreateEventInput,
   type RegistrationRequest,
   type UserCategory,
   type UserRecord,
@@ -57,6 +59,9 @@ const ATTENDANCE_CLAIM_STATUS_NAMES: Record<AttendanceClaim["status"], string> =
 type EditDraft = Pick<UserRecord, "id" | "full_name" | "phone" | "role" | "user_category" | "is_active" | "supervisor_id" | "permanent_shop_id">;
 type CustomSelectProps = { value: string; options: Array<{ value: string; label: string }>; placeholder: string; onChange: (value: string) => void; ariaLabel: string };
 type LoginMode = "signin" | "signup";
+
+type EventDayDraft = CreateEventInput["days"][number];
+type EventDraft = CreateEventInput & { codeTouched: boolean };
 
 type SignupForm = {
   fullName: string;
@@ -104,6 +109,26 @@ function CustomSelect({ value, options, placeholder, onChange, ariaLabel }: Cust
 
 function escapeCsv(value: unknown): string { return `"${String(value ?? "").replaceAll('"', '""')}"`; }
 function escapeHtml(value: unknown): string { return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;"); }
+
+function todayDateInput(): string { return new Date().toISOString().slice(0, 10); }
+function eventCodeFromName(name: string): string {
+  const slug = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 72);
+  return slug.length >= 3 ? slug : "event-nouveau";
+}
+function dateKeysBetween(start: string, end: string): string[] {
+  if (!start || !end || start > end) return [];
+  const keys: string[] = [];
+  const cursor = new Date(`${start}T00:00:00Z`);
+  const last = new Date(`${end}T00:00:00Z`);
+  while (cursor <= last) {
+    keys.push(cursor.toISOString().slice(0, 10));
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return keys;
+}
+function defaultEventDay(date: string): EventDayDraft {
+  return { event_date: date, arrival_from: "", arrival_until: "", departure_from: "", departure_until: "" };
+}
 
 function ModalLayer({ children }: { children: React.ReactNode }) {
   if (typeof document === "undefined") return null;
@@ -212,6 +237,7 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
   const [selectedUserProfile, setSelectedUserProfile] = useState<UserRecord | null>(null);
   const [galleryPhotoUser, setGalleryPhotoUser] = useState<UserRecord | null>(null);
   const [campaignDraft, setCampaignDraft] = useState<UserRecord | null>(null);
+  const [eventDraft, setEventDraft] = useState<EventDraft | null>(null);
   const [selectedAttendanceClaim, setSelectedAttendanceClaim] = useState<AttendanceClaim | null>(null);
   const [attendanceClaimsMenuOpen, setAttendanceClaimsMenuOpen] = useState(false);
   const [expandedQueues, setExpandedQueues] = useState({ registration: true, claims: true });
@@ -239,6 +265,7 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
   const canManage = effectiveProfile?.role === "admin" || effectiveProfile?.role === "super_admin";
   const canManageCampaigns = effectiveProfile?.role === "admin" || effectiveProfile?.role === "super_admin" || effectiveProfile?.role === "supervisor" || effectiveProfile?.role === "sub_admin";
   const canCreateUsers = Boolean(effectiveProfile && ["admin", "super_admin", "supervisor", "sub_admin"].includes(effectiveProfile.role));
+  const canCreateEvents = Boolean(effectiveProfile && !isSimulation && ["admin", "super_admin", "sub_admin"].includes(effectiveProfile.role));
   const isReadOnly = Boolean(effectiveProfile && !canManage && !canManageCampaigns);
   const simulationControl = profile?.role === "super_admin" && effectiveProfile ? <SimulationBar masterUser={profile} effectiveUser={effectiveProfile} users={users} onSelectUser={handleSimulationSelect} onExit={handleSimulationExit} /> : null;
   function toggleQueue(queue: keyof typeof expandedQueues) {
@@ -897,6 +924,51 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
     }
   }
 
+  function openEventCreation() {
+    if (!canCreateEvents) return;
+    const start = todayDateInput();
+    setEventDraft({ code: "", name: "", startsOn: start, endsOn: start, days: [defaultEventDay(start)], codeTouched: false });
+  }
+
+  function updateEventDates(field: "startsOn" | "endsOn", value: string) {
+    setEventDraft((current) => {
+      if (!current) return current;
+      const next = { ...current, [field]: value } as EventDraft;
+      if (next.startsOn && next.endsOn && next.startsOn <= next.endsOn) {
+        const existing = new Map(current.days.map((day) => [day.event_date, day]));
+        next.days = dateKeysBetween(next.startsOn, next.endsOn).map((date) => existing.get(date) || defaultEventDay(date));
+      }
+      return next;
+    });
+  }
+
+  function updateEventDay(date: string, field: keyof Omit<EventDayDraft, "event_date">, value: string) {
+    setEventDraft((current) => current ? { ...current, days: current.days.map((day) => day.event_date === date ? { ...day, [field]: value } : day) } : current);
+  }
+
+  async function saveEvent(event: FormEvent) {
+    event.preventDefault();
+    if (!eventDraft) return;
+    const name = eventDraft.name.trim();
+    const code = eventDraft.code.trim().toLowerCase();
+    const days = eventDraft.days;
+    if (name.length < 2) { setNotice({ kind: "error", message: "Donnez un nom à l’événement." }); return; }
+    if (!/^[a-z0-9][a-z0-9-]{2,79}$/.test(code)) { setNotice({ kind: "error", message: "Le code doit contenir au moins 3 caractères : lettres minuscules, chiffres et tirets." }); return; }
+    if (!eventDraft.startsOn || !eventDraft.endsOn || eventDraft.startsOn > eventDraft.endsOn) { setNotice({ kind: "error", message: "Vérifiez la période de l’événement." }); return; }
+    if (days.length !== dateKeysBetween(eventDraft.startsOn, eventDraft.endsOn).length || days.some((day) => !day.arrival_from || !day.arrival_until || !day.departure_from || !day.departure_until)) { setNotice({ kind: "error", message: "Renseignez les quatre horaires pour chaque journée." }); return; }
+    setActionLoading(true);
+    try {
+      await createEventCampaign({ code, name, startsOn: eventDraft.startsOn, endsOn: eventDraft.endsOn, days });
+      setEventDraft(null);
+      setNotice({ kind: "success", message: `L’événement « ${name} » a été créé.` });
+      await refreshUsers(profile, true, new Set(["campaigns"]));
+    } catch (error) {
+      setNotice({ kind: "error", message: readableSupabaseError(error, "Impossible de créer l’événement.") });
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
   async function saveEdit(event: FormEvent) {
     event.preventDefault();
     if (!editDraft) return;
@@ -967,7 +1039,7 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
   }
 
   return <section className="admin-dashboard glass-card">{simulationControl}
-    <div className="dashboard-header"><div className="dashboard-title"><div className="heading-icon"><ServerCog size={19} /></div><div><div className="eyebrow"><ShieldCheck size={13} /> Console sécurisée</div><h2>Tableau de bord administrateur</h2></div></div><div className="dashboard-actions">{effectiveProfile && <span className="session-chip"><span className="session-dot" />{effectiveProfile.full_name} · {activeProfileRoleLabel(effectiveProfile)}</span>}{canCreateUsers && !isSimulation && <button className="button primary compact dashboard-create-user" type="button" onClick={() => onRequestCreate(!canManage)}><UserPlus size={14} /> {canManage ? "Nouvel utilisateur" : "Ajouter un agent"}</button>}{profile && <button className="icon-button" type="button" onClick={() => void handleLogout()} aria-label="Se déconnecter" title="Se déconnecter"><LogOut size={15} /></button>}{configured && profile?.role === "super_admin" && !isSimulation && <button className="icon-button" type="button" onClick={() => setShowConfig(true)} aria-label="Configurer la base de données" title="Configurer la base de données"><Database size={16} /></button>}</div></div>{effectiveProfile && <div className="admin-profile-hero"><div className="admin-profile-photo"><button type="button" className="workspace-profile-photo-button" onClick={() => setProfilePhotoPreviewOpen(true)} aria-label="Agrandir ma photo de profil"><Avatar user={effectiveProfile!} size="large" /></button><button type="button" className="workspace-profile-edit" onClick={() => isSimulation ? setNotice({ kind: "error", message: "Le profil est indisponible pendant une simulation." }) : setProfileOpen(true)} aria-label="Modifier mon profil" title="Modifier mon profil"><FilePenLine size={11} /></button></div><div><div className="eyebrow"><UserCircle2 size={13} /> Profil actif</div><h3>{effectiveProfile?.full_name || "Utilisateur"}</h3><p>{effectiveProfile ? activeProfileRoleLabel(effectiveProfile) : ""} · Gérez vos informations personnelles depuis la photo.</p></div></div>}
+    <div className="dashboard-header"><div className="dashboard-title"><div className="heading-icon"><ServerCog size={19} /></div><div><div className="eyebrow"><ShieldCheck size={13} /> Console sécurisée</div><h2>Tableau de bord administrateur</h2></div></div><div className="dashboard-actions">{effectiveProfile && <span className="session-chip"><span className="session-dot" />{effectiveProfile.full_name} · {activeProfileRoleLabel(effectiveProfile)}</span>}{canCreateUsers && !isSimulation && <button className="button primary compact dashboard-create-user" type="button" onClick={() => onRequestCreate(!canManage)}><UserPlus size={14} /> {canManage ? "Nouvel utilisateur" : "Ajouter un agent"}</button>}{canCreateEvents && <button className="button secondary compact dashboard-create-event" type="button" onClick={openEventCreation}><CalendarPlus size={14} /> Nouvel événement</button>}{profile && <button className="icon-button" type="button" onClick={() => void handleLogout()} aria-label="Se déconnecter" title="Se déconnecter"><LogOut size={15} /></button>}{configured && profile?.role === "super_admin" && !isSimulation && <button className="icon-button" type="button" onClick={() => setShowConfig(true)} aria-label="Configurer la base de données" title="Configurer la base de données"><Database size={16} /></button>}</div></div>{effectiveProfile && <div className="admin-profile-hero"><div className="admin-profile-photo"><button type="button" className="workspace-profile-photo-button" onClick={() => setProfilePhotoPreviewOpen(true)} aria-label="Agrandir ma photo de profil"><Avatar user={effectiveProfile!} size="large" /></button><button type="button" className="workspace-profile-edit" onClick={() => isSimulation ? setNotice({ kind: "error", message: "Le profil est indisponible pendant une simulation." }) : setProfileOpen(true)} aria-label="Modifier mon profil" title="Modifier mon profil"><FilePenLine size={11} /></button></div><div><div className="eyebrow"><UserCircle2 size={13} /> Profil actif</div><h3>{effectiveProfile?.full_name || "Utilisateur"}</h3><p>{effectiveProfile ? activeProfileRoleLabel(effectiveProfile) : ""} · Gérez vos informations personnelles depuis la photo.</p></div></div>}
     {notice && <div className={`dashboard-notice ${notice.kind}`}><span>{notice.kind === "success" ? <CheckCircle2 size={15} /> : <AlertCircle size={15} />}</span>{notice.message}<button type="button" onClick={() => setNotice(null)} aria-label="Fermer"><X size={14} /></button></div>}
     {!configured && !showConfig && <div className="dashboard-empty"><ServerCog size={27} /><strong>Connectez votre projet Supabase</strong><button className="button primary compact" type="button" onClick={() => setShowConfig(true)}><Database size={14} /> Configurer</button></div>}
     {configured && !isAuthenticated && !showConfig && <>
@@ -1014,6 +1086,7 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
     {passwordAssistOpen && <ModalLayer><button className="modal-backdrop" type="button" aria-label="Fermer l’assistance mot de passe" onClick={() => { setPasswordAssistOpen(false); setPasswordAssistError(""); }} /><form className="modal-card password-assistance-modal" onSubmit={unlockPasswordAssistance}><div className="modal-header"><div><div className="eyebrow"><LockKeyhole size={13} /> Assistance superadmin</div><h3>Afficher les mots de passe</h3><span>Une réauthentification est requise à chaque déverrouillage.</span></div><button type="button" className="modal-close" onClick={() => { setPasswordAssistOpen(false); setPasswordAssistError(""); }} aria-label="Fermer"><X size={16} /></button></div><div className="password-assistance-warning"><LockKeyhole size={15} /><p>Cette action affiche les valeurs enregistrées dans <code>public.users</code> uniquement pour le superadmin réel. Elles ne sont jamais chargées dans la liste standard.</p></div><label>Mot de passe actuel du superadmin<input value={passwordAssistInput} onChange={(event) => setPasswordAssistInput(event.target.value)} type="password" autoComplete="current-password" autoFocus required /></label>{passwordAssistError && <div className="connection-test error">{passwordAssistError}</div>}<div className="modal-actions"><button type="button" className="button secondary" onClick={() => { setPasswordAssistOpen(false); setPasswordAssistError(""); }}>Annuler</button><button type="submit" className="button primary" disabled={passwordAssistLoading}>{passwordAssistLoading ? <LoaderCircle className="spin" size={14} /> : <LockKeyhole size={14} />} Déverrouiller</button></div></form></ModalLayer>}
     {showConfig && <ModalLayer><button className="modal-backdrop" type="button" aria-label="Fermer" onClick={() => configured && setShowConfig(false)} /><form className="modal-card config-modal" onSubmit={handleSetup}><div className="modal-header"><div><div className="eyebrow"><Database size={13} /> Connexion</div><h3>Base Supabase</h3></div>{configured && <button type="button" className="modal-close" onClick={() => setShowConfig(false)} aria-label="Fermer"><X size={16} /></button>}</div><label>URL du projet<input value={setupUrl} onChange={(event) => setSetupUrl(event.target.value)} placeholder="https://votre-projet.supabase.co" required /></label><label>Clé publishable<input value={setupKey} onChange={(event) => setSetupKey(event.target.value)} placeholder="Clé publishable / anon" type="password" autoComplete="off" required /></label>{connectionTest && <div className={`connection-test ${connectionTest.kind}`}><span>{connectionTest.kind === "success" ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}</span>{connectionTest.message}</div>}<div className="modal-actions"><button type="button" className="button secondary" onClick={() => void handleTestConnection()} disabled={testingConnection}>{testingConnection ? <LoaderCircle className="spin" size={14} /> : <Database size={14} />} Tester</button><button type="submit" className="button primary" disabled={testingConnection}><CheckCircle2 size={14} /> Enregistrer</button></div>{configured && <button type="button" className="text-button danger config-disconnect" onClick={handleDisconnect}>Déconnecter ce projet</button>}</form></ModalLayer>}
     {deleteCandidate && <ModalLayer><button className="modal-backdrop" type="button" aria-label="Fermer" onClick={() => setDeleteCandidate(null)} /><div className="modal-card confirm-card"><div className="danger-icon"><Trash2 size={19} /></div><h3>Supprimer cet utilisateur ?</h3><p><strong>{deleteCandidate.full_name}</strong> · <CopyablePhone value={deleteCandidate.phone} />La ligne sera supprimée définitivement de <code>public.users</code>.</p><div className="modal-actions"><button type="button" className="button secondary" onClick={() => setDeleteCandidate(null)}>Annuler</button><button type="button" className="button danger-button" onClick={() => void confirmDelete()} disabled={actionLoading}>{actionLoading ? <LoaderCircle className="spin" size={14} /> : <Trash2 size={14} />} Confirmer</button></div></div></ModalLayer>}
+    {eventDraft && <ModalLayer><button className="modal-backdrop" type="button" aria-label="Fermer la création d’événement" onClick={() => setEventDraft(null)} /><form className="modal-card event-modal" onSubmit={saveEvent}><div className="modal-header"><div><div className="eyebrow"><CalendarPlus size={13} /> Création événement</div><h3>Nouvel événement</h3><span>Chaque journée conserve ses propres heures de pointage.</span></div><button type="button" className="modal-close" onClick={() => setEventDraft(null)} aria-label="Fermer"><X size={16} /></button></div><div className="event-form-grid"><label>Nom de l’événement<input value={eventDraft.name} onChange={(event) => setEventDraft((current) => current ? { ...current, name: event.target.value, code: current.codeTouched ? current.code : eventCodeFromName(event.target.value) } : current)} placeholder="Ex. Forum partenaires" required /></label><label>Code technique<input value={eventDraft.code} onChange={(event) => setEventDraft((current) => current ? { ...current, code: event.target.value.toLowerCase().replace(/\s+/g, "-"), codeTouched: true } : current)} placeholder="forum-partenaires" pattern="[a-z0-9][a-z0-9-]{2,79}" required /><small>Minuscules, chiffres et tirets uniquement.</small></label><label>Date de début<input type="date" value={eventDraft.startsOn} onChange={(event) => updateEventDates("startsOn", event.target.value)} required /></label><label>Date de fin<input type="date" value={eventDraft.endsOn} min={eventDraft.startsOn} onChange={(event) => updateEventDates("endsOn", event.target.value)} required /></label></div><div className="event-schedule-heading"><div><div className="card-kicker"><Clock3 size={13} /> Horaires de pointage</div><p>Les heures sont indicatives par journée : elles peuvent varier pendant l’événement.</p></div><span>{eventDraft.days.length} journée{eventDraft.days.length > 1 ? "s" : ""}</span></div><div className="event-schedule-list">{eventDraft.days.map((day) => <div className="event-day-row" key={day.event_date}><div className="event-day-date"><CalendarDays size={14} /><strong>{new Date(`${day.event_date}T00:00:00Z`).toLocaleDateString("fr-FR", { weekday: "short", day: "2-digit", month: "short", timeZone: "UTC" })}</strong><small>{day.event_date}</small></div><label>Arrivée à partir de<input type="time" value={day.arrival_from} onChange={(event) => updateEventDay(day.event_date, "arrival_from", event.target.value)} required /></label><label>Arrivée au plus tard<input type="time" value={day.arrival_until} onChange={(event) => updateEventDay(day.event_date, "arrival_until", event.target.value)} required /></label><label>Départ à partir de<input type="time" value={day.departure_from} onChange={(event) => updateEventDay(day.event_date, "departure_from", event.target.value)} required /></label><label>Départ au plus tard<input type="time" value={day.departure_until} onChange={(event) => updateEventDay(day.event_date, "departure_until", event.target.value)} required /></label></div>)}</div><div className="event-form-note"><CalendarPlus size={15} /><span>L’événement sera créé comme campagne <strong>Event</strong>, actif immédiatement, avec son planning journalier attaché.</span></div><div className="modal-actions"><button type="button" className="button secondary" onClick={() => setEventDraft(null)}>Annuler</button><button type="submit" className="button primary" disabled={actionLoading}>{actionLoading ? <LoaderCircle className="spin" size={14} /> : <CalendarPlus size={14} />} Créer l’événement</button></div></form></ModalLayer>}
     {campaignDraft && <ModalLayer><button className="modal-backdrop" type="button" aria-label="Fermer" onClick={() => setCampaignDraft(null)} /><form className="modal-card campaign-modal" onSubmit={saveCampaignAssignment}><div className="modal-header"><div><div className="eyebrow"><BriefcaseBusiness size={13} /> Affectation par campagne</div><h3>{campaignDraft.full_name}</h3></div><button type="button" className="modal-close" onClick={() => setCampaignDraft(null)} aria-label="Fermer"><X size={16} /></button></div><p className="modal-helper">Un agent peut avoir plusieurs superviseurs pour une même campagne. Le rattachement affiché dans la fiche utilisateur reste le superviseur historique d’entrée en agence.</p><div className="campaign-options">{campaigns.filter((campaign) => (campaign.status === "active" || campaign.status === "draft") && isCampaignCompatibleWithCategory(campaign.campaign_type, campaignDraft.user_category)).map((campaign) => { const selected = campaignSelection.includes(campaign.id); const selectedSupervisors = campaignSupervisorSelection[campaign.id] || []; return <div className={`campaign-option ${selected ? "is-selected" : ""}`} key={campaign.id}><button type="button" className="campaign-option-toggle" aria-pressed={selected} onClick={() => setCampaignSelection((current) => selected ? current.filter((id) => id !== campaign.id) : [...current, campaign.id])}><span className="campaign-option-mark">{selected ? <CheckCircle2 size={15} /> : <span />}</span><span><strong>{campaign.name}</strong><small>{campaignTypeLabel(campaign.campaign_type)} · {campaign.status === "active" ? "Active" : "Brouillon"}</small></span></button>{selected && <div className="campaign-supervisor-editor"><small>Superviseurs opérationnels</small><div className="campaign-supervisor-options">{supervisorSelectOptions.map((option) => { const supervisorSelected = selectedSupervisors.includes(option.value); return <button type="button" key={option.value} className={supervisorSelected ? "is-selected" : ""} onClick={() => setCampaignSupervisorSelection((current) => ({ ...current, [campaign.id]: supervisorSelected ? selectedSupervisors.filter((id) => id !== option.value) : [...selectedSupervisors, option.value] }))}><span>{option.label}</span>{supervisorSelected && <CheckCircle2 size={13} />}</button>; })}</div>{!supervisorSelectOptions.length && <span className="muted-note">Aucun responsable disponible dans la base.</span>}</div>}</div>; })}</div>{!campaigns.length && <div className="table-empty"><BriefcaseBusiness size={20} /><strong>Aucune campagne disponible</strong></div>}<div className="modal-actions"><button type="button" className="button secondary" onClick={() => setCampaignDraft(null)}>Annuler</button><button type="submit" className="button primary" disabled={actionLoading}>{actionLoading ? <LoaderCircle className="spin" size={14} /> : <CheckCircle2 size={14} />} Enregistrer</button></div></form></ModalLayer>}
     {editDraft && <ModalLayer><button className="modal-backdrop" type="button" aria-label="Fermer" onClick={() => setEditDraft(null)} /><form className="modal-card edit-modal" onSubmit={saveEdit}><div className="modal-header"><div><div className="eyebrow"><ShieldCheck size={13} /> Modification</div><h3>Modifier l’utilisateur</h3></div><button type="button" className="modal-close" onClick={() => setEditDraft(null)} aria-label="Fermer"><X size={16} /></button></div><label>Nom complet<input value={editDraft.full_name} onChange={(event) => setEditDraft((draft) => draft ? { ...draft, full_name: event.target.value } : draft)} required /></label><label>MSISDN<input value={editDraft.phone} onChange={(event) => setEditDraft((draft) => draft ? { ...draft, phone: event.target.value } : draft)} type="tel" inputMode="tel" required /></label><div className="filter-control"><CustomSelect value={editDraft.role} onChange={(value) => setEditDraft((draft) => draft ? { ...draft, role: value as UserRole } : draft)} ariaLabel="Rôle" placeholder="Rôle" options={ROLE_OPTIONS.map((role) => ({ value: role, label: ROLE_LABELS[role] }))} /></div><div className="filter-control"><CustomSelect value={editDraft.user_category || ""} onChange={(value) => setEditDraft((draft) => draft ? { ...draft, user_category: (value || null) as UserCategory | null } : draft)} ariaLabel="Catégorie" placeholder="Catégorie" options={[{ value: "", label: "Aucune catégorie" }, ...CATEGORY_OPTIONS.map((category) => ({ value: category, label: CATEGORY_LABELS[category] }))]} /></div><div className="filter-control"><CustomSelect value={editDraft.is_active ? "active" : "inactive"} onChange={(value) => setEditDraft((draft) => draft ? { ...draft, is_active: value === "active" } : draft)} ariaLabel="Statut du compte" placeholder="Statut" options={[{ value: "active", label: "Actif" }, { value: "inactive", label: "Inactif" }]} /></div><div className="filter-control"><CustomSelect value={editDraft.supervisor_id || ""} onChange={(value) => setEditDraft((draft) => draft ? { ...draft, supervisor_id: value || null } : draft)} ariaLabel="Superviseur" placeholder="Aucun superviseur" options={[{ value: "", label: "Aucun superviseur" }, ...supervisorSelectOptions]} /></div><div className="filter-control"><CustomSelect value={editDraft.permanent_shop_id || ""} onChange={(value) => setEditDraft((draft) => draft ? { ...draft, permanent_shop_id: value || null } : draft)} ariaLabel="Shop permanent" placeholder="Aucun shop" options={[{ value: "", label: "Aucun shop" }, ...shopSelectOptions]} /></div><div className="modal-actions"><button type="button" className="button secondary" onClick={() => setEditDraft(null)}>Annuler</button><button type="submit" className="button primary" disabled={actionLoading}>{actionLoading ? <LoaderCircle className="spin" size={14} /> : <CheckCircle2 size={14} />} Enregistrer</button></div></form></ModalLayer>}
     {selectedAgentProfile && <AgentDetailModal agent={selectedAgentProfile} password={canViewPasswords && passwordAssistanceReady ? userPasswords[selectedAgentProfile.id] : undefined} users={users} campaigns={campaigns} shops={shops} assignments={campaignAssignments} campaignSupervisorAssignments={campaignSupervisorAssignments} assignmentRequests={assignmentRequests} attendanceClaims={attendanceClaims} canRequest={false} canExport canEdit={canManage} onEdit={() => { if (selectedAgentProfile) beginEdit(selectedAgentProfile); setSelectedAgentProfile(null); }} onNotice={(next) => setNotice(next)} onClose={() => setSelectedAgentProfile(null)} />}
