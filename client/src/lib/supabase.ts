@@ -28,9 +28,16 @@ export type UserRecord = {
   permanent_shop_id: string | null;
   avatar_url: string | null;
   profile_updated_at: string | null;
+  shirt_size: string | null;
+  jacket_size: string | null;
+  skirt_size: string | null;
+  dress_size: string | null;
+  heel_size: string | null;
+  sneaker_size: string | null;
+  ballerina_size: string | null;
 };
 
-export type UserInsert = Omit<UserRecord, "password_hash" | "avatar_url" | "profile_updated_at"> & { password_hash: string; avatar_url?: string | null; profile_updated_at?: string | null };
+export type UserInsert = Omit<UserRecord, "password_hash" | "avatar_url" | "profile_updated_at" | "shirt_size" | "jacket_size" | "skirt_size" | "dress_size" | "heel_size" | "sneaker_size" | "ballerina_size"> & { password_hash: string; avatar_url?: string | null; profile_updated_at?: string | null; shirt_size?: string | null; jacket_size?: string | null; skirt_size?: string | null; dress_size?: string | null; heel_size?: string | null; sneaker_size?: string | null; ballerina_size?: string | null };
 export type CampaignRecord = {
   id: string;
   code: string;
@@ -39,7 +46,15 @@ export type CampaignRecord = {
   status: string;
   starts_on: string | null;
   ends_on: string | null;
+  event_mode?: "punctual" | "periodic" | null;
+  event_arrival_time?: string | null;
+  event_departure_time?: string | null;
+  event_supervisor_id?: string | null;
+  event_perimeter?: string | null;
 };
+export type EventOutfitItem = { id: string; campaign_id: string; item_key: string; item_label: string; provided_by_company: boolean };
+export type EventTechnicalAgent = { agent: UserRecord; eventCount: number; included: boolean };
+export type EventTechnicalSheet = { campaign: CampaignRecord; days: EventDay[]; outfitItems: EventOutfitItem[]; agents: EventTechnicalAgent[] };
 export type EventDay = {
   id: string;
   campaign_id: string;
@@ -54,7 +69,12 @@ export type CreateEventInput = {
   name: string;
   startsOn: string;
   endsOn: string;
-  days: Array<Pick<EventDay, "event_date" | "arrival_from" | "arrival_until" | "departure_from" | "departure_until">>;
+  mode: "punctual" | "periodic";
+  arrivalTime: string | null;
+  departureTime: string | null;
+  supervisorId: string | null;
+  agentIds: string[];
+  outfitItems: Array<{ key: string; label: string; provided_by_company: boolean }>;
 };
 export type ShopRecord = {
   id: string;
@@ -253,7 +273,7 @@ export async function testSupabaseConnection(url: string, publishableKey: string
   if (![200, 206, 403].includes(response.status)) throw new Error(`Connexion refusée (${response.status}).`);
 }
 
-const safeUserColumns = "id, full_name, phone, whatsapp_phone, whatsapp_same_as_phone, date_of_birth, address, address_province, address_commune, address_quartier, address_avenue, address_number, address_latitude, address_longitude, role, user_category, is_active, supervisor_id, permanent_shop_id, avatar_url, profile_updated_at";
+const safeUserColumns = "id, full_name, phone, whatsapp_phone, whatsapp_same_as_phone, date_of_birth, address, address_province, address_commune, address_quartier, address_avenue, address_number, address_latitude, address_longitude, role, user_category, is_active, supervisor_id, permanent_shop_id, avatar_url, profile_updated_at, shirt_size, jacket_size, skirt_size, dress_size, heel_size, sneaker_size, ballerina_size";
 const safeCampaignColumns = "id, code, name, campaign_type, status, starts_on, ends_on";
 const safeShopColumns = "id, name, city, type";
 const safeAssignmentColumns = "id, user_id, campaign_id, is_active, assigned_at, assigned_by";
@@ -385,6 +405,8 @@ export function subscribeToDataChanges(onChange: (table: string) => void, onStat
     "attendance_claims",
     "campaign_attendance_overrides",
     "user_registration_requests",
+    "event_days",
+    "event_outfit_items",
   ].forEach((table) => {
     channel.on("postgres_changes", { event: "*", schema: "public", table }, () => onChange(table));
   });
@@ -464,17 +486,29 @@ export async function createEventCampaign(input: CreateEventInput): Promise<Camp
   if (!activeProfile || !supabaseClient) throw new Error("Connexion administrative requise avant de créer un événement.");
   if (!["admin", "super_admin", "sub_admin"].includes(activeProfile.role)) throw new Error("Seuls les administrateurs et la coordination peuvent créer un événement.");
   const { data, error } = await supabaseClient.rpc("create_event_campaign", {
-    p_creator_id: activeProfile.id,
-    p_code: input.code.trim(),
-    p_name: input.name.trim(),
-    p_starts_on: input.startsOn,
-    p_ends_on: input.endsOn,
-    p_days: input.days,
+    p_creator_id: activeProfile.id, p_code: input.code.trim(), p_name: input.name.trim(),
+    p_starts_on: input.startsOn, p_ends_on: input.endsOn, p_event_mode: input.mode,
+    p_arrival_time: input.arrivalTime, p_departure_time: input.departureTime,
+    p_supervisor_id: input.supervisorId, p_agent_ids: input.agentIds,
+    p_outfit_items: input.outfitItems,
   });
   if (error) throw error;
   const campaign = Array.isArray(data) ? data[0] : data;
   if (!campaign) throw new Error("La création de l’événement n’a pas été confirmée.");
   return campaign as CampaignRecord;
+}
+
+export async function loadEventOutfitItems(campaignId: string): Promise<EventOutfitItem[]> {
+  if (!supabaseClient || !campaignId) return [];
+  const { data, error } = await supabaseClient.rpc("list_event_outfit_items", { p_campaign_id: campaignId });
+  if (error) throw error;
+  return (data || []) as EventOutfitItem[];
+}
+
+export async function setEventOutfitSupply(campaignId: string, itemKey: string, providedByCompany: boolean): Promise<void> {
+  if (!activeProfile || !supabaseClient) throw new Error("Connexion requise.");
+  const { error } = await supabaseClient.rpc("set_event_outfit_supply", { p_actor_id: activeProfile.id, p_campaign_id: campaignId, p_item_key: itemKey, p_provided_by_company: providedByCompany });
+  if (error) throw error;
 }
 
 export async function loadShops(): Promise<ShopRecord[]> {
@@ -651,12 +685,12 @@ export async function reviewCampaignAssignmentRequest(requestId: string, approve
   return request as CampaignAssignmentRequest;
 }
 
-export async function updateMyProfile(input: { fullName: string; phone: string; currentPassword: string; password?: string; avatarUrl?: string | null; avatarChanged?: boolean; address?: string | null; addressProvince?: string | null; addressCommune?: string | null; addressQuartier?: string | null; addressAvenue?: string | null; addressNumber?: string | null; addressLatitude?: number | null; addressLongitude?: number | null }): Promise<UserRecord> {
+export async function updateMyProfile(input: { fullName: string; phone: string; currentPassword: string; password?: string; avatarUrl?: string | null; avatarChanged?: boolean; address?: string | null; addressProvince?: string | null; addressCommune?: string | null; addressQuartier?: string | null; addressAvenue?: string | null; addressNumber?: string | null; addressLatitude?: number | null; addressLongitude?: number | null; shirtSize?: string | null; jacketSize?: string | null; skirtSize?: string | null; dressSize?: string | null; heelSize?: string | null; sneakerSize?: string | null; ballerinaSize?: string | null }): Promise<UserRecord> {
   if (!activeProfile || !supabaseClient) throw new Error("Connexion requise avant de modifier votre profil.");
   const normalizedPhone = normalizePhone(input.phone);
   if (!isValidMsisdn(normalizedPhone)) throw new Error("Le MSISDN fourni est invalide.");
   if (!input.currentPassword) throw new Error("Le mot de passe actuel est requis pour confirmer cette modification.");
-  const { data, error } = await supabaseClient.rpc("update_my_profile", { p_user_id: activeProfile.id, p_full_name: input.fullName.trim(), p_phone: normalizedPhone, p_password: input.password || null, p_avatar_url: input.avatarChanged ? input.avatarUrl ?? null : activeProfile.avatar_url, p_current_password: input.currentPassword, p_address: input.address ?? activeProfile.address, p_address_province: input.addressProvince ?? activeProfile.address_province, p_address_commune: input.addressCommune ?? activeProfile.address_commune, p_address_quartier: input.addressQuartier ?? activeProfile.address_quartier, p_address_avenue: input.addressAvenue ?? activeProfile.address_avenue, p_address_number: input.addressNumber ?? activeProfile.address_number, p_address_latitude: input.addressLatitude ?? activeProfile.address_latitude, p_address_longitude: input.addressLongitude ?? activeProfile.address_longitude });
+  const { data, error } = await supabaseClient.rpc("update_my_profile", { p_user_id: activeProfile.id, p_full_name: input.fullName.trim(), p_phone: normalizedPhone, p_password: input.password || null, p_avatar_url: input.avatarChanged ? input.avatarUrl ?? null : activeProfile.avatar_url, p_current_password: input.currentPassword, p_address: input.address ?? activeProfile.address, p_address_province: input.addressProvince ?? activeProfile.address_province, p_address_commune: input.addressCommune ?? activeProfile.address_commune, p_address_quartier: input.addressQuartier ?? activeProfile.address_quartier, p_address_avenue: input.addressAvenue ?? activeProfile.address_avenue, p_address_number: input.addressNumber ?? activeProfile.address_number, p_address_latitude: input.addressLatitude ?? activeProfile.address_latitude, p_address_longitude: input.addressLongitude ?? activeProfile.address_longitude, p_shirt_size: input.shirtSize ?? activeProfile.shirt_size, p_jacket_size: input.jacketSize ?? activeProfile.jacket_size, p_skirt_size: input.skirtSize ?? activeProfile.skirt_size, p_dress_size: input.dressSize ?? activeProfile.dress_size, p_heel_size: input.heelSize ?? activeProfile.heel_size, p_sneaker_size: input.sneakerSize ?? activeProfile.sneaker_size, p_ballerina_size: input.ballerinaSize ?? activeProfile.ballerina_size });
   if (error) throw error;
   const row = Array.isArray(data) ? data[0] : data;
   if (!row) throw new Error("Le profil n’a pas pu être mis à jour.");
