@@ -61,7 +61,7 @@ declare actor_role text; row_campaign public.campaigns;
 begin
   select role into actor_role from public.users where id=p_actor_id and is_active;
   if actor_role not in ('admin','super_admin','sub_admin') then raise exception 'event_status_not_allowed' using errcode='42501'; end if;
-  if p_status not in ('active','stopped') then raise exception 'event_status_invalid' using errcode='22023'; end if;
+  if p_status not in ('active','archived') then raise exception 'event_status_invalid' using errcode='22023'; end if;
   update public.campaigns set status=p_status,updated_at=now() where id=p_campaign_id returning * into row_campaign;
   if row_campaign.id is null then raise exception 'campaign_not_found' using errcode='P0002'; end if;
   return row_campaign;

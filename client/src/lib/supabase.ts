@@ -511,7 +511,7 @@ export async function updateEventCampaign(campaignId: string, input: CreateEvent
   if (!campaign) throw new Error("La modification de l’événement n’a pas été confirmée.");
   return campaign as CampaignRecord;
 }
-export async function setEventStatus(campaignId: string, status: "active" | "stopped"): Promise<CampaignRecord> {
+export async function setEventStatus(campaignId: string, status: "active" | "archived"): Promise<CampaignRecord> {
   if (!activeProfile || !supabaseClient) throw new Error("Connexion administrative requise.");
   const { data, error } = await supabaseClient.rpc("set_event_status", { p_actor_id: activeProfile.id, p_campaign_id: campaignId, p_status: status });
   if (error) throw error;
