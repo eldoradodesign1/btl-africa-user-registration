@@ -527,6 +527,7 @@ function Home({ onUserCreated, onNavigateDashboard, agentsOnly = false }: { onUs
               </section>
             ) : (
               <section className="side-card guide-card">
+                <div className="guide-illustration" aria-hidden="true"><img src={`${import.meta.env.BASE_URL}btl-field-illustration.webp`} alt="" loading="lazy" decoding="async" /></div>
                 <div className="card-kicker"><BadgeCheck size={15} /> Parcours contrôlé</div>
                 <h2>Prêt pour le terrain.</h2>
                 <p>Chaque création passe par trois garde-fous avant d’atteindre <code>public.users</code>.</p>
