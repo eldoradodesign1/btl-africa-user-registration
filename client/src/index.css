@@ -1184,3 +1184,14 @@ html { scrollbar-width: thin; scrollbar-color: rgba(158,233,232,.35) rgba(3,11,1
  .dashboard-context-row .dashboard-main-nav button{white-space:nowrap}
 }
 .campaign-menu-card-actions{display:flex;flex-wrap:wrap;gap:7px}.campaign-menu-card-actions .button{flex:1;justify-content:center;min-width:112px}
+
+/* BTL atmosphere: movement stays subtle so operational data remains primary. */
+.app-shell::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;background:linear-gradient(115deg,rgba(7,16,21,.68),rgba(7,16,21,.18) 46%,rgba(7,16,21,.58)),url('/btl-dashboard-atmosphere.png') center/cover no-repeat;opacity:.27;mix-blend-mode:screen;animation:btl-atmosphere-drift 24s ease-in-out infinite alternate}
+.ambient{animation:btl-orb-float 13s ease-in-out infinite alternate}.ambient-two{animation-delay:-5s}
+@keyframes btl-atmosphere-drift{0%{transform:scale(1) translate3d(0,0,0);filter:saturate(.9)}100%{transform:scale(1.045) translate3d(1.5%,-1%,0);filter:saturate(1.16)}}
+@keyframes btl-orb-float{0%{transform:translate3d(-8px,0,0) scale(.96);opacity:.13}100%{transform:translate3d(12px,-18px,0) scale(1.08);opacity:.25}}
+.campaign-menu-card{position:relative;overflow:hidden;transition:transform .24s var(--ease-out),border-color .24s ease,box-shadow .24s ease;background:linear-gradient(145deg,rgba(12,49,55,.74),rgba(8,24,31,.74))}
+.campaign-menu-card::before{content:"";position:absolute;inset:-40% -10%;pointer-events:none;background:radial-gradient(circle at 18% 0%,rgba(158,233,232,.16),transparent 28%),radial-gradient(circle at 92% 110%,rgba(181,239,140,.12),transparent 32%);opacity:.45;transition:transform .45s ease,opacity .3s ease}
+.campaign-menu-card:hover{transform:translateY(-4px);border-color:rgba(158,233,232,.42);box-shadow:0 18px 36px rgba(0,0,0,.23),0 0 0 1px rgba(158,233,232,.08)}
+.campaign-menu-card:hover::before{transform:translate3d(4%, -4%,0) scale(1.08);opacity:.8}.campaign-menu-card>*{position:relative;z-index:1}.campaign-menu-card[role="button"]{cursor:pointer}.campaign-menu-card[role="button"]:focus-visible{outline:2px solid var(--lime);outline-offset:3px}
+.campaign-menu-card-actions{display:flex;justify-content:flex-end;gap:6px;margin-top:12px}.campaign-menu-card-actions .icon-action{width:30px;height:30px;display:inline-grid;place-items:center;border:1px solid rgba(158,233,232,.2);border-radius:9px;color:var(--cyan);background:rgba(255,255,255,.035);transition:transform .18s ease,color .18s ease,background .18s ease,border-color .18s ease}.campaign-menu-card-actions .icon-action:hover:not(:disabled){transform:translateY(-2px) scale(1.06);color:#071015;background:var(--cyan);border-color:var(--cyan)}.campaign-menu-card-actions .icon-action:disabled{opacity:.35}

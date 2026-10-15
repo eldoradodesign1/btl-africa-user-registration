@@ -62,8 +62,8 @@ begin
   select role into actor_role from public.users where id=p_actor_id and is_active;
   if actor_role not in ('admin','super_admin','sub_admin') then raise exception 'event_status_not_allowed' using errcode='42501'; end if;
   if p_status not in ('active','stopped') then raise exception 'event_status_invalid' using errcode='22023'; end if;
-  update public.campaigns set status=p_status,updated_at=now() where id=p_campaign_id and campaign_type='event' returning * into row_campaign;
-  if row_campaign.id is null then raise exception 'event_not_found' using errcode='P0002'; end if;
+  update public.campaigns set status=p_status,updated_at=now() where id=p_campaign_id returning * into row_campaign;
+  if row_campaign.id is null then raise exception 'campaign_not_found' using errcode='P0002'; end if;
   return row_campaign;
 end;
 $function$;
@@ -78,7 +78,7 @@ begin
   select role into actor_role from public.users where id=p_actor_id and is_active;
   if actor_role not in ('admin','super_admin','sub_admin') then raise exception 'event_pause_not_allowed' using errcode='42501'; end if;
   if p_starts_on is null or p_ends_on is null or p_starts_on>p_ends_on then raise exception 'pause_dates_invalid' using errcode='22023'; end if;
-  if not exists(select 1 from public.campaigns where id=p_campaign_id and campaign_type='event') then raise exception 'event_not_found' using errcode='P0002'; end if;
+  if not exists(select 1 from public.campaigns where id=p_campaign_id) then raise exception 'campaign_not_found' using errcode='P0002'; end if;
   insert into public.campaign_pauses(campaign_id,starts_on,ends_on,reason,created_by) values(p_campaign_id,p_starts_on,p_ends_on,coalesce(nullif(trim(p_reason),''),'Pause opérationnelle'),p_actor_id);
   return true;
 end;
