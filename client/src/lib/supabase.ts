@@ -274,7 +274,7 @@ export async function testSupabaseConnection(url: string, publishableKey: string
 }
 
 const safeUserColumns = "id, full_name, phone, whatsapp_phone, whatsapp_same_as_phone, date_of_birth, address, address_province, address_commune, address_quartier, address_avenue, address_number, address_latitude, address_longitude, role, user_category, is_active, supervisor_id, permanent_shop_id, avatar_url, profile_updated_at, shirt_size, jacket_size, skirt_size, dress_size, heel_size, sneaker_size, ballerina_size";
-const safeCampaignColumns = "id, code, name, campaign_type, status, starts_on, ends_on";
+const safeCampaignColumns = "id, code, name, campaign_type, status, starts_on, ends_on, event_mode, event_arrival_time, event_departure_time, event_supervisor_id, event_perimeter";
 const safeShopColumns = "id, name, city, type";
 const safeAssignmentColumns = "id, user_id, campaign_id, is_active, assigned_at, assigned_by";
 const safeCampaignSupervisorAssignmentColumns = "id, agent_id, supervisor_id, campaign_id, is_active, assigned_at, assigned_by";
@@ -496,6 +496,36 @@ export async function createEventCampaign(input: CreateEventInput): Promise<Camp
   const campaign = Array.isArray(data) ? data[0] : data;
   if (!campaign) throw new Error("La création de l’événement n’a pas été confirmée.");
   return campaign as CampaignRecord;
+}
+export async function updateEventCampaign(campaignId: string, input: CreateEventInput): Promise<CampaignRecord> {
+  if (!activeProfile || !supabaseClient) throw new Error("Connexion administrative requise avant de modifier un événement.");
+  if (!["admin", "super_admin", "sub_admin"].includes(activeProfile.role)) throw new Error("Droits administratifs requis.");
+  const { data, error } = await supabaseClient.rpc("update_event_campaign", {
+    p_actor_id: activeProfile.id, p_campaign_id: campaignId, p_code: input.code.trim(), p_name: input.name.trim(),
+    p_starts_on: input.startsOn, p_ends_on: input.endsOn, p_event_mode: input.mode,
+    p_arrival_time: input.arrivalTime, p_departure_time: input.departureTime, p_supervisor_id: input.supervisorId,
+    p_agent_ids: input.agentIds, p_outfit_items: input.outfitItems,
+  });
+  if (error) throw error;
+  const campaign = Array.isArray(data) ? data[0] : data;
+  if (!campaign) throw new Error("La modification de l’événement n’a pas été confirmée.");
+  return campaign as CampaignRecord;
+}
+export async function setEventStatus(campaignId: string, status: "active" | "stopped"): Promise<CampaignRecord> {
+  if (!activeProfile || !supabaseClient) throw new Error("Connexion administrative requise.");
+  const { data, error } = await supabaseClient.rpc("set_event_status", { p_actor_id: activeProfile.id, p_campaign_id: campaignId, p_status: status });
+  if (error) throw error;
+  return (Array.isArray(data) ? data[0] : data) as CampaignRecord;
+}
+export async function pauseEventCampaign(campaignId: string, startsOn: string, endsOn: string, reason: string): Promise<void> {
+  if (!activeProfile || !supabaseClient) throw new Error("Connexion administrative requise.");
+  const { error } = await supabaseClient.rpc("pause_event_campaign", { p_actor_id: activeProfile.id, p_campaign_id: campaignId, p_starts_on: startsOn, p_ends_on: endsOn, p_reason: reason });
+  if (error) throw error;
+}
+export async function resumeEventCampaign(campaignId: string): Promise<void> {
+  if (!activeProfile || !supabaseClient) throw new Error("Connexion administrative requise.");
+  const { error } = await supabaseClient.rpc("resume_event_campaign", { p_actor_id: activeProfile.id, p_campaign_id: campaignId });
+  if (error) throw error;
 }
 
 export async function loadEventOutfitItems(campaignId: string): Promise<EventOutfitItem[]> {
