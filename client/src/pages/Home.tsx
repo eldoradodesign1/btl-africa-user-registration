@@ -51,6 +51,7 @@ import {
 import { CopyablePhone } from "@/components/CopyablePhone";
 import BrandLogo from "@/components/BrandLogo";
 import AddressFields, { addressLabel, EMPTY_ADDRESS_DRAFT, type AddressDraft } from "@/components/AddressFields";
+import { DatePickerField } from "@/components/DateTimeFields";
 
 type PhoneState = "idle" | "checking" | "valid" | "invalid" | "duplicate" | "error";
 type ToastState = { kind: "success" | "error" | "info"; title: string; message: string; action?: () => void } | null;
@@ -151,6 +152,16 @@ function CustomSelect<T extends string>({
 
 function UserRoleBadge({ role }: { role: UserRole }) {
   return <span className={`role-badge role-${role}`}>{ROLE_LABELS[role]}</span>;
+}
+
+function CustomOptionSelect({ label, value, options, onChange, helper, disabled = false, ariaLabel }: { label?: string; value: string; options: Array<{ value: string; label: string }>; onChange: (value: string) => void; helper?: string; disabled?: boolean; ariaLabel?: string }) {
+  const [open, setOpen] = useState(false);
+  const current = options.find((option) => option.value === value)?.label || options[0]?.label || "Sélectionner";
+  return <div className="field select-field">
+    {(label || helper) && <div className="field-label-row">{label && <label>{label}</label>}{helper && <span className="field-helper">{helper}</span>}</div>}
+    <button type="button" className={`select-trigger ${open ? "is-open" : ""}`} aria-label={ariaLabel || label} aria-haspopup="listbox" aria-expanded={open} disabled={disabled} onClick={() => setOpen((state) => !state)}><span>{current}</span><ChevronDown size={16} strokeWidth={2.5} /></button>
+    {open && <div className="select-menu" role="listbox">{options.map((option) => <button type="button" role="option" aria-selected={option.value === value} className={`select-option ${option.value === value ? "is-selected" : ""}`} key={option.value} onClick={() => { onChange(option.value); setOpen(false); }}><span>{option.label}</span>{option.value === value && <Check size={15} />}</button>)}</div>}
+  </div>;
 }
 
 function Home({ onUserCreated, onNavigateDashboard, agentsOnly = false }: { onUserCreated?: (user: UserRecord) => void; onNavigateDashboard?: () => void; agentsOnly?: boolean }) {
@@ -444,7 +455,7 @@ function Home({ onUserCreated, onNavigateDashboard, agentsOnly = false }: { onUs
               </div>
               <label className="password-toggle signup-whatsapp-toggle"><input type="checkbox" checked={form.whatsappSameAsPhone} onChange={(event) => updateForm("whatsappSameAsPhone", event.target.checked)} /><span className="toggle-visual"><Check size={13} /></span><span><strong>WhatsApp</strong><small>Utiliser le numéro M-Pesa</small></span></label>
               {!form.whatsappSameAsPhone && <div className="field-grid two-columns"><div className="field"><label htmlFor="whatsappPhone">Numéro WhatsApp <b>*</b></label><input id="whatsappPhone" value={form.whatsappPhone} onChange={(event) => updateForm("whatsappPhone", event.target.value)} placeholder="081 234 5678" type="tel" inputMode="tel" autoComplete="tel" /></div></div>}
-              <div className="field-grid two-columns profile-extra-fields"><div className="field"><label htmlFor="dateOfBirth">Date de naissance</label><div className="input-wrap"><CalendarDays size={17} /><input id="dateOfBirth" value={form.dateOfBirth} onChange={(event) => updateForm("dateOfBirth", event.target.value)} type="date" /></div></div></div>
+              <div className="field-grid two-columns profile-extra-fields"><div className="field"><label htmlFor="dateOfBirth">Date de naissance</label><DatePickerField id="dateOfBirth" ariaLabel="Date de naissance" value={form.dateOfBirth} onChange={(value) => updateForm("dateOfBirth", value)} /></div></div>
               <AddressFields value={form.addressDetails} onChange={(addressDetails) => updateForm("addressDetails", addressDetails)} />
               <div className="field profile-photo-field"><label htmlFor="profilePhoto">Photo de profil</label><label className="file-input-control"><ImagePlus size={16} /><span>{form.avatarUrl ? "Photo sélectionnée" : "Choisir une photo"}</span><input id="profilePhoto" type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; if (!file.type.startsWith("image/") || file.size > 520000) { setToast({ kind: "error", title: "Photo invalide", message: "La photo doit être une image de moins de 500 Ko." }); return; } const reader = new FileReader(); reader.onload = () => updateForm("avatarUrl", String(reader.result)); reader.readAsDataURL(file); }} /></label></div>
             </div>
@@ -453,16 +464,8 @@ function Home({ onUserCreated, onNavigateDashboard, agentsOnly = false }: { onUs
               <div className="section-title"><span>02</span><div><h3>Rôle & rattachement</h3><p>{agentsOnly ? "Ajout d’un agent par un responsable habilité." : "Définissez le périmètre de l’utilisateur."}</p></div></div>
               <div className="field-grid two-columns">
                 {agentsOnly ? <div className="field select-field"><div className="field-label-row"><label>Rôle</label><span className="field-helper">Accès limité</span></div><div className="role-fixed-value"><span className="role-badge role-agent">Agent</span><small>Seuls les agents peuvent être ajoutés depuis cet espace.</small></div></div> : <CustomSelect label="Rôle" value={form.role} options={ROLE_OPTIONS} labels={ROLE_LABELS} onChange={handleRoleChange} helper="Accès applicatif" />}
-                <div className="field select-field">
-                  <div className="field-label-row"><label>Superviseur</label><span className="field-helper">Optionnel</span></div>
-                  <div className="supervisor-shell">
-                    <Search size={16} />
-                    <select value={form.supervisorId} onChange={(event) => updateForm("supervisorId", event.target.value)} disabled={loadingSupervisors || supervisorError}>
-                      <option value="">Aucun rattachement</option>
-                      {supervisorOptions.map((user) => <option value={user.id} key={user.id}>{user.full_name}</option>)}
-                    </select>
-                    {loadingSupervisors ? <LoaderCircle className="spin" size={15} /> : <ChevronDown size={15} />}
-                  </div>
+                <div>
+                  <CustomOptionSelect label="Superviseur" value={form.supervisorId} options={[{ value: "", label: "Aucun rattachement" }, ...supervisorOptions.map((user) => ({ value: user.id, label: user.full_name }))]} onChange={(value) => updateForm("supervisorId", value)} helper="Optionnel" disabled={loadingSupervisors || supervisorError} />
                   {supervisorError ? <span className="field-error"><AlertCircle size={13} />Impossible de charger les superviseurs.</span> : <span className="field-hint">Seuls les rôles d’encadrement sont proposés.</span>}
                 </div>
               </div>
@@ -475,9 +478,7 @@ function Home({ onUserCreated, onNavigateDashboard, agentsOnly = false }: { onUs
               {showShop && (
                 <div className="shop-row">
                   <div className="shop-copy"><span className="mini-label">SHOP PERMANENT</span><strong>Point de rattachement</strong><span>« Aucun shop » sera enregistré comme <code>null</code>.</span></div>
-                  <select value={form.permanentShopId} onChange={(event) => updateForm("permanentShopId", event.target.value)}>
-                    {shopOptions.map((shop) => <option value={shop.value} key={shop.value}>{shop.label}</option>)}
-                  </select>
+                  <CustomOptionSelect ariaLabel="Point de rattachement" value={form.permanentShopId} options={shopOptions} onChange={(value) => updateForm("permanentShopId", value)} />
                 </div>
               )}
             </div>
