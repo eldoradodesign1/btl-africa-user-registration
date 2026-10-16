@@ -35,9 +35,13 @@ export type UserRecord = {
   heel_size: string | null;
   sneaker_size: string | null;
   ballerina_size: string | null;
+  current_occupation: string | null;
+  accepts_night_work: boolean;
+  accepts_overnight_stay: boolean;
+  accepts_late_work: boolean;
 };
 
-export type UserInsert = Omit<UserRecord, "password_hash" | "avatar_url" | "profile_updated_at" | "shirt_size" | "jacket_size" | "skirt_size" | "dress_size" | "heel_size" | "sneaker_size" | "ballerina_size"> & { password_hash: string; avatar_url?: string | null; profile_updated_at?: string | null; shirt_size?: string | null; jacket_size?: string | null; skirt_size?: string | null; dress_size?: string | null; heel_size?: string | null; sneaker_size?: string | null; ballerina_size?: string | null };
+export type UserInsert = Omit<UserRecord, "password_hash" | "avatar_url" | "profile_updated_at" | "shirt_size" | "jacket_size" | "skirt_size" | "dress_size" | "heel_size" | "sneaker_size" | "ballerina_size" | "current_occupation" | "accepts_night_work" | "accepts_overnight_stay" | "accepts_late_work"> & { password_hash: string; avatar_url?: string | null; profile_updated_at?: string | null; shirt_size?: string | null; jacket_size?: string | null; skirt_size?: string | null; dress_size?: string | null; heel_size?: string | null; sneaker_size?: string | null; ballerina_size?: string | null };
 export type CampaignRecord = {
   id: string;
   code: string;
@@ -273,7 +277,7 @@ export async function testSupabaseConnection(url: string, publishableKey: string
   if (![200, 206, 403].includes(response.status)) throw new Error(`Connexion refusée (${response.status}).`);
 }
 
-const safeUserColumns = "id, full_name, phone, whatsapp_phone, whatsapp_same_as_phone, date_of_birth, address, address_province, address_commune, address_quartier, address_avenue, address_number, address_latitude, address_longitude, role, user_category, is_active, supervisor_id, permanent_shop_id, avatar_url, profile_updated_at, shirt_size, jacket_size, skirt_size, dress_size, heel_size, sneaker_size, ballerina_size";
+const safeUserColumns = "id, full_name, phone, whatsapp_phone, whatsapp_same_as_phone, date_of_birth, address, address_province, address_commune, address_quartier, address_avenue, address_number, address_latitude, address_longitude, role, user_category, is_active, supervisor_id, permanent_shop_id, avatar_url, profile_updated_at, shirt_size, jacket_size, skirt_size, dress_size, heel_size, sneaker_size, ballerina_size, current_occupation, accepts_night_work, accepts_overnight_stay, accepts_late_work";
 const safeCampaignColumns = "id, code, name, campaign_type, status, starts_on, ends_on, event_mode, event_arrival_time, event_departure_time, event_supervisor_id, event_perimeter";
 const safeShopColumns = "id, name, city, type";
 const safeAssignmentColumns = "id, user_id, campaign_id, is_active, assigned_at, assigned_by";
@@ -367,6 +371,11 @@ function assertSuperAdmin(): UserRecord {
   return activeProfile;
 }
 
+function assertTrainingManager(): UserRecord {
+  if (!activeProfile) throw new Error("Connexion administrateur requise avant cette opération.");
+  if (!['admin', 'super_admin'].includes(activeProfile.role)) throw new Error("Cette opération est réservée aux admins.");
+  return activeProfile;
+}
 function mapRequest(data: unknown): RegistrationRequest {
   return data as RegistrationRequest;
 }
@@ -426,6 +435,7 @@ export async function signInAdmin(phone: string, password: string): Promise<Admi
   for (const candidate of phoneCandidates(phone)) {
     const { data, error } = await supabaseClient.from("users").select(`${safeUserColumns}, password_hash`).eq("phone", candidate).eq("password_hash", password).maybeSingle();
     if (!error && data) {
+      if (data.role !== "super_admin" && data.is_active === false) throw new Error("Ce compte est inactif. Contactez un administrateur.");
       const profile = { ...data, password_hash: null } as UserRecord;
       activeProfile = profile;
       localStorage.setItem(profileKey, JSON.stringify(profile));
@@ -715,12 +725,12 @@ export async function reviewCampaignAssignmentRequest(requestId: string, approve
   return request as CampaignAssignmentRequest;
 }
 
-export async function updateMyProfile(input: { fullName: string; phone: string; currentPassword: string; password?: string; avatarUrl?: string | null; avatarChanged?: boolean; address?: string | null; addressProvince?: string | null; addressCommune?: string | null; addressQuartier?: string | null; addressAvenue?: string | null; addressNumber?: string | null; addressLatitude?: number | null; addressLongitude?: number | null; shirtSize?: string | null; jacketSize?: string | null; skirtSize?: string | null; dressSize?: string | null; heelSize?: string | null; sneakerSize?: string | null; ballerinaSize?: string | null }): Promise<UserRecord> {
+export async function updateMyProfile(input: { fullName: string; phone: string; currentPassword: string; password?: string; avatarUrl?: string | null; avatarChanged?: boolean; address?: string | null; addressProvince?: string | null; addressCommune?: string | null; addressQuartier?: string | null; addressAvenue?: string | null; addressNumber?: string | null; addressLatitude?: number | null; addressLongitude?: number | null; shirtSize?: string | null; jacketSize?: string | null; skirtSize?: string | null; dressSize?: string | null; heelSize?: string | null; sneakerSize?: string | null; ballerinaSize?: string | null; currentOccupation?: string | null; acceptsNightWork?: boolean; acceptsOvernightStay?: boolean; acceptsLateWork?: boolean }): Promise<UserRecord> {
   if (!activeProfile || !supabaseClient) throw new Error("Connexion requise avant de modifier votre profil.");
   const normalizedPhone = normalizePhone(input.phone);
   if (!isValidMsisdn(normalizedPhone)) throw new Error("Le MSISDN fourni est invalide.");
   if (!input.currentPassword) throw new Error("Le mot de passe actuel est requis pour confirmer cette modification.");
-  const { data, error } = await supabaseClient.rpc("update_my_profile", { p_user_id: activeProfile.id, p_full_name: input.fullName.trim(), p_phone: normalizedPhone, p_password: input.password || null, p_avatar_url: input.avatarChanged ? input.avatarUrl ?? null : activeProfile.avatar_url, p_current_password: input.currentPassword, p_address: input.address ?? activeProfile.address, p_address_province: input.addressProvince ?? activeProfile.address_province, p_address_commune: input.addressCommune ?? activeProfile.address_commune, p_address_quartier: input.addressQuartier ?? activeProfile.address_quartier, p_address_avenue: input.addressAvenue ?? activeProfile.address_avenue, p_address_number: input.addressNumber ?? activeProfile.address_number, p_address_latitude: input.addressLatitude ?? activeProfile.address_latitude, p_address_longitude: input.addressLongitude ?? activeProfile.address_longitude, p_shirt_size: input.shirtSize ?? activeProfile.shirt_size, p_jacket_size: input.jacketSize ?? activeProfile.jacket_size, p_skirt_size: input.skirtSize ?? activeProfile.skirt_size, p_dress_size: input.dressSize ?? activeProfile.dress_size, p_heel_size: input.heelSize ?? activeProfile.heel_size, p_sneaker_size: input.sneakerSize ?? activeProfile.sneaker_size, p_ballerina_size: input.ballerinaSize ?? activeProfile.ballerina_size });
+  const { data, error } = await supabaseClient.rpc("update_my_profile", { p_user_id: activeProfile.id, p_full_name: input.fullName.trim(), p_phone: normalizedPhone, p_password: input.password || null, p_avatar_url: input.avatarChanged ? input.avatarUrl ?? null : activeProfile.avatar_url, p_current_password: input.currentPassword, p_address: input.address ?? activeProfile.address, p_address_province: input.addressProvince ?? activeProfile.address_province, p_address_commune: input.addressCommune ?? activeProfile.address_commune, p_address_quartier: input.addressQuartier ?? activeProfile.address_quartier, p_address_avenue: input.addressAvenue ?? activeProfile.address_avenue, p_address_number: input.addressNumber ?? activeProfile.address_number, p_address_latitude: input.addressLatitude ?? activeProfile.address_latitude, p_address_longitude: input.addressLongitude ?? activeProfile.address_longitude, p_shirt_size: input.shirtSize ?? activeProfile.shirt_size, p_jacket_size: input.jacketSize ?? activeProfile.jacket_size, p_skirt_size: input.skirtSize ?? activeProfile.skirt_size, p_dress_size: input.dressSize ?? activeProfile.dress_size, p_heel_size: input.heelSize ?? activeProfile.heel_size, p_sneaker_size: input.sneakerSize ?? activeProfile.sneaker_size, p_ballerina_size: input.ballerinaSize ?? activeProfile.ballerina_size, p_current_occupation: input.currentOccupation ?? activeProfile.current_occupation, p_accepts_night_work: input.acceptsNightWork ?? activeProfile.accepts_night_work, p_accepts_overnight_stay: input.acceptsOvernightStay ?? activeProfile.accepts_overnight_stay, p_accepts_late_work: input.acceptsLateWork ?? activeProfile.accepts_late_work });
   if (error) throw error;
   const row = Array.isArray(data) ? data[0] : data;
   if (!row) throw new Error("Le profil n’a pas pu être mis à jour.");
@@ -729,6 +739,26 @@ export async function updateMyProfile(input: { fullName: string; phone: string; 
   return activeProfile;
 }
 
+export type TrainingModuleAccess = { user_id: string; module_code: string; granted: boolean; granted_by: string | null; granted_at: string; updated_at: string };
+export const TRAINING_MODULES = [
+  ["clients", "Clients M-Pesa"], ["petit-commerce", "Petit Commerce"], ["paiement-marchand", "Paiement Marchand"],
+  ["carte-visa", "M-Pesa Carte Visa"], ["mikili", "M-Pesa Mikili"], ["rallonge", "M-Pesa Rallonge"],
+  ["vodacom-privilege", "Vodacom Privilège"], ["formation-hotesses", "Formation Hôtesses"],
+] as const;
+export async function loadTrainingModuleAccess(userId: string): Promise<TrainingModuleAccess[]> {
+  const actor = assertTrainingManager();
+  if (!supabaseClient) throw new Error("Configurez Supabase avant de gérer les accès formation.");
+  const { data, error } = await supabaseClient.rpc("list_training_module_access", { p_actor_id: actor.id, p_user_id: userId });
+  if (error) throw error;
+  return (data || []) as TrainingModuleAccess[];
+}
+export async function setTrainingModuleAccess(userId: string, moduleCodes: string[]): Promise<TrainingModuleAccess[]> {
+  const actor = assertTrainingManager();
+  if (!supabaseClient) throw new Error("Configurez Supabase avant de gérer les accès formation.");
+  const { data, error } = await supabaseClient.rpc("set_training_module_access", { p_actor_id: actor.id, p_user_id: userId, p_module_codes: moduleCodes });
+  if (error) throw error;
+  return (data || []) as TrainingModuleAccess[];
+}
 export async function findExistingUser(normalizedPhone: string): Promise<UserRecord | null> {
   if (!supabaseClient) return null;
   const { data, error } = await supabaseClient.from("users").select(safeUserColumns).eq("phone", normalizedPhone).maybeSingle();
