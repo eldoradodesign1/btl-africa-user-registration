@@ -66,5 +66,5 @@ begin
   return query select u.id,u.full_name,u.phone,u.role,u.user_category,u.supervisor_id,u.permanent_shop_id,u.avatar_url,u.address,u.address_province,u.address_commune,u.address_quartier,u.address_avenue,u.address_number,u.address_latitude,u.address_longitude,u.shirt_size,u.jacket_size,u.skirt_size,u.dress_size,u.heel_size,u.sneaker_size,u.ballerina_size,u.current_occupation,u.accepts_night_work,u.accepts_overnight_stay,u.accepts_late_work,u.profile_updated_at from public.users u where u.id=p_user_id;
 end;
 $function$;
-grant execute on function public.update_my_profile(text,text,text,text,text,text,text,text,text,text,text,text,double precision,double precision,text,text,text,text,text,text,text,boolean,boolean,boolean,boolean) to anon, authenticated;
+grant execute on function public.update_my_profile(text,text,text,text,text,text,text,text,text,text,text,text,double precision,double precision,text,text,text,text,text,text,text,text,boolean,boolean,boolean) to anon, authenticated;
 notify pgrst,'reload schema';
