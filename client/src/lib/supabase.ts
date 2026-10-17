@@ -507,6 +507,15 @@ export async function createEventCampaign(input: CreateEventInput): Promise<Camp
   if (!campaign) throw new Error("La création de l’événement n’a pas été confirmée.");
   return campaign as CampaignRecord;
 }
+export async function updateCampaignManagement(campaignId: string, input: CreateEventInput): Promise<CampaignRecord> {
+  if (!activeProfile || !supabaseClient) throw new Error("Connexion administrative requise avant de modifier une campagne.");
+  if (!["admin", "super_admin", "sub_admin"].includes(activeProfile.role)) throw new Error("Droits administratifs requis.");
+  const { data, error } = await supabaseClient.rpc("update_campaign_management", { p_actor_id: activeProfile.id, p_campaign_id: campaignId, p_code: input.code.trim(), p_name: input.name.trim(), p_starts_on: input.startsOn, p_ends_on: input.endsOn || null, p_supervisor_id: input.supervisorId, p_agent_ids: input.agentIds });
+  if (error) throw error;
+  const campaign = Array.isArray(data) ? data[0] : data;
+  if (!campaign) throw new Error("La modification de la campagne n’a pas été confirmée.");
+  return campaign as CampaignRecord;
+}
 export async function updateEventCampaign(campaignId: string, input: CreateEventInput): Promise<CampaignRecord> {
   if (!activeProfile || !supabaseClient) throw new Error("Connexion administrative requise avant de modifier un événement.");
   if (!["admin", "super_admin", "sub_admin"].includes(activeProfile.role)) throw new Error("Droits administratifs requis.");
