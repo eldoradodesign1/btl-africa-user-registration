@@ -41,6 +41,7 @@ import {
   signOutAdmin,
   setUserActivityStatus,
   setEventStatus,
+  setUserCampaignAssignments,
   subscribeToDataChanges,
   syncAgentCampaignSupervisors,
   testSupabaseConnection,
@@ -915,9 +916,13 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
     if (!campaignDraft) return;
     setActionLoading(true);
     try {
+      // Membership and operational supervision are two distinct concerns.
+      // Persist the campaign selection explicitly first, then synchronize only
+      // the supervisors attached to the selected campaigns.
+      await setUserCampaignAssignments(campaignDraft.id, campaignSelection);
       const nextSupervisorAssignments = await syncAgentCampaignSupervisors(campaignDraft.id, campaignSelection.map((campaignId) => ({ campaignId, supervisorIds: campaignSupervisorSelection[campaignId] || [] })));
       const nextAssignments = await loadCampaignAssignments();
-      setCampaignAssignments((current) => [...current.filter((assignment) => assignment.user_id !== campaignDraft.id), ...nextAssignments]);
+      setCampaignAssignments(nextAssignments);
       setCampaignSupervisorAssignments((current) => [...current.filter((assignment) => assignment.agent_id !== campaignDraft.id), ...nextSupervisorAssignments]);
       setCampaignDraft(null);
       setNotice({ kind: "success", message: `Les campagnes de ${campaignDraft.full_name} ont été mises à jour.` });
