@@ -381,7 +381,6 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
   useEffect(() => { void refreshSession(); }, []);
   useEffect(() => {
     if (!activeProfileId) return;
-    let realtimeConnected = false;
     const flushRealtimeRefresh = () => {
       realtimeRefreshTimer.current = null;
       if (refreshInFlight.current) {
@@ -397,19 +396,20 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
       realtimeTables.current.add(table);
       if (realtimeRefreshTimer.current === null) realtimeRefreshTimer.current = window.setTimeout(flushRealtimeRefresh, 220);
     };
-    const unsubscribe = subscribeToDataChanges(scheduleRealtimeRefresh, (status) => {
-      realtimeConnected = status === "SUBSCRIBED";
-    });
+    const unsubscribe = subscribeToDataChanges(scheduleRealtimeRefresh);
+    // Realtime is an optimisation, not the source of truth. Some Supabase
+    // projects do not have every table enabled for postgres_changes, so keep
+    // the campaign/assignment view fresh even while the channel is connected.
     const fallbackRefreshTimer = window.setInterval(() => {
-      if (!realtimeConnected && document.visibilityState === "visible") {
+      if (document.visibilityState === "visible") {
         const currentProfile = profileRef.current;
-        if (currentProfile) void refreshUsers(currentProfile, true);
+        if (currentProfile) void refreshUsers(currentProfile, true, new Set(["campaigns", "user_campaign_assignments", "agent_campaign_supervisor_assignments"]));
       }
-    }, 30000);
+    }, 20000);
     const refreshWhenVisible = () => {
-      if (document.visibilityState === "visible" && Date.now() - lastRefreshAt.current > 30000) {
+      if (document.visibilityState === "visible") {
         const currentProfile = profileRef.current;
-        if (currentProfile) void refreshUsers(currentProfile, false);
+        if (currentProfile) void refreshUsers(currentProfile, true, new Set(["campaigns", "user_campaign_assignments", "agent_campaign_supervisor_assignments"]));
       }
     };
     document.addEventListener("visibilitychange", refreshWhenVisible);
