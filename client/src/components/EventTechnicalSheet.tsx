@@ -1,17 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
 import { BriefcaseBusiness, CheckCircle2, FilePenLine, FileText, LoaderCircle, MapPin, Phone, Shirt, Users, X } from "lucide-react";
 import { Avatar } from "@/components/RoleWorkspace";
-import { loadEventOutfitItems, loadEventDays, setEventOutfitSupply, type CampaignAssignment, type CampaignRecord, type EventDay, type EventOutfitItem, type UserRecord } from "@/lib/supabase";
+import { loadEventOutfitItems, loadEventDays, setEventOutfitSupply, type CampaignAssignment, type CampaignRecord, type CampaignSupervisorAssignment, type EventDay, type EventOutfitItem, type UserRecord } from "@/lib/supabase";
 import { categoryShortLabel } from "@/lib/user-form";
 
-export default function EventTechnicalSheet({ campaign, users, assignments, campaigns, onNotice, onClose, onEdit }: { campaign: CampaignRecord; users: UserRecord[]; assignments: CampaignAssignment[]; campaigns: CampaignRecord[]; onNotice: (notice: { kind: "success" | "error"; message: string }) => void; onClose: () => void; onEdit: () => void }) {
+export default function EventTechnicalSheet({ campaign, users, assignments, supervisorAssignments, campaigns, onNotice, onClose, onEdit }: { campaign: CampaignRecord; users: UserRecord[]; assignments: CampaignAssignment[]; supervisorAssignments: CampaignSupervisorAssignment[]; campaigns: CampaignRecord[]; onNotice: (notice: { kind: "success" | "error"; message: string }) => void; onClose: () => void; onEdit: () => void }) {
   const [days, setDays] = useState<EventDay[]>([]);
   const [outfitItems, setOutfitItems] = useState<EventOutfitItem[]>([]);
   const [loading, setLoading] = useState(true);
   const assignedAgents = useMemo(() => {
-    const ids = new Set(assignments.filter((item) => item.campaign_id === campaign.id && item.is_active).map((item) => item.user_id));
+    const ids = new Set([
+      ...assignments.filter((item) => item.campaign_id === campaign.id && item.is_active).map((item) => item.user_id),
+      ...supervisorAssignments.filter((item) => item.campaign_id === campaign.id && item.is_active).map((item) => item.agent_id),
+    ]);
     return users.filter((user) => ids.has(user.id) && user.role === "agent");
-  }, [assignments, campaign.id, users]);
+  }, [assignments, campaign.id, supervisorAssignments, users]);
   const [included, setIncluded] = useState<string[]>([]);
   useEffect(() => {
     setIncluded(assignedAgents.map((agent) => agent.id));
@@ -22,7 +25,10 @@ export default function EventTechnicalSheet({ campaign, users, assignments, camp
     return () => { cancelled = true; };
   }, [campaign.id, onNotice]);
   const supervisor = campaign.event_supervisor_id ? users.find((user) => user.id === campaign.event_supervisor_id) : null;
-  const eventCount = (agentId: string) => campaigns.filter((item) => item.campaign_type === "event" && assignments.some((assignment) => assignment.campaign_id === item.id && assignment.user_id === agentId && assignment.is_active)).length;
+  const eventCount = (agentId: string) => campaigns.filter((item) => item.campaign_type === "event" && (
+    assignments.some((assignment) => assignment.campaign_id === item.id && assignment.user_id === agentId && assignment.is_active)
+    || supervisorAssignments.some((assignment) => assignment.campaign_id === item.id && assignment.agent_id === agentId && assignment.is_active)
+  )).length;
   const address = (user: UserRecord) => [user.address_avenue, user.address_number, user.address_quartier, user.address_commune, user.address_province].filter(Boolean).join(", ") || "Adresse non renseignée";
   const sizeColumns = ["XS", "S", "M", "L", "XL", "XXL"];
   const measurementKey = (itemKey: string): keyof UserRecord => itemKey === "chemise" ? "shirt_size" : itemKey === "jupe" ? "skirt_size" : itemKey === "robe" ? "dress_size" : itemKey === "talon" ? "heel_size" : itemKey === "basket" ? "sneaker_size" : itemKey === "ballerine" ? "ballerina_size" : "jacket_size";
