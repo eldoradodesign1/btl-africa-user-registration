@@ -13,6 +13,12 @@ describe("campaign compatibility", () => {
     expect(isCampaignCompatibleWithCategory("hostess", "brand_ambassador")).toBe(false);
   });
 
+  it("shows every campaign family to polyvalent hostesses", () => {
+    expect(isCampaignCompatibleWithCategory("hostess", "hostess_polyvalent")).toBe(true);
+    expect(isCampaignCompatibleWithCategory("brand_ambassador", "hostess_polyvalent")).toBe(true);
+    expect(isCampaignCompatibleWithCategory("event", "hostess_polyvalent")).toBe(true);
+  });
+
   it("labels event campaigns explicitly", () => {
     expect(campaignTypeLabel("event")).toBe("Event");
   });
