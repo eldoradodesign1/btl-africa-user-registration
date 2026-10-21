@@ -878,7 +878,12 @@ export async function setUserCampaignAssignments(userId: string, campaignIds: st
   if (error) throw error;
   return (data || []) as CampaignAssignment[];
 }
-
+export async function removeAgentFromCampaign(agentId: string, campaignId: string): Promise<void> {
+  const manager = assertCampaignManager();
+  if (!supabaseClient) throw new Error("Configurez Supabase avant de gérer les campagnes.");
+  const { error } = await supabaseClient.rpc("remove_agent_from_campaign", { p_agent_id: agentId, p_campaign_id: campaignId, p_manager_id: manager.id });
+  if (error) throw error;
+}
 export async function syncAgentCampaignSupervisors(
   agentId: string,
   assignments: Array<{ campaignId: string; supervisorIds: string[] }>,
