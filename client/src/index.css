@@ -1230,3 +1230,6 @@ html { scrollbar-width: thin; scrollbar-color: rgba(158,188,233,.35) rgba(3,7,14
 .event-agent-card.technical-agent-card{padding-bottom:50px}
 .event-agent-card .export-agent-check{top:10px;right:10px;z-index:3}
 .event-agent-card .technical-agent-remove{top:auto;right:10px;bottom:10px;z-index:3}
+
+.settings-menu-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+@media (max-width: 680px) { .settings-menu-actions { width: 100%; justify-content: flex-start; } }
