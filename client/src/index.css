@@ -1186,10 +1186,10 @@ html { scrollbar-width: thin; scrollbar-color: rgba(158,188,233,.35) rgba(3,7,14
 .campaign-menu-card-actions{display:flex;flex-wrap:wrap;gap:7px}.campaign-menu-card-actions .button{flex:1;justify-content:center;min-width:112px}
 
 /* BTL atmosphere: movement stays subtle so operational data remains primary. */
-.app-shell::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;background:linear-gradient(115deg,rgba(7,13,21,.68),rgba(7,13,21,.18) 46%,rgba(7,13,21,.58)),url('/btl-dashboard-atmosphere.png') center/cover no-repeat;opacity:.27;mix-blend-mode:screen;animation:btl-atmosphere-drift 24s ease-in-out infinite alternate}
+.app-shell::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;background:linear-gradient(115deg,rgba(7,13,21,.68),rgba(7,13,21,.18) 46%,rgba(7,13,21,.58)),url('/btl-dashboard-atmosphere.png') center/cover no-repeat;opacity:.27;mix-blend-mode:screen;will-change:transform;animation:btl-atmosphere-drift 24s ease-in-out infinite alternate}
 .event-agent-tools{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:10px 0}.event-agent-search{flex:1 1 240px;min-width:190px;padding:10px 12px;border:1px solid rgba(158,188,233,.18);border-radius:10px;background:rgba(255,255,255,.045);color:inherit;outline:none}.event-agent-search:focus{border-color:var(--cyan);box-shadow:0 0 0 3px rgba(158,188,233,.1)}
 .ambient{animation:btl-orb-float 13s ease-in-out infinite alternate}.ambient-two{animation-delay:-5s}
-@keyframes btl-atmosphere-drift{0%{transform:scale(1) translate3d(0,0,0);filter:saturate(.9)}100%{transform:scale(1.045) translate3d(1.5%,-1%,0);filter:saturate(1.16)}}
+@keyframes btl-atmosphere-drift{0%{transform:scale(1) translate3d(0,0,0)}100%{transform:scale(1.045) translate3d(1.5%,-1%,0)}}
 @keyframes btl-orb-float{0%{transform:translate3d(-8px,0,0) scale(.96);opacity:.13}100%{transform:translate3d(12px,-18px,0) scale(1.08);opacity:.25}}
 .campaign-menu-card{position:relative;overflow:hidden;transition:transform .24s var(--ease-out),border-color .24s ease,box-shadow .24s ease;background:linear-gradient(145deg,rgba(12,29,55,.74),rgba(8,17,31,.74))}
 .campaign-menu-card::before{content:"";position:absolute;inset:-40% -10%;pointer-events:none;background:radial-gradient(circle at 18% 0%,rgba(158,188,233,.16),transparent 28%),radial-gradient(circle at 92% 110%,rgba(145,187,234,.12),transparent 32%);opacity:.45;transition:transform .45s ease,opacity .3s ease}
