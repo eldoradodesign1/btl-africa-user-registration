@@ -81,9 +81,12 @@ const MEASUREMENT_FIELDS = [
   ["heel_size", "Talon"], ["sneaker_size", "Basket"], ["ballerina_size", "Ballerines"],
 ] as const;
 const MEASUREMENT_SIZES = ["XXS", "XS", "S", "M", "L", "XL", "XXL", "XXXL"];
+const SHOE_MEASUREMENT_LABELS = new Set(["Talon", "Basket", "Ballerines"]);
 
 function MeasurementField({ label, value, onChange }: { label: string; value: string | null; onChange: (value: string) => void }) {
-  return <label className="measurement-field"><span>{label}</span><div className="measurement-input-wrap"><input value={value || ""} onChange={(event) => onChange(event.target.value.toUpperCase())} placeholder="Taille ou numéro" list={`sizes-${label}`} /><datalist id={`sizes-${label}`}>{MEASUREMENT_SIZES.map((size) => <option value={size} key={size} />)}</datalist></div></label>;
+  const isShoe = SHOE_MEASUREMENT_LABELS.has(label);
+  const current = (value || "").toUpperCase();
+  return <div className="measurement-field"><label className="measurement-field-label"><span>{label}</span><div className="measurement-input-wrap"><input value={value || ""} onChange={(event) => onChange(event.target.value.toUpperCase())} placeholder={isShoe ? "Pointure (ex. 39)" : "Taille ou numéro"} inputMode={isShoe ? "numeric" : "text"} autoComplete="off" /></div></label>{!isShoe && <div className="measurement-size-chips" role="group" aria-label={`Tailles rapides · ${label}`}>{MEASUREMENT_SIZES.map((size) => <button type="button" key={size} className={current === size ? "is-selected" : ""} aria-pressed={current === size} onClick={() => onChange(current === size ? "" : size)}>{size}</button>)}</div>}</div>;
 }
 
 function CampaignPicker({ campaigns, value, onChange }: { campaigns: CampaignRecord[]; value: CampaignRecord | null; onChange: (campaign: CampaignRecord) => void }) {

@@ -1,0 +1,646 @@
+/* ==========================================================================
+   BTL Africa — unified premium layer
+   Loaded after index.css and brand-refresh.css. Presentation only: no layout
+   rule here changes behaviour, and every interactive component keeps its DOM.
+   ========================================================================== */
+:root {
+  color-scheme: dark;
+  --btl-cobalt: #2861d4;
+  --btl-cobalt-hover: #3775e8;
+  --btl-sky: #a8caff;
+  --accent-ink: #9cc0ff;
+  --surface-0: #0b1730;
+  --surface-1: #122641;
+  --surface-2: #172e4d;
+  --surface-3: #1d3a60;
+  --field-bg: #0e1e36;
+  --field-line: #2f4a6e;
+  --field-line-hover: #4a6c9c;
+  --line-soft: rgba(132, 165, 214, .16);
+  --line-strong: rgba(132, 165, 214, .3);
+  --ink-1: #f1f5fb;
+  --ink-2: #c3d1e5;
+  --ink-3: #93a7c4;
+  --ok: #8fd3b2;
+  --ok-bg: rgba(64, 160, 120, .14);
+  --warn: #f0c983;
+  --danger: #ffaab4;
+  --danger-bg: rgba(220, 76, 98, .14);
+  --radius-sm: 8px;
+  --radius-md: 11px;
+  --radius-lg: 16px;
+  --shadow-pop: 0 18px 44px rgba(2, 8, 22, .46), 0 2px 6px rgba(2, 8, 22, .3);
+  --ring: 0 0 0 3px rgba(108, 160, 247, .22);
+  --ease-out: cubic-bezier(.2, .72, .24, 1);
+  --cyan: #2861d4;
+}
+
+/* --------------------------------------------------------------------------
+   1. Custom selects: the wrapper is the visible field, the trigger is inert.
+   -------------------------------------------------------------------------- */
+.custom-select { position: relative; min-width: 0; }
+.custom-select-trigger,
+.dashboard-shell .custom-select-trigger,
+.modal-card .custom-select-trigger {
+  width: 100%;
+  min-height: 24px;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  color: var(--ink-1) !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.custom-select-trigger > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.custom-select-trigger:hover { color: #fff !important; }
+.custom-select-trigger .select-chevron { flex: none; color: var(--ink-3); transition: transform .2s var(--ease-out), color .2s ease; }
+.custom-select.is-open .select-chevron { color: var(--btl-sky); transform: rotate(180deg); }
+.custom-select-menu {
+  z-index: 60;
+  min-width: max(100%, 200px);
+  max-height: min(320px, 52vh);
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid var(--line-strong) !important;
+  border-radius: 12px !important;
+  background: #132a48 !important;
+  box-shadow: var(--shadow-pop) !important;
+  animation: btl-pop-in .16s var(--ease-out);
+}
+.custom-select-menu button {
+  min-height: 34px;
+  padding: 8px 10px !important;
+  border-radius: 8px !important;
+  color: var(--ink-2) !important;
+  font-size: 11px !important;
+  font-weight: 600;
+  transition: background .14s ease, color .14s ease;
+}
+.custom-select-menu button:hover { color: #fff !important; background: rgba(76, 122, 196, .22) !important; }
+.custom-select-menu button.is-selected { color: #fff !important; background: rgba(40, 97, 212, .32) !important; }
+.custom-select-menu button.is-selected svg { color: var(--btl-sky) !important; }
+.select-backdrop { z-index: 50 !important; }
+.custom-select.is-open { z-index: 61; }
+
+/* Field shells that host a custom select */
+.filter-control,
+.signup-category > .custom-select,
+.modal-card label > .custom-select,
+.field > .custom-select {
+  border: 1px solid var(--field-line) !important;
+  border-radius: var(--radius-sm) !important;
+  background: var(--field-bg) !important;
+  transition: border-color .18s ease, box-shadow .18s ease, background .18s ease;
+}
+.filter-control:hover,
+.signup-category > .custom-select:hover,
+.modal-card label > .custom-select:hover { border-color: var(--field-line-hover) !important; }
+.filter-control:focus-within,
+.signup-category > .custom-select.is-open,
+.modal-card label > .custom-select.is-open { border-color: #6f9ff0 !important; box-shadow: var(--ring); }
+.filter-control { height: 40px; gap: 8px; padding: 0 12px; color: var(--ink-3); }
+.filter-control > svg { flex: none; color: var(--accent-ink); }
+.filter-control .custom-select { flex: 1; min-width: 132px; }
+.signup-category > .custom-select,
+.modal-card label > .custom-select { display: flex; align-items: center; min-height: 42px; padding: 0 12px !important; }
+.signup-category > .custom-select .custom-select-trigger,
+.modal-card label > .custom-select .custom-select-trigger { min-height: 40px; }
+.signup-category > .custom-select .custom-select-menu,
+.modal-card label > .custom-select .custom-select-menu { top: calc(100% + 6px); left: -1px; right: -1px; min-width: calc(100% + 2px); }
+
+/* --------------------------------------------------------------------------
+   2. Text inputs, search and date/time fields share one recipe.
+   -------------------------------------------------------------------------- */
+.history-search {
+  height: 40px;
+  gap: 9px;
+  padding: 0 12px;
+  border: 1px solid var(--field-line) !important;
+  border-radius: var(--radius-sm);
+  color: var(--accent-ink);
+  background: var(--field-bg) !important;
+  transition: border-color .18s ease, box-shadow .18s ease;
+}
+.history-search:hover { border-color: var(--field-line-hover) !important; }
+.history-search:focus-within { border-color: #6f9ff0 !important; box-shadow: var(--ring); }
+.history-search input,
+.dashboard-shell .history-search input {
+  height: 100%;
+  padding: 0 !important;
+  border: 0 !important;
+  color: var(--ink-1) !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  font-size: 11px;
+}
+.signup-fields input,
+.modal-card label > input,
+.admin-login input {
+  height: 42px;
+  padding: 0 12px;
+  border: 1px solid var(--field-line) !important;
+  border-radius: var(--radius-sm) !important;
+  color: var(--ink-1) !important;
+  background: var(--field-bg) !important;
+  font-size: 12px;
+  transition: border-color .18s ease, box-shadow .18s ease;
+}
+.signup-fields input:hover,
+.modal-card label > input:hover { border-color: var(--field-line-hover) !important; }
+.signup-fields input:focus,
+.modal-card label > input:focus,
+.admin-login input:focus { border-color: #6f9ff0 !important; box-shadow: var(--ring) !important; }
+.signup-fields input::placeholder,
+.modal-card input::placeholder,
+.history-search input::placeholder { color: #7489a8 !important; }
+.custom-date-picker-control,
+.custom-time-field,
+.address-select-trigger { transition: border-color .18s ease, box-shadow .18s ease; }
+.custom-date-picker-control:hover,
+.custom-time-field:hover,
+.address-select-trigger:hover { border-color: var(--field-line-hover) !important; }
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--ink-1);
+  caret-color: var(--ink-1);
+  -webkit-box-shadow: 0 0 0 1000px var(--field-bg) inset;
+  transition: background-color 9999s ease-out;
+}
+
+/* --------------------------------------------------------------------------
+   3. Custom checkboxes: never show the native control.
+   -------------------------------------------------------------------------- */
+.password-toggle input,
+.signup-whatsapp-toggle input,
+.export-select-all input,
+.export-preview-row input,
+.export-agent-check input {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  margin: 0 !important;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  opacity: 0 !important;
+  pointer-events: none;
+}
+.toggle-visual {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--btl-cobalt) !important;
+  border-radius: 6px !important;
+  color: #fff !important;
+  background: var(--btl-cobalt) !important;
+  box-shadow: 0 2px 8px rgba(40, 97, 212, .32);
+  transition: background .16s ease, border-color .16s ease, transform .16s var(--ease-out), box-shadow .16s ease;
+}
+.toggle-visual svg { width: 12px; height: 12px; }
+input:not(:checked) + .toggle-visual {
+  color: transparent !important;
+  border-color: #4d6a92 !important;
+  background: var(--field-bg) !important;
+  box-shadow: none;
+}
+label:hover > input + .toggle-visual { border-color: #7fa9ef !important; transform: scale(1.06); }
+input:focus-visible + .toggle-visual { box-shadow: var(--ring); }
+.password-toggle,
+.signup-whatsapp-toggle {
+  position: relative;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 11px;
+  padding: 11px 13px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-md);
+  background: rgba(23, 46, 77, .55);
+  cursor: pointer;
+  transition: border-color .18s ease, background .18s ease;
+}
+.password-toggle:hover,
+.signup-whatsapp-toggle:hover { border-color: var(--line-strong); background: rgba(29, 58, 96, .6); }
+.password-toggle strong,
+.signup-whatsapp-toggle strong { display: block; color: var(--ink-1) !important; font-size: 11px; font-weight: 700; }
+.password-toggle small,
+.signup-whatsapp-toggle small { display: block; margin-top: 3px; color: var(--ink-3) !important; font-size: 10px; }
+.password-toggle code { color: var(--btl-sky) !important; font-family: "DM Mono", monospace; }
+
+/* Technical-sheet card checkbox */
+.export-agent-check {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid #4d6a92;
+  border-radius: 8px;
+  color: transparent;
+  background: var(--field-bg);
+  cursor: pointer;
+  transition: background .16s ease, border-color .16s ease, color .16s ease, transform .16s var(--ease-out);
+}
+.export-agent-check:hover { border-color: #7fa9ef; transform: scale(1.05); }
+.export-agent-check:has(input:checked) { color: #fff; border-color: var(--btl-cobalt); background: var(--btl-cobalt); box-shadow: 0 3px 10px rgba(40, 97, 212, .35); }
+.export-agent-check svg { width: 14px; height: 14px; }
+
+/* --------------------------------------------------------------------------
+   4. Export selection rows: grid, not stacked label columns.
+   -------------------------------------------------------------------------- */
+.modal-card label.export-preview-row,
+.export-selection-list .export-preview-row {
+  position: relative;
+  display: grid !important;
+  flex-direction: initial;
+  grid-template-columns: 24px minmax(150px, 1.5fr) 78px minmax(105px, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  padding: 8px 12px;
+  color: var(--ink-2);
+  font-size: 11px;
+  transition: background .14s ease;
+}
+.export-selection-list .export-preview-head { grid-template-columns: 24px minmax(150px, 1.5fr) 78px minmax(105px, 1fr); padding: 9px 12px; color: var(--ink-3); background: rgba(23, 46, 77, .8) !important; font-size: 9px; letter-spacing: .06em; }
+.export-selection-list .export-preview-row:hover { background: rgba(40, 97, 212, .1) !important; }
+.export-selection-list .export-preview-row:not(.is-selected) { opacity: .62; }
+.export-selection-list .export-preview-row strong { color: var(--ink-1) !important; font-size: 11px; }
+.modal-card label.export-select-all { display: inline-flex; flex-direction: row; align-items: center; gap: 9px; color: var(--ink-1); font-size: 11px; font-weight: 600; cursor: pointer; }
+.export-preview-table { overflow: hidden; border: 1px solid var(--line-soft) !important; border-radius: var(--radius-md); background: rgba(14, 30, 54, .6); }
+.activity-text { font-family: "DM Mono", monospace; font-size: 10px; }
+.activity-text.is-active { color: var(--ok); }
+.activity-text.is-inactive { color: var(--danger); }
+@media (max-width: 680px) {
+  .modal-card label.export-preview-row,
+  .export-selection-list .export-preview-row,
+  .export-selection-list .export-preview-head { grid-template-columns: 24px minmax(0, 1fr) 70px; }
+}
+
+/* --------------------------------------------------------------------------
+   5. Agent campaign picker (styles were lost in an earlier restoration).
+   -------------------------------------------------------------------------- */
+.agent-followup { position: relative; }
+.agent-campaign-picker { position: relative; z-index: 7; margin: 14px 0 18px; }
+.agent-campaign-picker.is-open { z-index: 30; }
+.agent-campaign-picker-trigger,
+.dashboard-shell .agent-campaign-picker-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 52px;
+  padding: 0 16px;
+  border: 1px solid var(--field-line) !important;
+  border-radius: 12px !important;
+  color: var(--ink-1) !important;
+  background: linear-gradient(110deg, rgba(40, 97, 212, .2), rgba(14, 30, 54, .92) 62%) !important;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color .2s ease, box-shadow .2s ease, transform .2s var(--ease-out);
+}
+.agent-campaign-picker-trigger:hover,
+.agent-campaign-picker.is-open .agent-campaign-picker-trigger { border-color: #6f9ff0 !important; box-shadow: var(--ring) !important; transform: translateY(-1px); }
+.agent-campaign-picker-trigger > span { display: inline-flex; align-items: center; gap: 10px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agent-campaign-picker-trigger > span > svg { flex: none; color: var(--btl-sky); }
+.agent-campaign-picker-chevron { flex: none; color: var(--btl-sky); transition: transform .2s var(--ease-out); }
+.agent-campaign-picker-chevron.is-open { transform: rotate(90deg); }
+.agent-campaign-picker-backdrop { position: fixed; z-index: -1; inset: 0; width: 100vw; height: 100vh; border: 0; background: transparent; }
+.agent-campaign-picker-menu {
+  position: absolute;
+  z-index: 10;
+  top: calc(100% + 8px);
+  right: 0;
+  left: 0;
+  display: grid;
+  gap: 2px;
+  max-height: 300px;
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid var(--line-strong) !important;
+  border-radius: 13px !important;
+  background: #132a48 !important;
+  box-shadow: var(--shadow-pop) !important;
+  animation: btl-pop-in .16s var(--ease-out);
+}
+.agent-campaign-picker-menu > button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 11px 12px;
+  border: 0;
+  border-radius: 9px;
+  color: var(--ink-2) !important;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background .14s ease, color .14s ease;
+}
+.agent-campaign-picker-menu > button:hover { color: #fff !important; background: rgba(76, 122, 196, .22) !important; }
+.agent-campaign-picker-menu > button.is-selected { color: #fff !important; background: rgba(40, 97, 212, .32) !important; }
+.agent-campaign-picker-menu > button > svg { flex: none; color: var(--btl-sky); }
+.agent-campaign-picker-menu > button strong,
+.agent-campaign-picker-menu > button small { display: block; }
+.agent-campaign-picker-menu > button strong { color: inherit !important; font-size: 12px; }
+.agent-campaign-picker-menu > button small { margin-top: 4px; color: var(--ink-3) !important; font-family: "DM Mono", monospace; font-size: 9px; letter-spacing: .04em; text-transform: uppercase; }
+.followup-unassigned { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 116px; padding: 18px 20px; border: 1px dashed rgba(240, 201, 131, .34); border-radius: 13px; background: rgba(240, 201, 131, .06); }
+.followup-unassigned strong, .followup-unassigned small { display: block; }
+.followup-unassigned strong { color: #f6dfae !important; font-size: 13px; }
+.followup-unassigned small { margin-top: 6px; color: var(--ink-3) !important; font-size: 11px; }
+.followup-empty { display: grid; place-items: center; min-height: 116px; }
+@media (max-width: 620px) {
+  .followup-unassigned { align-items: stretch; flex-direction: column; }
+  .followup-unassigned .button { align-self: flex-start; }
+}
+
+/* --------------------------------------------------------------------------
+   6. Agent workspace: one balanced column, team as a responsive grid.
+   -------------------------------------------------------------------------- */
+.role-workspace { display: grid; gap: 16px; }
+.workspace-grid { grid-template-columns: minmax(0, 1fr) !important; gap: 16px; }
+.workspace-grid:has(> .agents-card) { grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr) !important; }
+.superiors-card .superior-list { grid-template-columns: repeat(auto-fill, minmax(min(100%, 250px), 1fr)); gap: 8px; }
+.superior-row { min-height: 58px; padding: 10px 12px !important; border: 1px solid var(--line-soft) !important; border-radius: var(--radius-md); background: rgba(14, 30, 54, .5); transition: border-color .18s ease, background .18s ease, transform .18s var(--ease-out); }
+.superior-row:hover { border-color: var(--line-strong) !important; background: rgba(29, 58, 96, .5); }
+.superior-row.is-clickable:hover { transform: translateY(-2px); border-color: rgba(108, 160, 247, .6) !important; background: rgba(40, 97, 212, .14); }
+.superior-row strong { color: var(--ink-1) !important; font-size: 12px; }
+.superior-row small { color: var(--ink-3) !important; font-size: 10px; }
+.superior-row .copyable-phone { color: var(--accent-ink) !important; font-size: 10px; }
+.workspace-card { padding: 18px 20px !important; border-radius: var(--radius-lg) !important; }
+.workspace-card-heading { color: var(--ink-1) !important; font-size: 12px !important; font-weight: 700; }
+.workspace-card-heading small { color: var(--ink-3) !important; font-size: 9px !important; }
+.workspace-hero { position: relative; overflow: hidden; padding: 20px 22px !important; border-radius: var(--radius-lg) !important; background: linear-gradient(115deg, rgba(40, 97, 212, .26), rgba(18, 38, 65, .96) 58%) !important; }
+.workspace-hero::after { position: absolute; right: -60px; top: -80px; width: 240px; height: 240px; border-radius: 50%; background: radial-gradient(circle, rgba(168, 202, 255, .16), transparent 70%); content: ""; pointer-events: none; }
+.workspace-hero h2 { color: var(--ink-1) !important; font-size: clamp(19px, 2.2vw, 24px) !important; letter-spacing: -.035em; }
+.workspace-hero p { color: var(--ink-2) !important; font-size: 12px; }
+.workspace-profile-hero .profile-avatar.large,
+.workspace-profile-hero > .workspace-profile-photo-button > .avatar,
+.workspace-profile-photo-button .profile-avatar.large { width: 74px !important; height: 74px !important; border-radius: 20px !important; }
+@media (max-width: 760px) {
+  .workspace-grid:has(> .agents-card) { grid-template-columns: minmax(0, 1fr) !important; }
+}
+
+/* --------------------------------------------------------------------------
+   7. Sign-up form: named areas instead of empty grid holes.
+   -------------------------------------------------------------------------- */
+.signup-card { gap: 18px !important; padding: clamp(18px, 2.6vw, 28px) !important; border-radius: var(--radius-lg) !important; }
+.signup-heading { align-items: center !important; gap: 12px !important; padding-bottom: 14px; border-bottom: 1px solid var(--line-soft); }
+.signup-heading strong { color: var(--ink-1) !important; font-size: 15px !important; font-weight: 800; letter-spacing: -.02em; }
+.signup-heading span { color: var(--ink-3) !important; font-size: 11px !important; }
+.signup-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 16px !important; align-items: start; }
+.signup-fields > label,
+.signup-fields > .signup-category { gap: 7px !important; color: var(--ink-2) !important; font-size: 11px !important; font-weight: 600; }
+.signup-fields > label > span:first-child,
+.signup-category > span { color: var(--ink-2) !important; font-size: 11px; font-weight: 600; }
+.signup-fields > .address-fields { grid-column: 1 / -1; order: 20; margin: 4px 0 0; }
+.signup-fields > .signup-whatsapp-toggle { grid-column: auto; margin-top: 0; }
+.signup-fields > .signup-photo-field { order: 10; }
+.signup-fields > .signup-category { order: 11; }
+.signup-fields > .signup-password-toggle { grid-column: 1 / -1; order: 30; }
+.signup-fields > label:has(input[type="password"]) { order: 31; }
+.signup-file-control,
+.file-input-control { min-height: 42px !important; padding: 0 13px !important; border-color: rgba(108, 160, 247, .4) !important; border-radius: var(--radius-sm) !important; color: var(--accent-ink) !important; background: rgba(40, 97, 212, .08) !important; cursor: pointer; transition: border-color .18s ease, background .18s ease; }
+.signup-file-control:hover,
+.file-input-control:hover { border-color: rgba(108, 160, 247, .8) !important; background: rgba(40, 97, 212, .16) !important; }
+.signup-file-control > span,
+.file-input-control > span { color: var(--ink-1) !important; font-size: 11px !important; font-weight: 600; }
+.signup-submit { min-height: 44px; padding-inline: 20px !important; }
+@media (max-width: 680px) {
+  .signup-fields { grid-template-columns: minmax(0, 1fr) !important; }
+  .signup-fields > * { grid-column: 1 / -1 !important; }
+}
+
+/* --------------------------------------------------------------------------
+   8. Simulation bar: BTL night-blue instead of the legacy amber/teal mix.
+   -------------------------------------------------------------------------- */
+.simulation-bar {
+  border-color: rgba(108, 160, 247, .28) !important;
+  background: linear-gradient(90deg, rgba(23, 46, 77, .97), rgba(14, 30, 54, .97)) !important;
+  box-shadow: 0 10px 28px rgba(2, 8, 22, .34);
+  backdrop-filter: blur(10px);
+}
+.simulation-bar.is-active { border-color: rgba(240, 201, 131, .5) !important; background: linear-gradient(90deg, rgba(74, 56, 34, .9), rgba(14, 30, 54, .97) 46%) !important; }
+.simulation-brand span { color: var(--btl-sky) !important; font-size: 9px !important; }
+.simulation-bar.is-active .simulation-brand span { color: var(--warn) !important; }
+.simulation-brand small { color: var(--ink-3) !important; font-size: 10px !important; }
+.simulation-brand-icon { border-color: rgba(108, 160, 247, .32) !important; color: var(--btl-sky) !important; background: rgba(40, 97, 212, .16) !important; }
+.simulation-user-select { min-height: 40px; border-color: var(--field-line) !important; background: var(--field-bg) !important; transition: border-color .18s ease, box-shadow .18s ease; }
+.simulation-user-select:hover { border-color: #6f9ff0 !important; background: var(--field-bg) !important; box-shadow: var(--ring); }
+.simulation-user-select strong { color: var(--ink-1) !important; font-size: 11px !important; }
+.simulation-user-select small { color: var(--btl-sky) !important; font-size: 8px !important; }
+.simulation-shortcuts { border-color: var(--field-line) !important; background: var(--field-bg) !important; }
+.simulation-shortcut { color: var(--ink-3) !important; font-size: 9px !important; transition: color .15s ease, background .15s ease; }
+.simulation-shortcut:hover:not(:disabled) { color: #fff !important; border-color: transparent !important; background: rgba(76, 122, 196, .26) !important; }
+.simulation-shortcut.is-active { color: #fff !important; background: var(--btl-cobalt) !important; }
+.simulation-collapse { border-color: var(--field-line) !important; background: var(--field-bg) !important; }
+.simulation-exit { border-color: rgba(255, 170, 180, .36) !important; color: var(--danger) !important; background: var(--danger-bg) !important; }
+.simulation-picker { border-color: var(--line-strong) !important; background: #132a48 !important; }
+.simulation-picker-icon, .simulation-kicker { color: var(--btl-sky) !important; }
+.simulation-picker-icon { background: rgba(40, 97, 212, .18) !important; }
+.simulation-search { border-color: var(--field-line) !important; background: var(--field-bg) !important; }
+.simulation-search:focus-within { border-color: #6f9ff0 !important; box-shadow: var(--ring) !important; }
+.simulation-user-option:hover,
+.simulation-user-option.is-selected { border-color: rgba(108, 160, 247, .32) !important; background: rgba(40, 97, 212, .18) !important; }
+.simulation-current { color: #fff !important; background: var(--btl-cobalt) !important; }
+
+/* --------------------------------------------------------------------------
+   9. Chips, toggles and pills.
+   -------------------------------------------------------------------------- */
+.session-chip { border-color: var(--line-strong) !important; color: var(--ink-2) !important; background: rgba(23, 46, 77, .7) !important; font-size: 10px !important; }
+.activity-toggle { min-height: 26px; font-size: 9px !important; font-weight: 700; letter-spacing: .03em; transition: transform .16s var(--ease-out), border-color .16s ease, background .16s ease; }
+.activity-toggle.is-active { color: var(--ok) !important; border-color: rgba(143, 211, 178, .32) !important; background: var(--ok-bg) !important; }
+.activity-toggle.is-active::before,
+.activity-toggle.is-inactive::before { display: inline-block; width: 6px; height: 6px; margin-right: 6px; border-radius: 50%; background: currentColor; content: ""; }
+.activity-toggle.is-inactive { color: var(--danger) !important; border-color: rgba(255, 170, 180, .32) !important; background: var(--danger-bg) !important; }
+.role-badge { padding: 4px 8px; border: 1px solid rgba(108, 160, 247, .26); font-size: 9px !important; }
+.campaign-pill { border-radius: 7px !important; font-size: 10px !important; transition: border-color .16s ease, background .16s ease; }
+.campaign-pill:hover { border-color: #6f9ff0 !important; }
+.view-toggle,
+.compact-filter-group { height: 40px; border-color: var(--field-line) !important; background: var(--field-bg) !important; }
+.compact-filter-button { width: 32px; height: 32px; color: var(--ink-3) !important; transition: color .15s ease, background .15s ease, transform .15s var(--ease-out); }
+.compact-filter-button:hover { color: #fff !important; background: rgba(76, 122, 196, .24) !important; }
+.compact-filter-button.is-active,
+.view-toggle button.is-active { color: #fff !important; border-color: transparent !important; background: var(--btl-cobalt) !important; box-shadow: 0 4px 12px rgba(40, 97, 212, .34) !important; }
+.compact-filter-button.status-active.is-active { background: #2f8a67 !important; box-shadow: 0 4px 12px rgba(47, 138, 103, .32) !important; }
+.compact-filter-button.status-inactive.is-active { background: #b2475a !important; box-shadow: 0 4px 12px rgba(178, 71, 90, .32) !important; }
+
+/* --------------------------------------------------------------------------
+   10. Buttons and icon actions: one height scale, tactile feedback.
+   -------------------------------------------------------------------------- */
+.button { min-height: 38px; gap: 8px; font-size: 11px !important; font-weight: 700; letter-spacing: -.005em; }
+.button.compact { min-height: 32px; }
+.button.primary { background: linear-gradient(180deg, #3170e6, #2861d4) !important; box-shadow: 0 6px 18px rgba(40, 97, 212, .34), inset 0 1px 0 rgba(255, 255, 255, .14) !important; }
+.button.primary:hover:not(:disabled) { background: linear-gradient(180deg, #3d7cf0, #2f6ae0) !important; transform: translateY(-1px); box-shadow: 0 10px 24px rgba(40, 97, 212, .42), inset 0 1px 0 rgba(255, 255, 255, .16) !important; }
+.button.secondary { border-color: var(--field-line) !important; color: var(--ink-1) !important; background: var(--surface-2) !important; }
+.button.secondary:hover:not(:disabled) { border-color: #6f9ff0 !important; background: var(--surface-3) !important; transform: translateY(-1px); }
+.icon-button, .icon-action, .modal-close { transition: color .15s ease, border-color .15s ease, background .15s ease, transform .15s var(--ease-out); }
+.icon-button:hover, .icon-action:hover { transform: translateY(-1px); }
+.icon-action { border-color: var(--field-line) !important; color: var(--ink-2) !important; background: var(--surface-2) !important; }
+.icon-action:hover { border-color: #6f9ff0 !important; color: #fff !important; background: var(--surface-3) !important; }
+.icon-action.danger, .icon-action.delete { color: var(--danger) !important; }
+.icon-action.danger:hover, .icon-action.delete:hover { border-color: rgba(255, 170, 180, .5) !important; background: var(--danger-bg) !important; }
+.modal-close { border: 1px solid var(--field-line) !important; border-radius: 9px !important; }
+.modal-close:hover { transform: rotate(90deg); }
+
+/* --------------------------------------------------------------------------
+   11. Tables and dashboard frame.
+   -------------------------------------------------------------------------- */
+.users-table-wrap { border-color: var(--line-soft) !important; border-radius: var(--radius-lg) !important; background: rgba(14, 30, 54, .55) !important; }
+.users-table th { color: var(--ink-3) !important; background: #142b4b !important; font-size: 9px !important; letter-spacing: .07em; }
+.users-table td { color: var(--ink-2) !important; font-size: 11px !important; border-bottom-color: rgba(132, 165, 214, .1) !important; }
+.users-table td strong { color: var(--ink-1) !important; font-size: 12px; }
+.users-table tbody tr { transition: background .14s ease; }
+.users-table tbody tr:hover td { background: rgba(40, 97, 212, .09) !important; }
+.dashboard-main-nav { border-color: var(--line-soft) !important; background: rgba(14, 30, 54, .7) !important; }
+.dashboard-main-nav button { font-size: 11px !important; transition: color .16s ease, background .16s ease, box-shadow .16s ease; }
+.dashboard-main-nav button.is-active,
+.dashboard-main-nav button[aria-current="page"] { color: #fff !important; background: var(--btl-cobalt) !important; box-shadow: 0 6px 16px rgba(40, 97, 212, .34) !important; }
+.admin-profile-hero p,
+.admin-profile-hero small { color: var(--ink-3) !important; }
+.admin-profile-hero h3,
+.admin-profile-hero strong { color: var(--ink-1) !important; }
+.dashboard-title h2 { letter-spacing: -.035em; }
+.eyebrow, .card-kicker { color: var(--btl-sky) !important; }
+
+/* --------------------------------------------------------------------------
+   12. Modals and detail sections.
+   -------------------------------------------------------------------------- */
+.modal-layer { background: rgba(4, 10, 24, .64); backdrop-filter: blur(8px); }
+.modal-card { border-radius: 18px !important; box-shadow: 0 30px 80px rgba(2, 8, 22, .55), 0 0 0 1px rgba(132, 165, 214, .08) !important; }
+.modal-card label { color: var(--ink-2) !important; font-size: 11px !important; font-weight: 600; }
+.detail-section { border-radius: var(--radius-md) !important; }
+.detail-section-title {
+  min-height: 34px;
+  margin: -1px -1px 10px;
+  padding: 0 12px;
+  border-radius: 10px 10px 0 0;
+  background: rgba(29, 58, 96, .7) !important;
+}
+.detail-section-title span { color: var(--ink-1) !important; font-size: 12px !important; font-weight: 700; }
+.detail-section-title small { color: var(--ink-3) !important; font-size: 9px !important; }
+.measurement-summary-grid > div { border-radius: 9px !important; }
+.measurement-summary-grid small { color: var(--ink-3) !important; }
+.measurement-summary-grid strong { color: var(--ink-1) !important; }
+.detail-campaign { border-radius: var(--radius-md) !important; transition: border-color .16s ease, background .16s ease; }
+.detail-campaign:hover { border-color: var(--line-strong) !important; }
+.detail-campaign.is-assigned strong { color: var(--ink-1) !important; }
+.detail-campaign.is-assigned small { color: var(--ok) !important; }
+.user-address-summary { border-radius: 9px; padding: 11px 12px; font-size: 11px; }
+.workspace-empty { color: var(--ink-3) !important; font-size: 11px !important; }
+
+/* Profile modal: keep the action bar pinned without covering content. */
+.profile-modal .modal-actions,
+.modal-card > .modal-actions:last-child {
+  position: sticky;
+  bottom: -22px;
+  z-index: 5;
+  margin: 6px -22px -22px;
+  padding: 14px 22px;
+  border-top: 1px solid var(--line-soft);
+  background: linear-gradient(180deg, rgba(18, 38, 65, .92), #122641 40%);
+  backdrop-filter: blur(6px);
+}
+@media (max-width: 680px) {
+  .profile-modal .modal-actions,
+  .modal-card > .modal-actions:last-child { bottom: -18px; margin: 6px -18px -18px; padding: 12px 18px; }
+}
+
+/* Measurements editor: custom size chips (no native datalist). */
+.measurement-form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr)); gap: 12px; }
+.measurement-field { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--line-soft); border-radius: var(--radius-md); background: rgba(14, 30, 54, .5); }
+.measurement-field-label { display: grid; gap: 6px; color: var(--ink-2) !important; font-size: 11px; font-weight: 600; }
+.measurement-input-wrap input { width: 100%; height: 38px; padding: 0 11px; border: 1px solid var(--field-line) !important; border-radius: var(--radius-sm); outline: 0; color: var(--ink-1) !important; background: var(--field-bg) !important; font: inherit; font-size: 12px; font-weight: 700; letter-spacing: .02em; }
+.measurement-input-wrap input:focus { border-color: #6f9ff0 !important; box-shadow: var(--ring); }
+.measurement-size-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.measurement-size-chips button { min-width: 34px; height: 26px; padding: 0 7px; border: 1px solid var(--field-line); border-radius: 7px; color: var(--ink-3); background: transparent; font-family: "DM Mono", monospace; font-size: 9px; font-weight: 700; cursor: pointer; transition: color .14s ease, background .14s ease, border-color .14s ease, transform .14s var(--ease-out); }
+.measurement-size-chips button:hover { color: #fff; border-color: #6f9ff0; transform: translateY(-1px); }
+.measurement-size-chips button.is-selected { color: #fff; border-color: var(--btl-cobalt); background: var(--btl-cobalt); box-shadow: 0 3px 10px rgba(40, 97, 212, .32); }
+
+/* Technical sheet card actions: checkbox top-right, delete bottom-right. */
+.event-agent-card.technical-agent-card { padding-right: 46px; padding-bottom: 50px; }
+.event-agent-card .technical-agent-remove { top: auto !important; right: 12px; bottom: 12px; }
+
+/* --------------------------------------------------------------------------
+   13. Cards: subtle lift and light that follows the cursor (pure CSS hover).
+   -------------------------------------------------------------------------- */
+.campaign-menu-card,
+.user-card,
+.event-agent-card,
+.workspace-card,
+.pending-item {
+  transition: border-color .2s ease, box-shadow .24s var(--ease-out), transform .24s var(--ease-out), background-color .2s ease !important;
+}
+.campaign-menu-card:hover,
+.event-agent-card:hover { transform: translateY(-3px) !important; border-color: rgba(108, 160, 247, .55) !important; box-shadow: 0 16px 34px rgba(2, 8, 22, .38) !important; }
+.campaign-menu-card { border-radius: var(--radius-lg) !important; }
+.campaign-menu-card h4 { letter-spacing: -.02em; }
+
+/* --------------------------------------------------------------------------
+   14. Calendar and notices.
+   -------------------------------------------------------------------------- */
+.calendar-day { border-radius: 9px !important; transition: transform .14s var(--ease-out), border-color .14s ease, filter .14s ease; }
+button.calendar-day:hover:not(:disabled) { transform: translateY(-1px); filter: brightness(1.14); }
+.dashboard-notice { border-radius: var(--radius-md) !important; font-size: 11px; }
+
+/* --------------------------------------------------------------------------
+   15. Motion.
+   -------------------------------------------------------------------------- */
+@keyframes btl-pop-in { from { opacity: 0; transform: translateY(-4px) scale(.985); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .custom-select-menu, .agent-campaign-picker-menu { animation: none; }
+  .campaign-menu-card:hover, .event-agent-card:hover, .superior-row.is-clickable:hover, .button:hover { transform: none !important; }
+}
+
+/* --------------------------------------------------------------------------
+   16. Final polish after visual review.
+   -------------------------------------------------------------------------- */
+/* Date/time fields: the shell carries the border, never the inner input. */
+.custom-date-picker-control,
+.custom-time-field { border-color: var(--field-line) !important; background: var(--field-bg) !important; }
+.signup-fields .custom-date-picker-control input,
+.modal-card .custom-date-picker-control input,
+.custom-date-picker-control input,
+.custom-time-field input {
+  height: auto !important;
+  min-height: 40px;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  color: var(--ink-1) !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.custom-date-picker-control:focus-within,
+.custom-time-field:focus-within { border-color: #6f9ff0 !important; box-shadow: var(--ring) !important; }
+
+/* Agent workspace: remove the legacy 72px gap under the team grid. */
+.workspace-grid { padding-bottom: 0 !important; }
+
+/* Export header: the checkbox column needs no visible label. */
+.export-selection-list .export-preview-head > span:first-child { overflow: hidden; color: transparent; font-size: 0; }
+
+/* Modal headers with actions: actions above the title on small screens. */
+@media (max-width: 620px) {
+  .modal-header:has(.modal-header-actions) { flex-wrap: wrap; gap: 12px; }
+  .modal-header:has(.modal-header-actions) > div:first-child { order: 2; flex: 1 1 100%; min-width: 0; }
+  .modal-header:has(.modal-header-actions) .modal-header-actions { order: 1; flex: 1 1 100%; justify-content: flex-end; }
+  .modal-header h3 { font-size: 19px !important; line-height: 1.2; }
+}
+.modal-header-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.modal-header-actions .button { white-space: nowrap; }
+.modal-header > div:first-child > span { color: var(--ink-3) !important; font-size: 11px; }
