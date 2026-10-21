@@ -647,3 +647,26 @@ body { color: var(--text); }
 .admin-login input { color: #edf3fb !important; border-color: #304a6b !important; background: #0e1e36 !important; }
 .admin-login input::placeholder { color: #9aadc7 !important; }
 .admin-login input:focus { border-color: #79a8f5 !important; box-shadow: 0 0 0 3px rgba(113,164,247,.18) !important; }
+
+
+/* Campaign assignment switch and supervisor chooser in the agent detail. */
+.detail-assignment-switch { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 26px; padding: 0; border: 0; border-radius: 999px; background: transparent; cursor: pointer; }
+.detail-assignment-switch-track { width: 36px; height: 20px; display: flex; align-items: center; padding: 2px; border: 1px solid #526985; border-radius: 999px; background: #172e4d; transition: background .18s ease, border-color .18s ease; }
+.detail-assignment-switch-track > span { width: 14px; height: 14px; border-radius: 50%; background: #9fb1ca; box-shadow: 0 1px 3px rgba(0,0,0,.28); transition: transform .18s ease, background .18s ease; }
+.detail-assignment-switch.is-on .detail-assignment-switch-track { border-color: #2861d4; background: #2861d4; }
+.detail-assignment-switch.is-on .detail-assignment-switch-track > span { background: #fff; transform: translateX(16px); }
+.detail-assignment-switch:hover .detail-assignment-switch-track { border-color: #78a6ef; }
+.detail-assignment-switch:disabled { cursor: wait; opacity: .58; }
+.detail-supervisor-modal-layer { z-index: 1002 !important; }
+.detail-supervisor-modal { width: min(460px, 100%); }
+.detail-supervisor-modal-hint { margin: 10px 0 12px; color: #b0bfd3; font-size: 12px; line-height: 1.5; }
+.detail-supervisor-options { display: grid; gap: 7px; max-height: min(320px, 38vh); overflow-y: auto; }
+.detail-supervisor-option { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 47px; padding: 8px 10px; border: 1px solid #304a6b; border-radius: 9px; color: #dbe6f5; background: #142a47; text-align: left; cursor: pointer; }
+.detail-supervisor-option:hover, .detail-supervisor-option.is-selected { border-color: #5478ac; background: #203c61; }
+.detail-supervisor-check { width: 20px; height: 20px; flex: none; display: grid; place-items: center; border: 1px solid #526985; border-radius: 6px; color: #d8e7ff; }
+.detail-supervisor-option.is-selected .detail-supervisor-check { border-color: #2861d4; color: #fff; background: #2861d4; }
+.detail-supervisor-option > span:last-child { display: grid; gap: 3px; }
+.detail-supervisor-option strong { color: #f1f5fb; font-size: 12px; }
+.detail-supervisor-option small { color: #9fb1ca; font-size: 10px; }
+.detail-supervisor-modal .modal-actions { margin-top: 14px; }
+@media (max-width: 560px) { .detail-campaign { gap: 4px; padding: 7px; } .detail-supervisor-modal { width: 100%; } }
