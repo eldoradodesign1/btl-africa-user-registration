@@ -2,7 +2,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { isValidMsisdn, normalizePhone } from "./phone";
 
 export type UserRole = "agent" | "supervisor" | "sub_admin" | "admin" | "super_admin";
-export type UserCategory = "hostess" | "brand_ambassador" | "brand_ambassador_youth" | "operations";
+export type UserCategory = "hostess" | "hostess_polyvalent" | "brand_ambassador" | "operations";
 export type RegistrationRequestStatus = "pending" | "approved" | "rejected";
 
 export type UserRecord = {

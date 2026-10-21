@@ -10,13 +10,13 @@ export const ROLE_LABELS: Record<UserRole, string> = {
 
 export const CATEGORY_LABELS: Record<UserCategory, string> = {
   hostess: "Hôtesse — campagne Vodacom Privilège",
+  hostess_polyvalent: "Hôtesse polyvalente — campagnes Hôtesses, BA et Events",
   brand_ambassador: "Brand Ambassador — campagne Merchant Educational",
-  brand_ambassador_youth: "Brand Ambassador Youth — campagne Youth F2F",
   operations: "Opérations",
 };
 
 export const ROLE_OPTIONS: UserRole[] = ["agent", "supervisor", "sub_admin", "admin", "super_admin"];
-export const CATEGORY_OPTIONS: UserCategory[] = ["hostess", "brand_ambassador", "brand_ambassador_youth", "operations"];
+export const CATEGORY_OPTIONS: UserCategory[] = ["hostess", "hostess_polyvalent", "brand_ambassador", "operations"];
 
 export function defaultPasswordForRole(role: UserRole): string {
   if (role === "agent") return "password";
@@ -85,6 +85,7 @@ export function categoryShortLabel(category: UserCategory | null): string {
  * aux hôtesses. Les campagnes BA restent réservées aux catégories BA.
  */
 export function isCampaignCompatibleWithCategory(campaignType: string, category: UserCategory | null): boolean {
+  if (category === "hostess_polyvalent") return campaignType === "hostess" || campaignType === "brand_ambassador" || campaignType === "event";
   if (category === "hostess") return campaignType === "hostess" || campaignType === "event";
   return campaignType === "brand_ambassador";
 }
