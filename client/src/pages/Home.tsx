@@ -26,8 +26,6 @@ import {
   X,
 } from "lucide-react";
 import {
-  CATEGORY_LABELS,
-  CATEGORY_OPTIONS,
   ROLE_LABELS,
   ROLE_OPTIONS,
   buildUserPayload,
@@ -152,6 +150,35 @@ function CustomSelect<T extends string>({
 
 function UserRoleBadge({ role }: { role: UserRole }) {
   return <span className={`role-badge role-${role}`}>{ROLE_LABELS[role]}</span>;
+}
+
+function CategoryChoice({ value, onChange }: { value: UserCategory; onChange: (value: UserCategory) => void }) {
+  const choices: Array<{ value: UserCategory; label: string; detail: string }> = [
+    { value: "hostess", label: "Hôtesse", detail: "Accueil, terrain et opérations" },
+    { value: "brand_ambassador", label: "Brand Ambassador", detail: "Activation commerciale et visibilité" },
+  ];
+
+  return (
+    <fieldset className="category-choice">
+      <legend>Catégorie utilisateur <span aria-hidden="true">*</span></legend>
+      <div className="category-choice-grid" role="radiogroup" aria-label="Catégorie utilisateur">
+        {choices.map((choice) => (
+          <button
+            type="button"
+            role="radio"
+            aria-checked={choice.value === value}
+            className={`category-choice-option ${choice.value === value ? "is-selected" : ""}`}
+            key={choice.value}
+            onClick={() => onChange(choice.value)}
+          >
+            <span className="category-choice-mark" aria-hidden="true">{choice.value === value ? <Check size={14} /> : <span />}</span>
+            <span className="category-choice-copy"><strong>{choice.label}</strong><small>{choice.detail}</small></span>
+          </button>
+        ))}
+      </div>
+      <span className="field-hint">Ce choix détermine les campagnes et les équipements proposés.</span>
+    </fieldset>
+  );
 }
 
 function CustomOptionSelect({ label, value, options, onChange, helper, disabled = false, ariaLabel }: { label?: string; value: string; options: Array<{ value: string; label: string }>; onChange: (value: string) => void; helper?: string; disabled?: boolean; ariaLabel?: string }) {
@@ -455,7 +482,7 @@ function Home({ onUserCreated, onNavigateDashboard, agentsOnly = false }: { onUs
               </div>
               <label className="password-toggle signup-whatsapp-toggle"><input type="checkbox" checked={form.whatsappSameAsPhone} onChange={(event) => updateForm("whatsappSameAsPhone", event.target.checked)} /><span className="toggle-visual"><Check size={13} /></span><span><strong>WhatsApp</strong><small>Utiliser le numéro M-Pesa</small></span></label>
               {!form.whatsappSameAsPhone && <div className="field-grid two-columns"><div className="field"><label htmlFor="whatsappPhone">Numéro WhatsApp <b>*</b></label><input id="whatsappPhone" value={form.whatsappPhone} onChange={(event) => updateForm("whatsappPhone", event.target.value)} placeholder="081 234 5678" type="tel" inputMode="tel" autoComplete="tel" /></div></div>}
-              <div className="field-grid two-columns profile-extra-fields"><div className="field"><label htmlFor="dateOfBirth">Date de naissance</label><DatePickerField id="dateOfBirth" ariaLabel="Date de naissance" value={form.dateOfBirth} onChange={(value) => updateForm("dateOfBirth", value)} /></div></div>
+              <div className="field-grid two-columns profile-extra-fields"><div className="field"><label htmlFor="dateOfBirth">Date de naissance <span className="optional-label">facultatif</span></label><DatePickerField native id="dateOfBirth" ariaLabel="Date de naissance, facultatif" value={form.dateOfBirth} onChange={(value) => updateForm("dateOfBirth", value)} /><span className="field-hint">Le calendrier de votre téléphone s’ouvrira automatiquement.</span></div></div>
               <AddressFields value={form.addressDetails} onChange={(addressDetails) => updateForm("addressDetails", addressDetails)} />
               <div className="field profile-photo-field"><label htmlFor="profilePhoto">Photo de profil</label><label className="file-input-control"><ImagePlus size={16} /><span>{form.avatarUrl ? "Photo sélectionnée" : "Choisir une photo"}</span><input id="profilePhoto" type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; if (!file.type.startsWith("image/") || file.size > 520000) { setToast({ kind: "error", title: "Photo invalide", message: "La photo doit être une image de moins de 500 Ko." }); return; } const reader = new FileReader(); reader.onload = () => updateForm("avatarUrl", String(reader.result)); reader.readAsDataURL(file); }} /></label></div>
             </div>
@@ -472,7 +499,7 @@ function Home({ onUserCreated, onNavigateDashboard, agentsOnly = false }: { onUs
               {form.role === "agent" && (
                 <div className="conditional-panel">
                   <div className="conditional-label"><BriefcaseBusiness size={15} /><div><strong>Campagne / catégorie</strong><span>Les catégories Merchant et Youth F2F restent distinctes.</span></div></div>
-                  <CustomSelect label="Catégorie utilisateur" value={form.category} options={CATEGORY_OPTIONS} labels={CATEGORY_LABELS} onChange={(value) => setForm((current) => ({ ...current, category: value, permanentShopId: value === "hostess" ? current.permanentShopId : "" }))} />
+                  <CategoryChoice value={form.category} onChange={(value) => setForm((current) => ({ ...current, category: value, permanentShopId: value === "hostess" ? current.permanentShopId : "" }))} />
                 </div>
               )}
               {showShop && (

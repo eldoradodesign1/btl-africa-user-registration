@@ -10,6 +10,7 @@ type DatePickerFieldProps = {
   required?: boolean;
   min?: string;
   max?: string;
+  native?: boolean;
 };
 
 function toDate(value: string): Date | undefined {
@@ -34,7 +35,7 @@ function toIsoFromFrenchDate(value: string): string | undefined {
   return date ? toIsoDate(date) : undefined;
 }
 
-export function DatePickerField({ id, value, onChange, ariaLabel, required, min, max }: DatePickerFieldProps) {
+export function DatePickerField({ id, value, onChange, ariaLabel, required, min, max, native = false }: DatePickerFieldProps) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(() => toFrenchDate(toDate(value)));
   const rootRef = useRef<HTMLDivElement>(null);
@@ -98,6 +99,26 @@ export function DatePickerField({ id, value, onChange, ariaLabel, required, min,
     setDraft(toFrenchDate(date));
     if (inputRef.current) inputRef.current.setCustomValidity("");
     setOpen(false);
+  }
+
+  if (native) {
+    return (
+      <div className="custom-date-picker custom-date-picker-native">
+        <div className="custom-date-picker-control">
+          <CalendarDays size={15} aria-hidden="true" />
+          <input
+            id={id}
+            type="date"
+            value={value}
+            min={min}
+            max={max}
+            required={required}
+            aria-label={ariaLabel}
+            onChange={(event) => onChange(event.target.value)}
+          />
+        </div>
+      </div>
+    );
   }
 
   return (
