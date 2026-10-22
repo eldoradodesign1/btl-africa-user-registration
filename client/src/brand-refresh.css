@@ -694,3 +694,95 @@ body { color: var(--text); }
   .category-choice-grid { grid-template-columns: 1fr; }
   .category-choice-option { min-height: 58px; padding: 11px; }
 }
+
+
+/* Harmonisation maquettes BTL : photo + catégorie compacte. Les règles existantes
+   du formulaire, de Supabase et des autres modules restent inchangées. */
+.profile-photo-category-row {
+  display: grid;
+  grid-template-columns: minmax(122px, 160px) minmax(0, 1fr);
+  align-items: stretch;
+  gap: 15px;
+  margin-top: 16px;
+}
+.profile-photo-category-row .profile-photo-field { margin: 0; max-width: none; min-width: 0; }
+.profile-photo-category-row .profile-photo-caption {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
+.profile-photo-category-row .profile-photo-tile {
+  position: relative; display: flex; flex-direction: column; justify-content: flex-start;
+  align-items: flex-start; min-height: 124px; width: 100%; gap: 5px;
+  padding: 14px 12px; overflow: hidden; border: 1px solid #304a6b;
+  border-radius: 10px; background: #1b3555; color: #edf3fb;
+}
+.profile-photo-category-row .profile-photo-tile > span { max-width: 100%; color: #edf3fb; font-size: 11px; font-weight: 700; line-height: 1.3; }
+.profile-photo-category-row .profile-photo-tile.has-photo { padding: 0; }
+.profile-photo-category-row .profile-photo-preview {
+  display: block; width: 100%; height: 124px; object-fit: cover;
+}
+.profile-photo-category-row .category-choice { align-self: stretch; display: flex; flex-direction: column; justify-content: center; min-width: 0; }
+.profile-photo-category-row .category-choice legend { margin-bottom: 8px; color: #9fb1ca; font-size: 10px; }
+.profile-photo-category-row .category-choice-grid {
+  display: grid; grid-template-columns: minmax(0, 1fr); gap: 7px; min-width: 0;
+}
+.profile-photo-category-row .category-choice-top-row {
+  display: flex; align-items: center; gap: 8px; min-width: 0;
+}
+.profile-photo-category-row .category-choice-option {
+  flex: none; display: flex; align-items: center; min-height: 51px; gap: 8px;
+  padding: 10px; background: #203c61; border: 1px solid transparent;
+  border-radius: 8px; box-shadow: none; transform: none;
+}
+.profile-photo-category-row .category-choice-option:hover { transform: none; }
+.profile-photo-category-row .category-choice-top-row .category-choice-option { min-width: 105px; max-width: 100%; }
+.profile-photo-category-row .category-choice-grid > .category-choice-option { width: fit-content; min-width: 182px; max-width: 100%; }
+.profile-photo-category-row .category-choice-option.is-selected {
+  background: #203c61; border-color: #47658e; box-shadow: none;
+}
+.profile-photo-category-row .category-choice-mark--round {
+  width: 18px; height: 18px; border-radius: 50%; border: 0;
+  background: #304a6b; color: #fff; flex: none;
+}
+.profile-photo-category-row .category-choice-option.is-selected .category-choice-mark--round {
+  background: #2861d4; color: #fff; border: 0;
+}
+.profile-photo-category-row .category-choice-polyvalent {
+  display: inline-flex; align-items: center; gap: 6px; position: relative;
+  flex: none; color: #edf3fb; font-size: 10px; font-weight: 700; cursor: pointer;
+}
+.profile-photo-category-row .category-choice-polyvalent input {
+  position: absolute; width: 1px; height: 1px; opacity: 0;
+}
+.profile-photo-category-row .category-choice-polyvalent-check {
+  display: grid; place-items: center; width: 19px; height: 19px;
+  flex: none; border: 1px solid #526985; border-radius: 5px;
+  background: #304a6b; color: #fff;
+}
+.profile-photo-category-row .category-choice-polyvalent input:checked + .category-choice-polyvalent-check {
+  background: #2861d4; border-color: #2861d4;
+}
+.profile-photo-category-row .category-choice-polyvalent input:focus-visible + .category-choice-polyvalent-check {
+  outline: 2px solid #a8caff; outline-offset: 3px;
+}
+.profile-photo-category-row .category-choice .field-hint {
+  margin-top: 8px; color: #9fb1ca; font-size: 9px; line-height: 1.4;
+}
+.address-street-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(94px, 1fr); gap: 10px; min-width: 0; }
+.address-street-grid > .field { min-width: 0; }
+.address-street-grid input { min-width: 0; }
+@media (max-width: 760px) {
+  .profile-photo-category-row { grid-template-columns: minmax(114px, 43%) minmax(0, 1fr); gap: 12px; }
+  .profile-photo-category-row .category-choice-top-row { flex-wrap: wrap; gap: 7px; }
+  .profile-photo-category-row .category-choice-top-row .category-choice-option { min-width: 0; }
+  .profile-photo-category-row .category-choice-grid > .category-choice-option { min-width: 0; width: 100%; }
+  .profile-photo-category-row .category-choice-option { min-height: 45px; padding: 9px; }
+  .profile-photo-category-row .category-choice .field-hint { display: none; }
+}
+@media (max-width: 370px) {
+  .profile-photo-category-row { grid-template-columns: minmax(100px, 42%) minmax(0, 1fr); gap: 9px; }
+  .profile-photo-category-row .category-choice-option { font-size: 10px; }
+  .profile-photo-category-row .category-choice-copy strong { font-size: 9px; }
+  .profile-photo-category-row .category-choice-polyvalent { font-size: 9px; }
+  .address-street-grid { grid-template-columns: minmax(0, 1.5fr) minmax(75px, 1fr); gap: 6px; }
+}
