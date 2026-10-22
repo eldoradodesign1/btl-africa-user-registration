@@ -3,7 +3,6 @@ import {
   AlertCircle,
   ArrowRight,
   BadgeCheck,
-  BriefcaseBusiness,
   CalendarDays,
   Check,
   CheckCircle2,
