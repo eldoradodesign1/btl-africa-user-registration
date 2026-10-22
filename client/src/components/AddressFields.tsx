@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { Check, ChevronDown, LoaderCircle, MapPin, Navigation } from "lucide-react";
 import { loadAddressCommunes, loadAddressProvinces, loadAddressQuartiers, type AddressCommune, type AddressProvince, type AddressQuartier } from "@/lib/supabase";
 
@@ -44,8 +44,34 @@ function findLocationName(value: unknown): string {
 
 function AddressSelect({ value, options, placeholder, onChange, disabled, loading, ariaLabel }: { value: string; options: Array<{ value: string; label: string }>; placeholder: string; onChange: (value: string) => void; disabled?: boolean; loading?: boolean; ariaLabel: string }) {
   const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const current = options.find((option) => option.value === value)?.label || (value && !options.some((option) => option.value === value) ? value : placeholder);
-  return <div className={`address-select ${open ? "is-open" : ""}`}><button type="button" className="select-trigger address-select-trigger" aria-label={ariaLabel} aria-expanded={open} disabled={disabled} onClick={() => setOpen((state) => !state)}><span>{loading ? "Chargement…" : current}</span>{loading ? <LoaderCircle className="spin" size={14} /> : <ChevronDown size={14} />}</button>{open && <><button type="button" className="select-backdrop" aria-label="Fermer" onClick={() => setOpen(false)} /><div className="select-menu address-select-menu">{options.map((option) => <button type="button" className={`select-option ${option.value === value ? "is-selected" : ""}`} key={option.value} onClick={() => { onChange(option.value); setOpen(false); }}>{option.label}{option.value === value && <Check size={14} />}</button>)}</div></>}</div>;
+
+  useEffect(() => {
+    if (!open) return;
+    const items = menuRef.current?.querySelectorAll<HTMLButtonElement>("[role=option]");
+    const selected = menuRef.current?.querySelector<HTMLButtonElement>("[aria-selected=true]");
+    (selected || items?.[0])?.focus({ preventScroll: false });
+  }, [open]);
+
+  function close(returnFocus = true) {
+    setOpen(false);
+    if (returnFocus) requestAnimationFrame(() => triggerRef.current?.focus());
+  }
+
+  function onMenuKey(event: ReactKeyboardEvent<HTMLDivElement>) {
+    const items = Array.from(menuRef.current?.querySelectorAll<HTMLButtonElement>("[role=option]") || []);
+    const index = items.indexOf(document.activeElement as HTMLButtonElement);
+    if (event.key === "Escape") { event.preventDefault(); close(); }
+    else if (event.key === "Tab") close(false);
+    else if (event.key === "ArrowDown") { event.preventDefault(); items[Math.min(items.length - 1, index + 1)]?.focus(); }
+    else if (event.key === "ArrowUp") { event.preventDefault(); items[Math.max(0, index - 1)]?.focus(); }
+    else if (event.key === "Home") { event.preventDefault(); items[0]?.focus(); }
+    else if (event.key === "End") { event.preventDefault(); items[items.length - 1]?.focus(); }
+  }
+
+  return <div className={`address-select ${open ? "is-open" : ""}`}><button ref={triggerRef} type="button" className="select-trigger address-select-trigger" aria-label={`${ariaLabel} : ${loading ? "chargement" : current}`} aria-haspopup="listbox" aria-expanded={open} disabled={disabled} onClick={() => setOpen((state) => !state)} onKeyDown={(event) => { if (event.key === "ArrowDown" && !open) { event.preventDefault(); setOpen(true); } }}><span>{loading ? "Chargement…" : current}</span>{loading ? <LoaderCircle className="spin" size={14} aria-hidden="true" /> : <ChevronDown size={14} aria-hidden="true" />}</button>{open && <><button type="button" className="select-backdrop" tabIndex={-1} aria-hidden="true" onClick={() => close(false)} /><div ref={menuRef} className="select-menu address-select-menu" role="listbox" aria-label={ariaLabel} onKeyDown={onMenuKey}>{options.map((option) => <button type="button" role="option" aria-selected={option.value === value} className={`select-option ${option.value === value ? "is-selected" : ""}`} key={option.value} onClick={() => { onChange(option.value); close(); }}>{option.label}{option.value === value && <Check size={14} aria-hidden="true" />}</button>)}</div></>}</div>;
 }
 
 export default function AddressFields({ value, onChange, enableLocationSuggestion = true }: { value: AddressDraft; onChange: (value: AddressDraft) => void; enableLocationSuggestion?: boolean }) {
@@ -121,9 +147,9 @@ export default function AddressFields({ value, onChange, enableLocationSuggestio
 
   return <div className="address-fields">
     <div className="address-fields-heading"><div><span className="mini-label"><MapPin size={12} /> ADRESSE RDC</span><small>Ajoutez les éléments connus pour améliorer les statistiques locales.</small></div>{enableLocationSuggestion && <button type="button" className="button secondary compact address-gps-button" onClick={locate} disabled={locationState === "loading"}><Navigation size={13} />{locationState === "loading" ? "Localisation…" : "Suggérer ma position"}</button>}</div>
-    {locationState === "found" && <span className="field-status valid"><Check size={13} /> Suggestion GPS appliquée, vérifiez-la avant d’enregistrer.</span>}
+    <div aria-live="polite" className="address-live">{locationState === "found" && <span className="field-status valid"><Check size={13} /> Suggestion GPS appliquée, vérifiez-la avant d’enregistrer.</span>}
     {locationState === "denied" && <span className="field-hint">La localisation n’a pas été autorisée. Vous pouvez remplir l’adresse manuellement.</span>}
-    {locationState === "unavailable" && <span className="field-hint">Suggestion GPS indisponible. Les listes restent utilisables manuellement.</span>}
+    {locationState === "unavailable" && <span className="field-hint">Suggestion GPS indisponible. Les listes restent utilisables manuellement.</span>}</div>
     <div className="field-grid two-columns address-select-grid">
       <div className="field"><label>Province</label><AddressSelect value={value.provinceId} options={provinceOptions} placeholder="Choisir une province" onChange={(provinceId) => { const province = provinces.find((item) => item.id === provinceId); onChange({ ...value, provinceId, provinceName: province?.name || "", commune: "", quartier: "" }); setManualCommune(false); setManualQuartier(false); }} loading={loadingProvinces} ariaLabel="Province de résidence" /></div>
       <div className="field"><label>Commune</label><AddressSelect value={communeValue} options={communeOptions} placeholder={value.provinceId ? "Choisir une commune" : "Choisir d’abord une province"} onChange={(commune) => { if (commune === "__manual__") { setManualCommune(true); setManualQuartier(true); onChange({ ...value, commune: "", quartier: "" }); } else { setManualCommune(false); setManualQuartier(false); onChange({ ...value, commune, quartier: "" }); } }} disabled={!value.provinceId} loading={loadingCommunes} ariaLabel="Commune de résidence" />{communeIsManual && <input value={value.commune} onChange={(event) => onChange({ ...value, commune: event.target.value, quartier: "" })} placeholder="Écrire la commune" autoComplete="address-level2" />}</div>
