@@ -6,6 +6,19 @@ import { defineConfig } from "vite";
 
 const plugins = [react(), tailwindcss(), jsxLocPlugin()];
 
+// Build Pages versionné : PAGES_BUNDLE_VERSION=20261022-a11y produit
+// assets/index-registration-20261022-a11y.{js,css}. Rollup connaît ainsi le nom
+// final de l'entrée et les chunks dynamiques (xlsx) l'importent directement,
+// sans renommage manuel après le build.
+const pagesBundleVersion = process.env.PAGES_BUNDLE_VERSION?.trim();
+if (pagesBundleVersion && !/^[\w.-]+$/.test(pagesBundleVersion)) {
+  throw new Error(
+    `PAGES_BUNDLE_VERSION invalide (« ${pagesBundleVersion} ») : lettres, chiffres, « . », « _ » ou « - » uniquement.`
+  );
+}
+const pagesEntryName =
+  pagesBundleVersion && `assets/index-registration-${pagesBundleVersion}`;
+
 export default defineConfig({
   base: "./",
   plugins,
@@ -21,6 +34,17 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    rollupOptions: pagesEntryName
+      ? {
+          output: {
+            entryFileNames: `${pagesEntryName}.js`,
+            assetFileNames: asset =>
+              asset.names.includes("index.css")
+                ? `${pagesEntryName}.css`
+                : "assets/[name]-[hash][extname]",
+          },
+        }
+      : undefined,
   },
   server: {
     port: 3000,
