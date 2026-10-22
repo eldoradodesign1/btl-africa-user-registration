@@ -153,30 +153,46 @@ function UserRoleBadge({ role }: { role: UserRole }) {
 }
 
 function CategoryChoice({ value, onChange }: { value: UserCategory; onChange: (value: UserCategory) => void }) {
-  const choices: Array<{ value: UserCategory; label: string; detail: string }> = [
-    { value: "hostess", label: "Hôtesse", detail: "Accueil, terrain et opérations" },
-    { value: "brand_ambassador", label: "Brand Ambassador", detail: "Activation commerciale et visibilité" },
-  ];
+  const isHostess = value === "hostess" || value === "hostess_polyvalent";
+  const isPolyvalent = value === "hostess_polyvalent";
+  const isAmbassador = value === "brand_ambassador";
 
   return (
-    <fieldset className="category-choice">
+    <fieldset className="category-choice category-choice--compact">
       <legend>Catégorie utilisateur <span aria-hidden="true">*</span></legend>
-      <div className="category-choice-grid" role="radiogroup" aria-label="Catégorie utilisateur">
-        {choices.map((choice) => (
+      <div className="category-choice-grid" role="group" aria-label="Catégorie de l’agent">
+        <div className="category-choice-top-row">
           <button
             type="button"
-            role="radio"
-            aria-checked={choice.value === value}
-            className={`category-choice-option ${choice.value === value ? "is-selected" : ""}`}
-            key={choice.value}
-            onClick={() => onChange(choice.value)}
+            aria-pressed={isHostess}
+            className={`category-choice-option ${isHostess ? "is-selected" : ""}`}
+            onClick={() => onChange("hostess")}
           >
-            <span className="category-choice-mark" aria-hidden="true">{choice.value === value ? <Check size={14} /> : <span />}</span>
-            <span className="category-choice-copy"><strong>{choice.label}</strong><small>{choice.detail}</small></span>
+            <span className="category-choice-mark category-choice-mark--round" aria-hidden="true">{isHostess ? <Check size={12} /> : null}</span>
+            <span className="category-choice-copy"><strong>Hôtesse</strong></span>
           </button>
-        ))}
+          <label className="category-choice-polyvalent" title="Hôtesse polyvalente : campagnes Hôtesses, BA et Events">
+            <input
+              type="checkbox"
+              checked={isPolyvalent}
+              onChange={(event) => onChange(event.target.checked ? "hostess_polyvalent" : "hostess")}
+              aria-label="Hôtesse polyvalente"
+            />
+            <span className="category-choice-polyvalent-check" aria-hidden="true">{isPolyvalent && <Check size={12} />}</span>
+            <span>Polyv.</span>
+          </label>
+        </div>
+        <button
+          type="button"
+          aria-pressed={isAmbassador}
+          className={`category-choice-option ${isAmbassador ? "is-selected" : ""}`}
+          onClick={() => onChange("brand_ambassador")}
+        >
+          <span className="category-choice-mark category-choice-mark--round" aria-hidden="true">{isAmbassador ? <Check size={12} /> : null}</span>
+          <span className="category-choice-copy"><strong>Brand Ambassador</strong></span>
+        </button>
       </div>
-      <span className="field-hint">Ce choix détermine les campagnes et les équipements proposés.</span>
+      <span className="field-hint">La catégorie détermine les campagnes et les équipements proposés.</span>
     </fieldset>
   );
 }
@@ -484,7 +500,16 @@ function Home({ onUserCreated, onNavigateDashboard, agentsOnly = false }: { onUs
               {!form.whatsappSameAsPhone && <div className="field-grid two-columns"><div className="field"><label htmlFor="whatsappPhone">Numéro WhatsApp <b>*</b></label><input id="whatsappPhone" value={form.whatsappPhone} onChange={(event) => updateForm("whatsappPhone", event.target.value)} placeholder="081 234 5678" type="tel" inputMode="tel" autoComplete="tel" /></div></div>}
               <div className="field-grid two-columns profile-extra-fields"><div className="field"><label htmlFor="dateOfBirth">Date de naissance <span className="optional-label">facultatif</span></label><DatePickerField native id="dateOfBirth" ariaLabel="Date de naissance, facultatif" value={form.dateOfBirth} onChange={(value) => updateForm("dateOfBirth", value)} /><span className="field-hint">Le calendrier de votre téléphone s’ouvrira automatiquement.</span></div></div>
               <AddressFields value={form.addressDetails} onChange={(addressDetails) => updateForm("addressDetails", addressDetails)} />
-              <div className="field profile-photo-field"><label htmlFor="profilePhoto">Photo de profil</label><label className="file-input-control"><ImagePlus size={16} /><span>{form.avatarUrl ? "Photo sélectionnée" : "Choisir une photo"}</span><input id="profilePhoto" type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; if (!file.type.startsWith("image/") || file.size > 520000) { setToast({ kind: "error", title: "Photo invalide", message: "La photo doit être une image de moins de 500 Ko." }); return; } const reader = new FileReader(); reader.onload = () => updateForm("avatarUrl", String(reader.result)); reader.readAsDataURL(file); }} /></label></div>
+              <div className="profile-photo-category-row">
+                <div className="field profile-photo-field">
+                  <label htmlFor="profilePhoto" className="profile-photo-caption">Photo de profil</label>
+                  <label className={`file-input-control profile-photo-tile ${form.avatarUrl ? "has-photo" : ""}`}>
+                    {form.avatarUrl ? <img src={form.avatarUrl} alt="Aperçu de la photo sélectionnée" className="profile-photo-preview" /> : <><ImagePlus size={16} /><span>Choisir une photo</span></>}
+                    <input id="profilePhoto" type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; if (!file.type.startsWith("image/") || file.size > 520000) { setToast({ kind: "error", title: "Photo invalide", message: "La photo doit être une image de moins de 500 Ko." }); return; } const reader = new FileReader(); reader.onload = () => updateForm("avatarUrl", String(reader.result)); reader.readAsDataURL(file); }} />
+                  </label>
+                </div>
+                {form.role === "agent" && <CategoryChoice value={form.category} onChange={(value) => setForm((current) => ({ ...current, category: value, permanentShopId: value === "hostess" ? current.permanentShopId : "" }))} />}
+              </div>
             </div>
 
             <div className="section-block role-block">
@@ -496,12 +521,6 @@ function Home({ onUserCreated, onNavigateDashboard, agentsOnly = false }: { onUs
                   {supervisorError ? <span className="field-error"><AlertCircle size={13} />Impossible de charger les superviseurs.</span> : <span className="field-hint">Seuls les rôles d’encadrement sont proposés.</span>}
                 </div>
               </div>
-              {form.role === "agent" && (
-                <div className="conditional-panel">
-                  <div className="conditional-label"><BriefcaseBusiness size={15} /><div><strong>Campagne / catégorie</strong><span>Les catégories Merchant et Youth F2F restent distinctes.</span></div></div>
-                  <CategoryChoice value={form.category} onChange={(value) => setForm((current) => ({ ...current, category: value, permanentShopId: value === "hostess" ? current.permanentShopId : "" }))} />
-                </div>
-              )}
               {showShop && (
                 <div className="shop-row">
                   <div className="shop-copy"><span className="mini-label">SHOP PERMANENT</span><strong>Point de rattachement</strong><span>« Aucun shop » sera enregistré comme <code>null</code>.</span></div>
