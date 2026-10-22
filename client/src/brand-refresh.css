@@ -772,7 +772,7 @@ body { color: var(--text); }
 .address-street-grid > .field { min-width: 0; }
 .address-street-grid input { min-width: 0; }
 @media (max-width: 760px) {
-  .profile-photo-category-row { grid-template-columns: minmax(114px, 43%) minmax(0, 1fr); gap: 12px; }
+  .profile-photo-category-row { grid-template-columns: minmax(106px, 34%) minmax(0, 1fr); gap: 9px; }
   .profile-photo-category-row .category-choice-top-row { flex-wrap: wrap; gap: 7px; }
   .profile-photo-category-row .category-choice-top-row .category-choice-option { min-width: 0; }
   .profile-photo-category-row .category-choice-grid > .category-choice-option { min-width: 0; width: 100%; }
@@ -780,7 +780,7 @@ body { color: var(--text); }
   .profile-photo-category-row .category-choice .field-hint { display: none; }
 }
 @media (max-width: 370px) {
-  .profile-photo-category-row { grid-template-columns: minmax(100px, 42%) minmax(0, 1fr); gap: 9px; }
+  .profile-photo-category-row { grid-template-columns: minmax(96px, 34%) minmax(0, 1fr); gap: 8px; }
   .profile-photo-category-row .category-choice-option { font-size: 10px; }
   .profile-photo-category-row .category-choice-copy strong { font-size: 9px; }
   .profile-photo-category-row .category-choice-polyvalent { font-size: 9px; }
