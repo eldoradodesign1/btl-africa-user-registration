@@ -7,6 +7,7 @@ import RoleWorkspace, { ATTENDANCE_STATE_LABELS, AgentDetailModal, Avatar, Atten
 import AddressFields, { addressCompletionPercent, addressLabel, EMPTY_ADDRESS_DRAFT, type AddressDraft } from "@/components/AddressFields";
 import SimulationBar from "@/components/SimulationBar";
 import EventTechnicalSheet from "@/components/EventTechnicalSheet";
+import AuthPanel, { type SignupForm } from "@/components/AuthPanel";
 import { CATEGORY_LABELS, CATEGORY_OPTIONS, ROLE_LABELS, ROLE_OPTIONS, campaignTypeLabel, categoryShortLabel, isCampaignCompatibleWithCategory } from "@/lib/user-form";
 import { isValidMsisdn, normalizePhone } from "@/lib/phone";
 import {
@@ -66,25 +67,11 @@ type Notice = { kind: "error" | "success"; message: string } | null;
 const ATTENDANCE_CLAIM_STATUS_NAMES: Record<AttendanceClaim["status"], string> = { pending: "En attente", approved: "Acceptée", rejected: "Rejetée" };
 type EditDraft = Pick<UserRecord, "id" | "full_name" | "phone" | "role" | "user_category" | "is_active" | "supervisor_id" | "permanent_shop_id">;
 type CustomSelectProps = { value: string; options: Array<{ value: string; label: string }>; placeholder: string; onChange: (value: string) => void; ariaLabel: string };
-type LoginMode = "signin" | "signup";
 
 type EventDraft = CreateEventInput & { codeTouched: boolean };
 
-type SignupForm = {
-  fullName: string;
-  phone: string;
-  whatsappPhone: string;
-  whatsappSameAsPhone: boolean;
-  dateOfBirth: string;
-  addressDetails: AddressDraft;
-  avatarUrl: string | null;
-  useDefaultPassword: boolean;
-  password: string;
-  confirmPassword: string;
-  category: UserCategory;
-};
 
-const INITIAL_SIGNUP: SignupForm = { fullName: "", phone: "", whatsappPhone: "", whatsappSameAsPhone: true, dateOfBirth: "", addressDetails: { ...EMPTY_ADDRESS_DRAFT }, avatarUrl: null, useDefaultPassword: true, password: "", confirmPassword: "", category: "hostess" };
+
 function shopDisplayName(shopId: string | null, shops: ShopRecord[]): string {
   if (!shopId) return "—";
   return shops.find((shop) => shop.id === shopId)?.name || "Shop non référencé";
@@ -228,11 +215,6 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
   const [showConfig, setShowConfig] = useState(!configured);
   const [setupUrl, setSetupUrl] = useState(getSupabaseConnection()?.url || "");
   const [setupKey, setSetupKey] = useState("");
-  const [phone, setPhone] = useState("");
-  const [password, setPassword] = useState("");
-  const [loginMode, setLoginMode] = useState<LoginMode>("signin");
-  const [signup, setSignup] = useState<SignupForm>(INITIAL_SIGNUP);
-  const [signupSuccess, setSignupSuccess] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
   const [connectionTest, setConnectionTest] = useState<Notice>(null);
   const [testingConnection, setTestingConnection] = useState(false);
@@ -462,14 +444,11 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
     }
   }
 
-  async function handleLogin(event: FormEvent) {
-    event.preventDefault();
+  async function handleLogin(loginPhone: string, loginPassword: string) {
     setLoading(true);
     try {
-      const current = await signInAdmin(phone, password);
+      const current = await signInAdmin(loginPhone, loginPassword);
       setProfile(current.profile);
-      setPhone("");
-      setPassword("");
       await refreshUsers(current.profile, true);
       if (current.profile.role === "super_admin") {
         setLoadingRequests(true);
@@ -482,35 +461,21 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
     }
   }
 
-  async function handleSignup(event: FormEvent) {
-    event.preventDefault();
+  async function handleSignup(signup: SignupForm): Promise<boolean> {
     const fullName = signup.fullName.trim();
     const normalizedPhone = normalizePhone(signup.phone);
     const normalizedWhatsappPhone = signup.whatsappSameAsPhone ? normalizedPhone : normalizePhone(signup.whatsappPhone);
-    if (fullName.length < 2 || !isValidMsisdn(normalizedPhone)) {
-      setNotice({ kind: "error", message: "Renseignez un nom complet et un MSISDN local valide." });
-      return;
-    }
-    if (!signup.whatsappSameAsPhone && !isValidMsisdn(normalizedWhatsappPhone)) {
-      setNotice({ kind: "error", message: "Renseignez un numéro WhatsApp local valide ou cochez l’option d’utilisation du numéro M-Pesa." });
-      return;
-    }
     const requestPassword = signup.useDefaultPassword ? "password" : signup.password;
-    if (requestPassword.length < 6 || (!signup.useDefaultPassword && signup.password !== signup.confirmPassword)) {
-      setNotice({ kind: "error", message: "Le mot de passe doit contenir au moins 6 caractères et les deux saisies doivent correspondre." });
-      return;
-    }
     setLoading(true);
     try {
       await createRegistrationRequest({ fullName, phone: normalizedPhone, whatsappPhone: normalizedWhatsappPhone, whatsappSameAsPhone: signup.whatsappSameAsPhone, dateOfBirth: signup.dateOfBirth || null, address: addressLabel(signup.addressDetails), addressProvince: signup.addressDetails.provinceName || null, addressCommune: signup.addressDetails.commune || null, addressQuartier: signup.addressDetails.quartier || null, addressAvenue: signup.addressDetails.avenue || null, addressNumber: signup.addressDetails.number || null, addressLatitude: signup.addressDetails.latitude, addressLongitude: signup.addressDetails.longitude, avatarUrl: signup.avatarUrl, password: requestPassword, category: signup.category });
-      setSignup(INITIAL_SIGNUP);
-      setSignupSuccess(true);
-      setNotice({ kind: "success", message: "Votre demande a été envoyée. Un super_admin doit encore la valider." });
+      return true;
     } catch (error) {
       setNotice({ kind: "error", message: isPendingRequestConflict(error) ? "Ce numéro possède déjà un compte ou une demande en attente." : readableSupabaseError(error, "Impossible d’envoyer la demande.") });
     } finally {
       setLoading(false);
     }
+    return false;
   }
 
   function openPasswordAssistance() {
@@ -1088,26 +1053,14 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
     return <section className="admin-dashboard glass-card role-dashboard">{simulationControl}<div className="dashboard-header"><div className="dashboard-title"><div className="heading-icon"><ServerCog size={19} /></div><div><div className="eyebrow"><ShieldCheck size={13} /> Console sécurisée</div><h2>Tableau de bord</h2></div></div><div className="dashboard-actions"><span className="session-chip"><span className="session-dot" />{effectiveProfile.full_name} · {ROLE_LABELS[effectiveProfile.role]}</span><button className="icon-button" type="button" onClick={() => void handleLogout()} aria-label="Se déconnecter" title="Se déconnecter"><LogOut size={15} /></button></div></div>{notice && <div className={`dashboard-notice ${notice.kind}`}><span>{notice.kind === "success" ? <CheckCircle2 size={15} /> : <AlertCircle size={15} />}</span>{notice.message}<button type="button" onClick={() => setNotice(null)} aria-label="Fermer"><X size={14} /></button></div>}{profileCompletion < 100 && !isSimulation && <button type="button" className="profile-completion-prompt" onClick={() => setProfileOpen(true)}><span><MapPin size={15} /><strong>Complétez votre profil</strong><small>{effectiveProfile.user_category === "hostess" ? "Mensurations prioritaires pour préparer vos tenues" : "Adresse et mensurations utiles à la préparation des activités"}</small></span><b>{profileCompletion}%</b></button>}<RoleWorkspace profile={effectiveProfile} users={users} superiors={superiors} campaigns={campaigns} shops={shops} assignments={campaignAssignments} campaignSupervisorAssignments={campaignSupervisorAssignments} assignmentRequests={assignmentRequests} attendanceClaims={attendanceClaims} onNotice={handleWorkspaceNotice} onProfileUpdated={handleProfileSaved} onProfileOpen={() => isSimulation ? setNotice({ kind: "error", message: "Le profil est indisponible pendant une simulation." }) : setProfileOpen(true)} onRequestReviewed={() => void refreshUsers(profile, true)} simulation={isSimulation} />{profileOpen && !isSimulation && profile && <ProfileModal profile={profile} onClose={() => setProfileOpen(false)} onSaved={handleProfileSaved} />}{profilePhotoPreviewOpen && effectiveProfile && <ProfilePhotoPreviewModal user={effectiveProfile} onClose={() => setProfilePhotoPreviewOpen(false)} />}</section>;
   }
 
+  if (configured && !isAuthenticated && !showConfig) {
+    return <AuthPanel loading={loading} notice={notice} onDismissNotice={() => setNotice(null)} onLogin={handleLogin} onSignup={handleSignup} />;
+  }
+
   return <section className="admin-dashboard glass-card">{simulationControl}
     <div className="dashboard-header"><div className="dashboard-title"><div className="heading-icon"><ServerCog size={19} /></div><div><div className="eyebrow"><ShieldCheck size={13} /> Console sécurisée</div><h2>Tableau de bord administrateur</h2></div></div><div className="dashboard-actions">{profile && <button className="icon-button" type="button" onClick={() => void handleLogout()} aria-label="Se déconnecter" title="Se déconnecter"><LogOut size={15} /></button>}</div></div><div className="dashboard-context-row">{effectiveProfile && <div className="admin-profile-hero"><div className="admin-profile-photo"><button type="button" className="workspace-profile-photo-button" onClick={() => setProfilePhotoPreviewOpen(true)} aria-label="Agrandir ma photo de profil"><Avatar user={effectiveProfile!} size="large" /></button><button type="button" className="workspace-profile-edit" onClick={() => isSimulation ? setNotice({ kind: "error", message: "Le profil est indisponible pendant une simulation." }) : setProfileOpen(true)} aria-label="Modifier mon profil" title="Modifier mon profil"><FilePenLine size={11} /></button></div><div><div className="eyebrow"><UserCircle2 size={13} /> Profil actif</div><h3>{effectiveProfile?.full_name || "Utilisateur"}</h3><p>{effectiveProfile ? activeProfileRoleLabel(effectiveProfile) : ""} · Gérez vos informations personnelles depuis la photo.</p></div></div>}<nav className="dashboard-main-nav" aria-label="Navigation principale"><button type="button" className={activeMenu === "agents" ? "is-active" : ""} onClick={() => setActiveMenu("agents")}><Users size={15} /> Agents</button><button type="button" className={activeMenu === "campaigns" ? "is-active" : ""} onClick={() => setActiveMenu("campaigns")}><BriefcaseBusiness size={15} /> Campagnes</button><button type="button" className={activeMenu === "settings" ? "is-active" : ""} onClick={() => setActiveMenu("settings")}><ServerCog size={15} /> Paramètres</button></nav></div>
     {notice && <div className={`dashboard-notice ${notice.kind}`}><span>{notice.kind === "success" ? <CheckCircle2 size={15} /> : <AlertCircle size={15} />}</span>{notice.message}<button type="button" onClick={() => setNotice(null)} aria-label="Fermer"><X size={14} /></button></div>}
     {!configured && !showConfig && <div className="dashboard-empty"><ServerCog size={27} /><strong>Connectez votre projet Supabase</strong><button className="button primary compact" type="button" onClick={() => setShowConfig(true)}><Database size={14} /> Configurer</button></div>}
-    {configured && !isAuthenticated && !showConfig && <>
-      <div className="auth-brand-art"><div className="auth-brand-copy"><span>BEYOND THE LINE</span><strong>Chaque mission commence avec l’équipe.</strong><small>Accès BTL Africa · Administration</small></div><img src={`${import.meta.env.BASE_URL}btl-field-illustration.webp`} alt="" aria-hidden="true" loading="lazy" decoding="async" /></div>
-      <div className="auth-tabs" role="tablist" aria-label="Authentification"><button type="button" role="tab" aria-selected={loginMode === "signin"} className={loginMode === "signin" ? "is-active" : ""} onClick={() => { setLoginMode("signin"); setSignupSuccess(false); }}>Se connecter</button><button type="button" role="tab" aria-selected={loginMode === "signup"} className={loginMode === "signup" ? "is-active" : ""} onClick={() => { setLoginMode("signup"); setSignupSuccess(false); }}>Créer un compte</button></div>
-      {loginMode === "signin" ? <form className="admin-login" onSubmit={handleLogin}><div className="login-icon"><LogIn size={19} /></div><div className="login-copy"><strong>Connexion par MSISDN</strong><span>Les données réelles sont verrouillées jusqu’à l’identification.</span></div><input value={phone} onChange={(event) => setPhone(event.target.value)} type="tel" placeholder="081 234 5678" aria-label="MSISDN de connexion" inputMode="tel" required /><input value={password} onChange={(event) => setPassword(event.target.value)} type="password" placeholder="Mot de passe" aria-label="Mot de passe" required /><button className="button primary compact" type="submit" disabled={loading}>{loading ? <LoaderCircle className="spin" size={14} /> : <LogIn size={14} />} Se connecter</button></form> : <form className="signup-card" onSubmit={handleSignup}>{signupSuccess ? <div className="signup-success"><div className="success-icon"><Clock3 size={20} /></div><div><strong>Demande en attente de validation</strong><span>Un super_admin doit approuver votre compte avant qu’il n’apparaisse dans les listes d’agents.</span></div><button type="button" className="button secondary compact" onClick={() => { setSignupSuccess(false); setLoginMode("signin"); }}>Retour à la connexion</button></div> : <><div className="signup-heading"><div className="login-icon"><UserRoundPlus size={19} /></div><div><strong>Créer un accès agent</strong><span>Votre compte sera visible uniquement après approbation.</span></div></div><div className="signup-fields">
-<label>Nom complet<input value={signup.fullName} onChange={(event) => setSignup((current) => ({ ...current, fullName: event.target.value }))} placeholder="Ex. Grâce Mbuyi" autoComplete="name" required /></label>
-<label><span>M-Pesa / numéro principal</span><input value={signup.phone} onChange={(event) => setSignup((current) => ({ ...current, phone: event.target.value }))} placeholder="081 234 5678" type="tel" inputMode="tel" autoComplete="tel" required /></label>
-<label className="signup-whatsapp-toggle"><input type="checkbox" checked={signup.whatsappSameAsPhone} onChange={(event) => setSignup((current) => ({ ...current, whatsappSameAsPhone: event.target.checked, whatsappPhone: event.target.checked ? "" : current.whatsappPhone }))} /><span className="toggle-visual"><CheckCircle2 size={12} /></span><span><strong>WhatsApp</strong><small>Utiliser le numéro M-Pesa</small></span></label>
-{!signup.whatsappSameAsPhone && <label><span>Numéro WhatsApp</span><input value={signup.whatsappPhone} onChange={(event) => setSignup((current) => ({ ...current, whatsappPhone: event.target.value }))} placeholder="081 234 5678" type="tel" inputMode="tel" autoComplete="tel" required /></label>}
-<label><span>Date de naissance</span><DatePickerField ariaLabel="Date de naissance" value={signup.dateOfBirth} onChange={(value) => setSignup((current) => ({ ...current, dateOfBirth: value }))} /></label>
-<AddressFields value={signup.addressDetails} onChange={(addressDetails) => setSignup((current) => ({ ...current, addressDetails }))} />
-<label className="signup-photo-field"><span>Photo de profil</span><span className="signup-file-control"><ImagePlus size={14} /><span>{signup.avatarUrl ? "Photo sélectionnée" : "Choisir une photo"}</span><input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; if (!file.type.startsWith("image/") || file.size > 520000) { setNotice({ kind: "error", message: "La photo doit être une image de moins de 500 Ko." }); return; } const reader = new FileReader(); reader.onload = () => setSignup((current) => ({ ...current, avatarUrl: String(reader.result) })); reader.readAsDataURL(file); }} /></span></label>
-<label className="password-toggle signup-password-toggle"><input type="checkbox" checked={signup.useDefaultPassword} onChange={(event) => setSignup((current) => ({ ...current, useDefaultPassword: event.target.checked, password: "", confirmPassword: "" }))} /><span className="toggle-visual"><CheckCircle2 size={12} /></span><span><strong>Utiliser le mot de passe par défaut</strong><small>Agent : <code>password</code></small></span></label>
-{!signup.useDefaultPassword && <><label>Mot de passe<input value={signup.password} onChange={(event) => setSignup((current) => ({ ...current, password: event.target.value }))} placeholder="Au moins 6 caractères" type="password" autoComplete="new-password" required /></label><label>Confirmer le mot de passe<input value={signup.confirmPassword} onChange={(event) => setSignup((current) => ({ ...current, confirmPassword: event.target.value }))} placeholder="Répétez le mot de passe" type="password" autoComplete="new-password" required /></label></>}
-<div className="signup-category"><span>Catégorie agent</span><CustomSelect value={signup.category} onChange={(value) => setSignup((current) => ({ ...current, category: value as UserCategory }))} ariaLabel="Catégorie agent" placeholder="Catégorie" options={CATEGORY_OPTIONS.map((category) => ({ value: category, label: categoryShortLabel(category) }))} /></div>
-</div><button className="button primary signup-submit" type="submit" disabled={loading}>{loading ? <LoaderCircle className="spin" size={14} /> : <UserCheck size={14} />} Envoyer la demande</button></>}</form>}
-    </>}
     {configured && isAuthenticated && <>{isReadOnly && <div className="readonly-banner"><ShieldCheck size={15} /><span><strong>Lecture seule</strong> · {ROLE_LABELS[profile!.role]}</span></div>}
       {profile?.role === "super_admin" && !isSimulation && pendingRequests.length > 0 && <section className="pending-panel"><div className="pending-heading queue-heading" role="button" tabIndex={0} aria-expanded={expandedQueues.registration} onClick={() => toggleQueue("registration")} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); toggleQueue("registration"); } }}><div className="queue-heading-main"><div><div className="card-kicker"><Clock3 size={14} /> Validation requise</div><h3>Demandes d’inscription</h3><p>Les agents restent absents des listes tant qu’ils ne sont pas approuvés.</p></div></div><span className="pending-count">{pendingRequests.length}</span><ChevronDown className={`queue-chevron ${expandedQueues.registration ? "is-open" : ""}`} size={15} /><button type="button" className="icon-button" onClick={(event) => { event.stopPropagation(); void refreshRequests(); }} disabled={loadingRequests} aria-label="Actualiser les demandes" title="Actualiser les demandes">{loadingRequests ? <LoaderCircle className="spin" size={14} /> : <RefreshCw size={14} />}</button></div>{expandedQueues.registration && <div className="pending-list">{pendingRequests.map((request) => <div className="pending-item" key={request.id}><div className="avatar small">{request.full_name.slice(0, 1).toUpperCase()}</div><div className="pending-identity"><strong>{request.full_name}</strong><CopyablePhone value={request.phone} /> <small>{categoryShortLabel(request.user_category)} · {new Date(request.created_at).toLocaleDateString("fr-FR")}</small></div><span className="role-badge">En attente</span><div className="pending-actions"><button type="button" className="icon-action approve" onClick={() => void handleApprove(request)} disabled={requestActionId === request.id} aria-label={`Approuver ${request.full_name}`} title="Approuver">{requestActionId === request.id ? <LoaderCircle className="spin" size={14} /> : <CheckCircle2 size={14} />}</button><button type="button" className="icon-action delete" onClick={() => void handleReject(request)} disabled={requestActionId === request.id} aria-label={`Rejeter ${request.full_name}`} title="Rejeter"><XCircle size={14} /></button></div></div>)}</div>}</section>}
       {canManageCampaigns && assignmentRequests.length > 0 && <section className="pending-panel campaign-request-panel"><div className="pending-heading"><div><div className="card-kicker"><BriefcaseBusiness size={14} /> Affectations à valider</div><h3>Demandes de campagne</h3><p>Les agents ont demandé à rejoindre une campagne.</p></div><span className="pending-count">{assignmentRequests.length}</span></div><div className="pending-list">{assignmentRequests.map((request) => { const agent = users.find((user) => user.id === request.user_id); const campaign = campaigns.find((item) => item.id === request.campaign_id); if (!agent || !campaign) return null; return <div className="pending-item" key={request.id}><div className="avatar small">{agent.full_name.slice(0, 1).toUpperCase()}</div><div className="pending-identity"><strong>{agent.full_name}</strong><small>{campaign.name} · {new Date(request.requested_at).toLocaleDateString("fr-FR")}</small></div><div className="pending-actions"><button type="button" className="icon-action approve" onClick={() => void handleCampaignRequestReview(request, true)} disabled={requestActionId === request.id} aria-label="Approuver"><CheckCircle2 size={14} /></button><button type="button" className="icon-action delete" onClick={() => void handleCampaignRequestReview(request, false)} disabled={requestActionId === request.id} aria-label="Rejeter"><XCircle size={14} /></button></div></div>; })}</div></section>}
