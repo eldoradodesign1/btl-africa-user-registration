@@ -246,6 +246,11 @@ function readStoredProfile(): UserRecord | null {
 }
 let activeProfile: UserRecord | null = readStoredProfile();
 
+/** Profil mémorisé de la dernière session, avant revalidation auprès de la base. */
+export function getStoredProfile(): UserRecord | null {
+  return activeProfile;
+}
+
 export function getSupabaseConnection(): SupabaseConnection | null { return activeConnection; }
 export function isSupabaseConfigured(): boolean { return Boolean(activeConnection && supabaseClient); }
 
@@ -282,6 +287,17 @@ export async function testSupabaseConnection(url: string, publishableKey: string
 }
 
 const safeUserColumns = "id, full_name, phone, whatsapp_phone, whatsapp_same_as_phone, mpesa_phone, date_of_birth, address, address_province, address_commune, address_quartier, address_avenue, address_number, address_latitude, address_longitude, role, user_category, is_active, supervisor_id, permanent_shop_id, avatar_url, profile_updated_at, shirt_size, jacket_size, skirt_size, dress_size, heel_size, sneaker_size, ballerina_size, current_occupation, accepts_night_work, accepts_overnight_stay, accepts_late_work";
+/** Liste des utilisateurs sans avatar_url : les photos (data URL, jusqu'à ~650 Ko) sont chargées à part. */
+const listUserColumns = safeUserColumns.replace(" avatar_url,", "");
+
+/** Photos déjà téléchargées, invalidées quand profile_updated_at change. */
+const avatarCache = new Map<string, { updatedAt: string | null; url: string | null }>();
+const avatarsInFlight = new Set<string>();
+
+function rememberAvatar(user: { id: string; avatar_url: string | null; profile_updated_at: string | null }) {
+  avatarCache.set(user.id, { updatedAt: user.profile_updated_at, url: user.avatar_url });
+}
+
 const safeCampaignColumns = "id, code, name, campaign_type, status, starts_on, ends_on, event_mode, event_arrival_time, event_departure_time, event_supervisor_id, event_perimeter";
 const safeShopColumns = "id, name, city, type";
 const safeAssignmentColumns = "id, user_id, campaign_id, is_active, assigned_at, assigned_by";
@@ -399,6 +415,7 @@ export async function refreshActiveProfile(): Promise<UserRecord | null> {
     return null;
   }
   activeProfile = { ...data, password_hash: null } as UserRecord;
+  rememberAvatar(activeProfile);
   localStorage.setItem(profileKey, JSON.stringify(activeProfile));
   return activeProfile;
 }
@@ -442,6 +459,7 @@ export async function signInAdmin(phone: string, password: string): Promise<Admi
       if (data.role !== "super_admin" && data.is_active === false) throw new Error("Ce compte est inactif. Contactez un administrateur.");
       const profile = { ...data, password_hash: null } as UserRecord;
       activeProfile = profile;
+      rememberAvatar(profile);
       localStorage.setItem(profileKey, JSON.stringify(profile));
       return { profile };
     }
@@ -455,9 +473,44 @@ export async function signOutAdmin(): Promise<void> { activeProfile = null; loca
 
 export async function loadUsers(): Promise<UserRecord[]> {
   if (!supabaseClient) return [];
-  const { data, error } = await supabaseClient.from("users").select(safeUserColumns).order("full_name");
+  const { data, error } = await supabaseClient.from("users").select(listUserColumns).order("full_name");
   if (error) throw error;
-  return (data || []).map((user) => ({ ...user, password_hash: null })) as UserRecord[];
+  return ((data || []) as unknown as Array<Omit<UserRecord, "avatar_url" | "password_hash">>).map((user) => {
+    const cached = avatarCache.get(user.id);
+    return { ...user, avatar_url: cached && cached.updatedAt === user.profile_updated_at ? cached.url : null, password_hash: null };
+  }) as UserRecord[];
+}
+
+/**
+ * Télécharge en arrière-plan, par lots de 4, les photos absentes du cache.
+ * onBatch reçoit chaque lot (id → data URL) pour l'afficher sans attendre les autres.
+ */
+export async function loadUserAvatars(users: UserRecord[], onBatch: (avatars: Map<string, string | null>) => void): Promise<void> {
+  if (!supabaseClient) return;
+  const stale = users.filter((user) => {
+    const cached = avatarCache.get(user.id);
+    return !avatarsInFlight.has(user.id) && (!cached || cached.updatedAt !== user.profile_updated_at);
+  });
+  if (!stale.length) return;
+  const { data: withPhoto, error } = await supabaseClient.from("users").select("id").not("avatar_url", "is", null);
+  if (error) return;
+  const photoIds = new Set((withPhoto || []).map((row) => String(row.id)));
+  stale.filter((user) => !photoIds.has(user.id)).forEach((user) => rememberAvatar({ ...user, avatar_url: null }));
+  const toFetch = stale.filter((user) => photoIds.has(user.id));
+  toFetch.forEach((user) => avatarsInFlight.add(user.id));
+  try {
+    for (let index = 0; index < toFetch.length; index += 4) {
+      const ids = toFetch.slice(index, index + 4).map((user) => user.id);
+      const { data } = await supabaseClient.from("users").select("id, avatar_url, profile_updated_at").in("id", ids);
+      ids.forEach((id) => avatarsInFlight.delete(id));
+      if (!data?.length) continue;
+      const batch = new Map<string, string | null>();
+      data.forEach((row) => { rememberAvatar(row as { id: string; avatar_url: string | null; profile_updated_at: string | null }); batch.set(String(row.id), row.avatar_url as string | null); });
+      onBatch(batch);
+    }
+  } finally {
+    toFetch.forEach((user) => avatarsInFlight.delete(user.id));
+  }
 }
 
 /**
@@ -750,6 +803,7 @@ export async function updateMyProfile(input: { fullName: string; phone: string; 
   const row = Array.isArray(data) ? data[0] : data;
   if (!row) throw new Error("Le profil n’a pas pu être mis à jour.");
   activeProfile = { ...activeProfile, ...row, password_hash: null } as UserRecord;
+  rememberAvatar(activeProfile);
   localStorage.setItem(profileKey, JSON.stringify(activeProfile));
   return activeProfile;
 }

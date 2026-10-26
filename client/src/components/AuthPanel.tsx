@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent,
 import { AlertCircle, Check, CheckCircle2, Clock3, Eye, EyeOff, ImagePlus, LoaderCircle, LogIn, UserCheck, X } from "lucide-react";
 import AddressFields, { EMPTY_ADDRESS_DRAFT, type AddressDraft } from "@/components/AddressFields";
 import { BirthDateField } from "@/components/DateTimeFields";
+import { resizeImage } from "@/lib/image";
 import { isValidMpesa, isValidMsisdn, normalizePhone } from "@/lib/phone";
 import type { UserCategory } from "@/lib/supabase";
 
@@ -42,27 +43,6 @@ type Props = {
 };
 
 const PHONE_PLACEHOLDER = "081 234 5678";
-
-/** Réduit la photo côté appareil (max 640 px, JPEG) : les photos de téléphone passent sans limite de poids. */
-async function resizeImage(file: File, max = 640): Promise<string> {
-  const url = URL.createObjectURL(file);
-  try {
-    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-      const image = new Image();
-      image.onload = () => resolve(image);
-      image.onerror = reject;
-      image.src = url;
-    });
-    const scale = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.round(img.naturalWidth * scale);
-    canvas.height = Math.round(img.naturalHeight * scale);
-    canvas.getContext("2d")!.drawImage(img, 0, 0, canvas.width, canvas.height);
-    return canvas.toDataURL("image/jpeg", 0.82);
-  } finally {
-    URL.revokeObjectURL(url);
-  }
-}
 
 function describedBy(id: string, hint?: string, error?: string): string | undefined {
   return [hint ? `${id}-hint` : "", error ? `${id}-error` : ""].filter(Boolean).join(" ") || undefined;

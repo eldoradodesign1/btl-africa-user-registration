@@ -2,25 +2,20 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertCircle,
   ArrowRight,
-  BadgeCheck,
   CalendarDays,
   Check,
   CheckCircle2,
   ChevronDown,
-  CircleHelp,
   Info,
   ImagePlus,
   KeyRound,
   LoaderCircle,
-  LockKeyhole,
   MapPin,
   Phone,
   RefreshCw,
   Search,
   ServerCog,
   ShieldCheck,
-  Sparkles,
-  UserPlus,
   UsersRound,
   X,
 } from "lucide-react";
@@ -32,6 +27,7 @@ import {
   defaultPasswordForRole,
   shouldShowShop,
 } from "@/lib/user-form";
+import { resizeImage } from "@/lib/image";
 import { formatPhoneForDisplay, isValidMpesa, isValidMsisdn, normalizePhone, phoneValidationMessage } from "@/lib/phone";
 import {
   findExistingUser,
@@ -48,7 +44,7 @@ import {
 import { CopyablePhone } from "@/components/CopyablePhone";
 import BrandLogo from "@/components/BrandLogo";
 import AddressFields, { addressLabel, EMPTY_ADDRESS_DRAFT, type AddressDraft } from "@/components/AddressFields";
-import { DatePickerField } from "@/components/DateTimeFields";
+import { BirthDateField } from "@/components/DateTimeFields";
 
 type PhoneState = "idle" | "checking" | "valid" | "invalid" | "duplicate" | "error";
 type ToastState = { kind: "success" | "error" | "info"; title: string; message: string; action?: () => void } | null;
@@ -191,7 +187,6 @@ function CategoryChoice({ value, onChange }: { value: UserCategory; onChange: (v
           <span className="category-choice-copy"><strong>Brand Ambassador</strong></span>
         </button>
       </div>
-      <span className="field-hint">La catégorie détermine les campagnes et les équipements proposés.</span>
     </fieldset>
   );
 }
@@ -438,40 +433,22 @@ function Home({ onUserCreated, onNavigateDashboard, agentsOnly = false }: { onUs
           </div>
         </div>
         <div className="topbar-actions">
-        <div className={`environment-chip ${isSupabaseConfigured() ? "is-live" : "is-demo"}`}>
-          <span className="environment-dot" />
-              {isSupabaseConfigured() ? "Connexion Supabase active" : "Connexion Supabase requise"}
-        </div>
-        {onNavigateDashboard && <button type="button" className="nav-action" onClick={onNavigateDashboard}><ServerCog size={14} /> Dashboard</button>}
+        {!isSupabaseConfigured() && <div className="environment-chip is-demo"><span className="environment-dot" />Connexion requise</div>}
+        {onNavigateDashboard && <button type="button" className="nav-action" onClick={onNavigateDashboard}><ServerCog size={14} /> Tableau de bord</button>}
         </div>
       </header>
 
       <main className="page-content">
         <section className="page-intro">
           <div>
-            <div className="eyebrow"><Sparkles size={13} /> Workspace sécurisé · Création d’accès</div>
-            <h1>Nouvel utilisateur<span>.</span></h1>
-            <p>Créez un accès opérationnel en quelques secondes, avec une vérification MSISDN intégrée et une traçabilité prête pour le terrain.</p>
-          </div>
-          <div className="intro-metrics">
-            <div><span className="metric-value">03</span><span className="metric-label">contrôles avant création</span></div>
-            <div><span className="metric-value">UUID</span><span className="metric-label">identité PostgreSQL</span></div>
+            <h1>{agentsOnly ? "Nouvel agent" : "Nouvel utilisateur"}<span>.</span></h1>
           </div>
         </section>
 
         <div className="workspace-grid">
           <form className="form-card glass-card" onSubmit={handleSubmit}>
-            <div className="card-heading">
-              <div className="heading-icon"><UserPlus size={19} /></div>
-              <div>
-                <h2>Profil d’accès</h2>
-                <p>Les champs marqués d’un astérisque sont obligatoires.</p>
-              </div>
-              <span className="step-count">01 <span>/ 03</span></span>
-            </div>
-
             <div className="section-block">
-              <div className="section-title"><span>01</span><div><h3>Identité</h3><p>Les informations visibles dans l’application.</p></div></div>
+              <div className="section-title"><span>01</span><div><h3>Identité</h3></div></div>
               <div className="field-grid two-columns">
                 <div className="field">
                   <label htmlFor="fullName">Nom complet <b>*</b></label>
@@ -481,7 +458,6 @@ function Home({ onUserCreated, onNavigateDashboard, agentsOnly = false }: { onUs
                     {form.fullName.trim().length >= 2 && <CheckCircle2 className="input-state-icon" size={16} />}
                   </div>
                   {fullNameError && <span className="field-error"><AlertCircle size={13} />{fullNameError}</span>}
-                  {!fullNameError && <span className="field-hint">Les accents sont conservés.</span>}
                 </div>
                 <div className="field phone-field">
                   <div className="field-label-row"><label htmlFor="phone">Numéro WhatsApp <b>*</b></label><span className="field-helper">Sert à se connecter</span></div>
@@ -496,19 +472,18 @@ function Home({ onUserCreated, onNavigateDashboard, agentsOnly = false }: { onUs
                   {phoneState === "valid" && <span className="field-status valid"><CheckCircle2 size={13} /> Numéro disponible · normalisé {normalizedPhone}</span>}
                   {phoneState === "duplicate" && <span className="field-status invalid"><AlertCircle size={13} /> Ce numéro est déjà utilisé</span>}
                   {(phoneState === "invalid" || phoneState === "error") && <span className="field-error"><AlertCircle size={13} />{phoneError || "Vérification indisponible. Réessayez."}</span>}
-                  {phoneState === "idle" && <span className="field-hint">Formats acceptés : 081…, +24381… ou 24381…</span>}
                 </div>
               </div>
               <label className={`password-toggle signup-whatsapp-toggle${mpesaEligible ? "" : " is-disabled"}`}><input type="checkbox" checked={mpesaSame} disabled={!mpesaEligible} onChange={(event) => updateForm("mpesaSameAsPhone", event.target.checked)} /><span className="toggle-visual"><Check size={13} /></span><span><strong>Même numéro pour M-Pesa</strong><small>{isPhoneValid && !mpesaEligible ? "M-Pesa : numéro en 08 uniquement" : "Le WhatsApp sert aussi au M-Pesa"}</small></span></label>
               {isPhoneValid && !mpesaSame && <div className="field-grid two-columns"><div className="field"><label htmlFor="mpesaPhone">Numéro M-Pesa <span className="optional-label">facultatif</span></label><input id="mpesaPhone" value={form.mpesaPhone} onChange={(event) => updateForm("mpesaPhone", event.target.value)} placeholder="081 234 5678" type="tel" inputMode="tel" autoComplete="off" /></div></div>}
-              <div className="field-grid two-columns profile-extra-fields"><div className="field"><label htmlFor="dateOfBirth">Date de naissance <span className="optional-label">facultatif</span></label><DatePickerField native id="dateOfBirth" ariaLabel="Date de naissance, facultatif" value={form.dateOfBirth} onChange={(value) => updateForm("dateOfBirth", value)} /><span className="field-hint">Le calendrier de votre téléphone s’ouvrira automatiquement.</span></div></div>
+              <div className="field-grid two-columns profile-extra-fields"><div className="field"><label htmlFor="dateOfBirth">Date de naissance <span className="optional-label">facultatif</span></label><BirthDateField id="dateOfBirth" ariaLabel="Date de naissance" value={form.dateOfBirth} onChange={(value) => updateForm("dateOfBirth", value)} /></div></div>
               <AddressFields value={form.addressDetails} onChange={(addressDetails) => updateForm("addressDetails", addressDetails)} />
               <div className="profile-photo-category-row">
                 <div className="field profile-photo-field">
                   <label htmlFor="profilePhoto" className="profile-photo-caption">Photo de profil</label>
                   <label className={`file-input-control profile-photo-tile ${form.avatarUrl ? "has-photo" : ""}`}>
                     {form.avatarUrl ? <img src={form.avatarUrl} alt="Aperçu de la photo sélectionnée" className="profile-photo-preview" /> : <><ImagePlus size={16} /><span>Choisir une photo</span></>}
-                    <input id="profilePhoto" type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; if (!file.type.startsWith("image/") || file.size > 520000) { setToast({ kind: "error", title: "Photo invalide", message: "La photo doit être une image de moins de 500 Ko." }); return; } const reader = new FileReader(); reader.onload = () => updateForm("avatarUrl", String(reader.result)); reader.readAsDataURL(file); }} />
+                    <input id="profilePhoto" type="file" accept="image/*" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (!file) return; if (!file.type.startsWith("image/")) { setToast({ kind: "error", title: "Photo invalide", message: "Choisissez une image." }); return; } void resizeImage(file).then((url) => updateForm("avatarUrl", url)).catch(() => setToast({ kind: "error", title: "Photo invalide", message: "Cette image n’a pas pu être lue." })); }} />
                   </label>
                 </div>
                 {form.role === "agent" && <CategoryChoice value={form.category} onChange={(value) => setForm((current) => ({ ...current, category: value, permanentShopId: value === "hostess" ? current.permanentShopId : "" }))} />}
@@ -516,28 +491,28 @@ function Home({ onUserCreated, onNavigateDashboard, agentsOnly = false }: { onUs
             </div>
 
             <div className="section-block role-block">
-              <div className="section-title"><span>02</span><div><h3>Rôle & rattachement</h3><p>{agentsOnly ? "Ajout d’un agent par un responsable habilité." : "Définissez le périmètre de l’utilisateur."}</p></div></div>
+              <div className="section-title"><span>02</span><div><h3>Rôle & rattachement</h3></div></div>
               <div className="field-grid two-columns">
-                {agentsOnly ? <div className="field select-field"><div className="field-label-row"><label>Rôle</label><span className="field-helper">Accès limité</span></div><div className="role-fixed-value"><span className="role-badge role-agent">Agent</span><small>Seuls les agents peuvent être ajoutés depuis cet espace.</small></div></div> : <CustomSelect label="Rôle" value={form.role} options={ROLE_OPTIONS} labels={ROLE_LABELS} onChange={handleRoleChange} helper="Accès applicatif" />}
+                {agentsOnly ? <div className="field select-field"><div className="field-label-row"><label>Rôle</label></div><div className="role-fixed-value"><span className="role-badge role-agent">Agent</span></div></div> : <CustomSelect label="Rôle" value={form.role} options={ROLE_OPTIONS} labels={ROLE_LABELS} onChange={handleRoleChange} />}
                 <div>
-                  <CustomOptionSelect label="Superviseur" value={form.supervisorId} options={[{ value: "", label: "Aucun rattachement" }, ...supervisorOptions.map((user) => ({ value: user.id, label: user.full_name }))]} onChange={(value) => updateForm("supervisorId", value)} helper="Optionnel" disabled={loadingSupervisors || supervisorError} />
-                  {supervisorError ? <span className="field-error"><AlertCircle size={13} />Impossible de charger les superviseurs.</span> : <span className="field-hint">Seuls les rôles d’encadrement sont proposés.</span>}
+                  <CustomOptionSelect label="Superviseur" value={form.supervisorId} options={[{ value: "", label: "Aucun rattachement" }, ...supervisorOptions.map((user) => ({ value: user.id, label: user.full_name }))]} onChange={(value) => updateForm("supervisorId", value)} helper="facultatif" disabled={loadingSupervisors || supervisorError} />
+                  {supervisorError && <span className="field-error"><AlertCircle size={13} />Impossible de charger les superviseurs.</span>}
                 </div>
               </div>
               {showShop && (
                 <div className="shop-row">
-                  <div className="shop-copy"><span className="mini-label">SHOP PERMANENT</span><strong>Point de rattachement</strong><span>« Aucun shop » sera enregistré comme <code>null</code>.</span></div>
+                  <div className="shop-copy"><strong>Shop permanent</strong></div>
                   <CustomOptionSelect ariaLabel="Point de rattachement" value={form.permanentShopId} options={shopOptions} onChange={(value) => updateForm("permanentShopId", value)} />
                 </div>
               )}
             </div>
 
             <div className="section-block security-block">
-              <div className="section-title"><span>03</span><div><h3>Accès initial</h3><p>Le secret reste confidentiel et n’est jamais affiché après création.</p></div></div>
+              <div className="section-title"><span>03</span><div><h3>Mot de passe</h3></div></div>
               <label className="password-toggle">
                 <input type="checkbox" checked={form.useDefaultPassword} onChange={(event) => updateForm("useDefaultPassword", event.target.checked)} />
                 <span className="toggle-visual"><Check size={13} /></span>
-                <span><strong>Utiliser le mot de passe par défaut</strong><small>{ROLE_LABELS[form.role]} : <code>{defaultPasswordForRole(form.role)}</code> · modifiable si nécessaire</small></span>
+                <span><strong>Mot de passe par défaut</strong><small><code>{defaultPasswordForRole(form.role)}</code>, modifiable ensuite</small></span>
               </label>
               {!form.useDefaultPassword && (
                 <div className="field password-field">
@@ -549,7 +524,6 @@ function Home({ onUserCreated, onNavigateDashboard, agentsOnly = false }: { onUs
                   {form.password.length > 0 && form.password.length < 6 && <span className="field-error"><AlertCircle size={13} />Le mot de passe doit contenir au moins 6 caractères.</span>}
                 </div>
               )}
-              <div className="security-note"><LockKeyhole size={15} /><span>La clé <code>service_role</code> n’est jamais utilisée côté navigateur. La clé publishable/anon suffit pour les opérations autorisées par vos politiques RLS.</span></div>
             </div>
 
             <div className="form-actions">
@@ -558,15 +532,13 @@ function Home({ onUserCreated, onNavigateDashboard, agentsOnly = false }: { onUs
                 {submitting ? <><LoaderCircle className="spin" size={17} /> Création…</> : <>{agentsOnly ? "Créer l’agent" : "Créer l’utilisateur"} <ArrowRight size={17} /></>}
               </button>
             </div>
-            <p className="required-note"><span>*</span> Le bouton reste désactivé tant que le nom, le MSISDN ou le contrôle anti-doublon n’est pas valide.</p>
           </form>
 
           <aside className="side-column">
-            {existingUser ? (
+            {existingUser && (
               <section className="duplicate-card side-card">
-                <div className="alert-topline"><div className="alert-icon"><X size={17} /></div><span>Contrôle anti-doublon</span></div>
-                <h2>Ce numéro est déjà attribué.</h2>
-                <p>La création est bloquée pour protéger l’utilisateur existant.</p>
+                <div className="alert-topline"><div className="alert-icon"><X size={17} /></div></div>
+                <h2>Ce numéro est déjà utilisé.</h2>
                 <div className="existing-user">
                   <div className="avatar">{existingUser.full_name.slice(0, 1).toUpperCase()}</div>
                   <div><strong>{existingUser.full_name}</strong><CopyablePhone value={existingUser.phone}>{formatPhoneForDisplay(existingUser.phone)}</CopyablePhone></div>
@@ -575,37 +547,21 @@ function Home({ onUserCreated, onNavigateDashboard, agentsOnly = false }: { onUs
                 <div className="existing-meta"><span>Catégorie</span><strong>{categoryShortLabel(existingUser.user_category)}</strong></div>
                 <div className="alert-actions"><button type="button" className="button secondary compact" onClick={() => updateForm("phone", "")}><RefreshCw size={14} /> Corriger le numéro</button></div>
               </section>
-            ) : (
-              <section className="side-card guide-card">
-                <div className="guide-illustration" aria-hidden="true"><img src={`${import.meta.env.BASE_URL}btl-field-illustration.webp`} alt="" loading="lazy" decoding="async" /></div>
-                <div className="card-kicker"><BadgeCheck size={15} /> Parcours contrôlé</div>
-                <h2>Prêt pour le terrain.</h2>
-                <p>Chaque création passe par trois garde-fous avant d’atteindre <code>public.users</code>.</p>
-                <div className="guardrail-list">
-                  <div><span className="guardrail-number">01</span><span><strong>Validation locale</strong><small>Nettoyage et format MSISDN</small></span><CheckCircle2 size={16} /></div>
-                  <div><span className="guardrail-number">02</span><span><strong>Lookup ciblé</strong><small>Recherche sur phone uniquement</small></span><CheckCircle2 size={16} /></div>
-                  <div><span className="guardrail-number">03</span><span><strong>Contrainte unique</strong><small>La base reste la dernière ligne</small></span><CheckCircle2 size={16} /></div>
-                </div>
-                <div className="tip-box"><Info size={15} /><span>Astuce : <strong>+243 81 234 5678</strong> devient automatiquement <strong>0812345678</strong>.</span></div>
-              </section>
             )}
 
             {successSummary && (
               <section className="success-card side-card">
                 <div className="success-icon"><CheckCircle2 size={20} /></div>
-                <div className="card-kicker success-kicker">Création confirmée</div>
-                <h2>Accès enregistré.</h2>
-                <p>Le profil est disponible dans la liste locale, sans rechargement.</p>
-                <div className="summary-grid"><div><span>Nom</span><strong>{successSummary.full_name}</strong></div><div><span>MSISDN</span><CopyablePhone value={successSummary.phone}>{successSummary.phone}</CopyablePhone></div><div><span>Rôle</span><strong>{ROLE_LABELS[successSummary.role]}</strong></div><div><span>Campagne</span><strong>{categoryShortLabel(successSummary.user_category)}</strong></div></div>
+                <h2>Compte créé.</h2>
+                <div className="summary-grid"><div><span>Nom</span><strong>{successSummary.full_name}</strong></div><div><span>WhatsApp</span><CopyablePhone value={successSummary.phone}>{successSummary.phone}</CopyablePhone></div><div><span>Rôle</span><strong>{ROLE_LABELS[successSummary.role]}</strong></div><div><span>Catégorie</span><strong>{categoryShortLabel(successSummary.user_category)}</strong></div></div>
               </section>
             )}
 
             <section className="side-card activity-card">
-              <div className="activity-heading"><div><div className="card-kicker"><UsersRound size={15} /> Activité locale</div><h2>Derniers accès</h2></div><span className="activity-count">{recentUsers.length}</span></div>
+              <div className="activity-heading"><div><h2>Derniers comptes créés</h2></div><span className="activity-count">{recentUsers.length}</span></div>
               <div className="activity-list">
                 {recentUsers.slice(0, 3).map((user) => <div className="activity-item" key={user.id}><div className="avatar small">{user.full_name.slice(0, 1).toUpperCase()}</div><div><strong>{user.full_name}</strong><CopyablePhone value={user.phone}>{user.phone}</CopyablePhone></div><UserRoleBadge role={user.role} /></div>)}
               </div>
-              <div className="activity-footer"><span><span className={`tiny-dot ${isSupabaseConfigured() ? "live" : ""}`} />{isSupabaseConfigured() ? "Synchronisé avec Supabase" : "Aucune donnée locale"}</span><CircleHelp size={14} /></div>
             </section>
           </aside>
         </div>

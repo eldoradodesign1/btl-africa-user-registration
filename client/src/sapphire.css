@@ -1,0 +1,318 @@
+/* =====================================================================
+   Matière « Sapphire » — couche globale (tableaux de bord, création,
+   profil, modales). Même matière que l'écran d'accès (auth-glass.css),
+   corrigée selon les principes apple-design :
+   - matériaux hiérarchisés : la grande carte est la plus « épaisse », les
+     blocs internes sont plus sombres et jamais translucides sur du translucide ;
+   - retour immédiat à la pression (scale .97, 100 ms), pas de saut au survol ;
+   - menus et popovers ancrés à leur déclencheur, qui « se matérialisent » ;
+   - modales : fond assombri pour la tâche en cours, feuille depuis le bas sur mobile ;
+   - typographie : interlettrage selon la taille, hiérarchie par graisse ;
+   - préférences système : mouvement, transparence, contraste, couleurs forcées.
+   Chargée après index / brand-refresh / premium (dont elle redéfinit les
+   tokens) et avant auth-glass.css, qui garde la main sur l'écran d'accès.
+   ===================================================================== */
+:root {
+  /* Tokens Sapphire, partagés avec l'écran d'accès (sélecteur de date, etc.) */
+  --a-text: #f2f7ff;
+  --a-muted: #c3d3ee;
+  --a-accent: #6fd4ff;
+  --a-accent-2: #1b6dff;
+  --a-surface: rgba(80, 140, 255, .08);
+  --a-surface-strong: rgba(8, 20, 58, .72);
+  --a-line: rgba(130, 175, 255, .28);
+  --a-line-strong: rgba(150, 195, 255, .6);
+  --a-btn-a: #2f7cff;
+  --a-btn-b: #123fb8;
+  --a-focus: #8fe3ff;
+  --s-card-a: rgba(18, 48, 128, .62);
+  --s-card-b: rgba(4, 10, 38, .9);
+  --s-rim: rgba(110, 170, 255, .55);
+  --s-rim-soft: rgba(40, 100, 255, .18);
+  --s-glow: rgba(35, 110, 255, .32);
+  --s-inner: rgba(6, 16, 48, .55);
+  --s-float: linear-gradient(160deg, rgba(20, 52, 132, .96), rgba(5, 12, 44, .98));
+
+  /* Tokens des couches index / brand-refresh */
+  --bg: #050c26;
+  --panel: #0a1840;
+  --panel-strong: #0b1a45;
+  --line: rgba(130, 175, 255, .2);
+  --text: #f2f7ff;
+  --muted: #b3c5e6;
+  --muted-2: #93a9cf;
+  --cyan: #2f7cff;
+  --cyan-strong: #6fd4ff;
+  --lime: #8ff0c4;
+  --red: #ffb4c0;
+  --amber: #ffd58a;
+  --ease-out: cubic-bezier(.22, 1, .36, 1);
+
+  /* Tokens premium.css */
+  --btl-cobalt: #2f7cff;
+  --btl-cobalt-hover: #4b8fff;
+  --btl-sky: #8fdcff;
+  --accent-ink: #8fdcff;
+  --surface-0: #050c26;
+  --surface-1: #0a1840;
+  --surface-2: #0f2152;
+  --surface-3: #152c66;
+  --field-bg: #071331;
+  --field-line: rgba(130, 175, 255, .3);
+  --field-line-hover: rgba(150, 195, 255, .6);
+  --line-soft: rgba(130, 175, 255, .16);
+  --line-strong: rgba(130, 175, 255, .34);
+  --ink-1: #f2f7ff;
+  --ink-2: #c9d8f2;
+  --ink-3: #a2b6da;
+  --ok: #8ff0c4;
+  --ok-bg: rgba(60, 220, 150, .12);
+  --warn: #ffd58a;
+  --danger: #ffb4c0;
+  --danger-bg: rgba(255, 70, 110, .13);
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --shadow-pop: 0 24px 60px rgba(0, 4, 24, .55), 0 0 24px rgba(35, 110, 255, .22);
+  --ring: 0 0 0 3px rgba(111, 212, 255, .35);
+
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---------------------------------------------------------------------
+   1. Scène : halo saphir statique, grain discret, filet de séparation doux
+   --------------------------------------------------------------------- */
+html, body { background: var(--bg); }
+.app-shell, .dashboard-shell {
+  background:
+    radial-gradient(60% 45% at 50% -8%, rgba(30, 100, 255, .26), transparent 70%),
+    radial-gradient(42% 36% at 100% 32%, rgba(27, 109, 255, .1), transparent 70%),
+    linear-gradient(180deg, #060f30 0%, #040a22 100%) !important;
+}
+.app-shell::before { opacity: .035 !important; }
+.app-shell::after { opacity: .3 !important; }
+.topbar { position: relative; border-bottom: 0 !important; }
+.topbar::after { /* bord de défilement plutôt qu'un trait dur */
+  content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 1px; pointer-events: none;
+  background: linear-gradient(90deg, transparent, var(--line-strong) 20%, var(--line-strong) 80%, transparent);
+}
+.brand-name { letter-spacing: -.01em; }
+
+/* ---------------------------------------------------------------------
+   2. Matériaux : carte principale (épaisse) puis blocs internes (sombres)
+   --------------------------------------------------------------------- */
+.glass-card, .side-card, .form-card {
+  border: 1px solid transparent !important;
+  border-radius: 28px !important;
+  background:
+    linear-gradient(160deg, var(--s-card-a), var(--s-card-b)) padding-box,
+    linear-gradient(150deg, var(--s-rim), var(--s-rim-soft) 40%, var(--s-rim-soft) 60%, var(--s-rim)) border-box !important;
+  box-shadow: 0 0 40px var(--s-glow), 0 30px 80px rgba(0, 0, 0, .45), inset 0 1px 0 rgba(255, 255, 255, .2) !important;
+}
+:is(.workspace-card, .detail-section, .pending-item, .user-card, .campaign-menu-card, .event-agent-card, .measurement-field, .users-table-wrap, .request-queue-row, .user-address-summary) {
+  border: 1px solid var(--line-soft) !important;
+  border-radius: 18px !important;
+  background: var(--s-inner) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .05) !important;
+}
+.detail-section-title { border-radius: 17px 17px 0 0 !important; background: rgba(80, 140, 255, .1) !important; }
+/* Pas de « saut » au survol : la bordure s'éclaire, l'élément reste en place */
+:is(.campaign-menu-card, .event-agent-card, .user-card, .workspace-card, .pending-item):hover {
+  transform: none !important;
+  border-color: var(--line-strong) !important;
+  box-shadow: 0 0 0 1px var(--line-strong), 0 12px 30px rgba(0, 0, 0, .32) !important;
+}
+
+/* ---------------------------------------------------------------------
+   3. Boutons : verre saphir, retour immédiat à la pression
+   --------------------------------------------------------------------- */
+.button {
+  min-height: 42px; padding-inline: 16px; border-radius: 14px !important; font-weight: 700; letter-spacing: 0;
+  transition: transform .1s ease-out, filter .2s ease, background-color .2s ease, border-color .2s ease, box-shadow .2s ease !important;
+}
+.button.compact { min-height: 36px; padding-inline: 12px; border-radius: 12px !important; }
+.button.primary {
+  color: #fff !important; border: 1px solid rgba(140, 190, 255, .7) !important;
+  background: linear-gradient(180deg, var(--a-btn-a), var(--a-btn-b)) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .4), inset 0 -6px 14px rgba(0, 0, 0, .14), 0 0 18px rgba(35, 110, 255, .4), 0 6px 16px rgba(0, 0, 0, .3) !important;
+}
+.button.primary:hover:not(:disabled) {
+  transform: none; filter: brightness(1.1);
+  background: linear-gradient(180deg, var(--a-btn-a), var(--a-btn-b)) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .45), inset 0 -6px 14px rgba(0, 0, 0, .14), 0 0 24px rgba(35, 110, 255, .5), 0 8px 20px rgba(0, 0, 0, .32) !important;
+}
+.button.secondary { color: var(--ink-1) !important; border: 1px solid var(--line-strong) !important; background: rgba(80, 140, 255, .1) !important; }
+.button.secondary:hover:not(:disabled) { transform: none; border-color: var(--field-line-hover) !important; background: rgba(80, 140, 255, .18) !important; }
+.button:disabled { opacity: .5; }
+.icon-action, .icon-button, .modal-close { border-radius: 12px !important; }
+.icon-action, .icon-button { border: 1px solid var(--line-strong) !important; color: var(--ink-2) !important; background: rgba(80, 140, 255, .1) !important; }
+.icon-action:hover, .icon-button:hover { transform: none !important; color: #fff !important; background: rgba(80, 140, 255, .2) !important; }
+.modal-close:hover { transform: none !important; }
+:is(.button, .icon-action, .icon-button, .modal-close, .dashboard-main-nav button, .profile-section-tabs button, .compact-filter-button, .view-toggle button, .campaign-pill, .availability-toggle, .measurement-size-chips button, .profile-completion-prompt):active:not(:disabled) {
+  transform: scale(.97) !important;
+  transition-duration: .1s !important;
+}
+
+/* ---------------------------------------------------------------------
+   4. Champs : même recette que l'écran d'accès
+   --------------------------------------------------------------------- */
+.app-shell :is(input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=range]), select, textarea):focus {
+  border-color: var(--a-focus) !important; box-shadow: var(--ring) !important; outline: none;
+}
+.app-shell :is(input, textarea)::placeholder { color: #8fa6cc !important; opacity: 1; }
+.bdf-control input { padding-right: 56px !important; }
+/* Sélecteur de date de naissance hors écran d'accès : même champ que les autres */
+.app-shell .bdf-control input {
+  width: 100%; min-height: 44px; padding-left: 12px; border: 1px solid var(--field-line) !important; border-radius: var(--radius-sm);
+  color: var(--ink-1) !important; background: var(--field-bg) !important; font: inherit;
+}
+.address-fields-heading small { display: none; } /* phrase d'explication superflue */
+
+/* ---------------------------------------------------------------------
+   5. Menus et popovers : flottants, ancrés au déclencheur, matérialisés
+   --------------------------------------------------------------------- */
+:is(.select-menu, .custom-select-menu, .agent-campaign-picker-menu, .custom-date-picker-popover) {
+  border: 1px solid var(--line-strong) !important;
+  border-radius: 16px !important;
+  background: var(--s-float) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  backdrop-filter: blur(18px) saturate(140%);
+  box-shadow: 0 0 28px rgba(35, 110, 255, .32), 0 24px 60px rgba(0, 0, 0, .55), inset 0 1px 0 rgba(255, 255, 255, .2) !important;
+  transform-origin: top center;
+  animation: s-materialize .18s var(--ease-out);
+}
+.custom-date-picker-popover { padding: 10px !important; border-radius: 20px !important; }
+.custom-date-picker-popover .custom-date-calendar { color: var(--ink-1); background: transparent !important; }
+:is(.select-menu .select-option, .custom-select-menu button) {
+  min-height: 40px; border-radius: 10px !important; color: var(--ink-1) !important;
+}
+:is(.select-menu .select-option, .custom-select-menu button):is(:hover, :focus-visible, .is-selected) { color: #fff !important; background: rgba(60, 130, 255, .22) !important; }
+:is(.select-menu, .custom-select-menu) svg { color: var(--a-accent); }
+@keyframes s-materialize { from { opacity: 0; transform: translateY(-4px) scale(.97); filter: blur(3px); } to { opacity: 1; transform: none; filter: none; } }
+
+/* ---------------------------------------------------------------------
+   6. Modales : le fond s'assombrit, la feuille est la matière la plus épaisse
+   --------------------------------------------------------------------- */
+.modal-layer { background: rgba(2, 6, 22, .6) !important; -webkit-backdrop-filter: blur(10px) saturate(120%); backdrop-filter: blur(10px) saturate(120%); }
+.modal-card {
+  border: 1px solid transparent !important;
+  border-radius: 26px !important;
+  background:
+    linear-gradient(160deg, rgba(20, 52, 132, .95), rgba(5, 12, 40, .98)) padding-box,
+    linear-gradient(150deg, var(--s-rim), var(--s-rim-soft) 45%, var(--s-rim)) border-box !important;
+  box-shadow: 0 0 44px rgba(35, 110, 255, .32), 0 40px 100px rgba(0, 0, 0, .6), inset 0 1px 0 rgba(255, 255, 255, .24) !important;
+  animation: s-sheet .26s var(--ease-out) both !important;
+}
+.profile-modal .modal-actions,
+.modal-card > .modal-actions:last-child {
+  border-top: 0 !important;
+  background: linear-gradient(180deg, rgba(5, 12, 40, 0), rgba(5, 12, 40, .96) 28%) !important;
+}
+@keyframes s-sheet { from { opacity: 0; transform: translateY(14px) scale(.98); } to { opacity: 1; transform: none; } }
+@media (max-width: 680px) {
+  /* Sur téléphone : feuille qui monte du bas, comme une sheet iOS */
+  .modal-layer { align-items: flex-end !important; padding: 0 !important; }
+  .modal-card { width: 100% !important; max-width: none !important; max-height: 92dvh; border-radius: 26px 26px 0 0 !important; animation-name: s-sheet-up !important; }
+  @keyframes s-sheet-up { from { transform: translateY(40px); opacity: 0; } to { transform: none; opacity: 1; } }
+}
+
+/* ---------------------------------------------------------------------
+   7. Navigation et onglets : contrôles segmentés
+   --------------------------------------------------------------------- */
+:is(.dashboard-main-nav, .profile-section-tabs, .agent-section-tabs) {
+  padding: 5px !important; border: 1px solid var(--a-line) !important; border-radius: 18px !important; background: var(--a-surface) !important;
+}
+:is(.dashboard-main-nav, .profile-section-tabs, .agent-section-tabs) button { min-height: 42px; border-radius: 14px !important; color: var(--ink-2) !important; background: transparent !important; box-shadow: none !important; }
+:is(.dashboard-main-nav, .profile-section-tabs, .agent-section-tabs) button:hover { transform: none !important; }
+/* Survol réservé à la souris, et bien plus discret que la sélection */
+@media (hover: hover) {
+  :is(.dashboard-main-nav, .profile-section-tabs, .agent-section-tabs) button:not(.is-active):not([aria-current="page"]):hover { color: var(--ink-1) !important; background: rgba(80, 140, 255, .08) !important; }
+}
+:is(.dashboard-main-nav button.is-active, .dashboard-main-nav button[aria-current="page"], .profile-section-tabs button.is-active, .agent-section-tabs button.is-active) {
+  color: #fff !important; background: rgba(60, 130, 255, .26) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .18), 0 0 0 1px var(--a-line-strong) !important;
+}
+:is(.compact-filter-button.is-active, .view-toggle button.is-active) { background: rgba(60, 130, 255, .32) !important; box-shadow: 0 0 0 1px var(--a-line-strong) !important; }
+
+/* ---------------------------------------------------------------------
+   8. Étiquettes, badges, invites, notices
+   --------------------------------------------------------------------- */
+.eyebrow, .card-kicker { color: var(--a-accent) !important; letter-spacing: .12em; }
+:is(.role-badge, .session-chip, .pending-count, .campaign-pill) { border-radius: 999px !important; }
+.role-badge, .session-chip { border-color: var(--line-strong) !important; background: rgba(80, 140, 255, .12) !important; }
+.profile-completion-prompt {
+  border: 1px solid var(--line-strong) !important; border-radius: 18px !important;
+  background: linear-gradient(110deg, rgba(40, 110, 255, .24), rgba(8, 20, 58, .6)) !important;
+}
+.profile-completion-prompt:hover { transform: none !important; border-color: var(--a-line-strong) !important; }
+.profile-completion-prompt b, .profile-completion-prompt svg { color: var(--a-accent) !important; }
+.dashboard-notice { border-radius: 14px !important; }
+.dashboard-notice.success { color: var(--ok) !important; border-color: rgba(120, 240, 180, .4) !important; background: rgba(60, 220, 150, .1) !important; }
+.dashboard-notice.error { color: var(--danger) !important; border-color: rgba(255, 140, 165, .45) !important; background: var(--danger-bg) !important; }
+.users-table th { background: rgba(8, 20, 58, .9) !important; letter-spacing: .06em; }
+.users-table tbody tr:hover td { background: rgba(60, 130, 255, .1) !important; }
+
+/* ---------------------------------------------------------------------
+   9. Typographie : interlettrage selon la taille, titres serrés
+   --------------------------------------------------------------------- */
+:is(.dashboard-title h2, .modal-header h3, .page-intro h1, .card-heading h2, .section-title h3, .workspace-card-heading) { letter-spacing: -.02em; line-height: 1.2; }
+.page-intro h1 { letter-spacing: -.035em; line-height: 1.05; }
+.app-shell small { letter-spacing: .01em; }
+
+/* Chiffres alignés ; la police à chasse fixe est réservée au code */
+.app-shell :is(code, kbd) { font-family: "DM Mono", ui-monospace, monospace; }
+.app-shell :is(.users-table, .dashboard-stats, .mono-value, .copyable-phone, .pending-count, .activity-count, .calendar-day, .workspace-card-heading small) { font-variant-numeric: tabular-nums; }
+
+/* ---------------------------------------------------------------------
+   10. Focus visible, cibles tactiles, champs sans zoom iOS
+   --------------------------------------------------------------------- */
+.app-shell :is(button, a, [role=tab], [role=option], summary, [tabindex]):focus-visible { outline: 3px solid var(--a-focus) !important; outline-offset: 2px; }
+@media (pointer: coarse) {
+  .button { min-height: 46px; }
+  .button.compact { min-height: 42px; }
+  :is(.icon-action, .icon-button, .modal-close) { min-width: 44px; min-height: 44px; }
+}
+@media (max-width: 720px) {
+  .app-shell :is(input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=range]), select, textarea) { font-size: 16px !important; }
+}
+/* Téléphone : en-tête sur une ligne, profil compact, navigation sans défilement */
+@media (max-width: 680px) {
+  .dashboard-header { display: flex !important; align-items: center !important; gap: 12px; padding-bottom: 14px !important; }
+  .dashboard-title { align-items: center !important; min-width: 0; }
+  .dashboard-title h2 { margin-top: 0 !important; font-size: 22px !important; }
+  .dashboard-actions { margin-top: 0 !important; flex-wrap: nowrap !important; }
+  .dashboard-actions .session-chip { display: none !important; } /* doublon du « Bonjour, … » juste en dessous */
+  .dashboard-context-row .admin-profile-hero { width: 100% !important; align-items: center !important; }
+  .dashboard-context-row .dashboard-main-nav { display: grid !important; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100% !important; justify-self: stretch; overflow: visible !important; }
+  .dashboard-context-row .dashboard-main-nav button { flex-direction: column; justify-content: center; gap: 4px !important; min-height: 56px; padding: 6px 4px !important; font-size: 13px !important; }
+  .dashboard-context-row .dashboard-main-nav button svg { flex: none; width: 18px; height: 18px; }
+  .workspace-hero p { display: none; }
+  /* Fiche agent : numéro + Appeler sur une ligne, M-Pesa / Lime / mot de passe en dessous, sans troncature */
+  .agent-contact { flex-wrap: wrap; row-gap: 12px; }
+  .agent-contact > :is(.agent-supervisor-label, .agent-password-label) { flex: 1 1 40%; max-width: none !important; }
+  .agent-contact > .agent-supervisor-label:first-of-type { padding-left: 0; border-left: 0; }
+  .agent-contact > .call-agent-button { margin-left: auto !important; }
+  .agent-contact :is(.agent-supervisor-label, .agent-password-label) strong { white-space: normal; }
+}
+
+/* ---------------------------------------------------------------------
+   11. Préférences système
+   --------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  :is(.modal-card, .select-menu, .custom-select-menu, .agent-campaign-picker-menu, .custom-date-picker-popover) { animation: s-fade .15s ease both !important; }
+  .app-shell :is(button, .button):active { transform: none !important; }
+  @keyframes s-fade { from { opacity: 0; } to { opacity: 1; } }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .glass-card, .side-card, .form-card, .modal-card { background: linear-gradient(160deg, #10285f, #050c26) !important; }
+  :is(.modal-layer, .select-menu, .custom-select-menu, .agent-campaign-picker-menu, .custom-date-picker-popover) { -webkit-backdrop-filter: none; backdrop-filter: none; }
+  :is(.select-menu, .custom-select-menu, .agent-campaign-picker-menu, .custom-date-picker-popover) { background: #0b1a45 !important; }
+}
+@media (prefers-contrast: more) {
+  :root { --line-soft: rgba(170, 205, 255, .5); --line-strong: rgba(190, 220, 255, .8); --ink-3: #d3e0f5; }
+}
+@media (forced-colors: active) {
+  .glass-card, .side-card, .form-card, .modal-card, .button, :is(.workspace-card, .detail-section, .pending-item) { border: 1px solid CanvasText !important; }
+}

@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { ShieldCheck } from "lucide-react";
 import AdminDashboard from "./pages/AdminDashboard";
 import Home from "./pages/Home";
 import BrandLogo from "@/components/BrandLogo";
@@ -18,7 +17,6 @@ export default function App() {
     <div className="app-shell dashboard-shell">
       <header className="topbar">
         <div className="brand-lockup"><BrandLogo /><div><span className="brand-name">BTL Africa</span><span className="brand-context">Privilege Tracker · Administration</span></div></div>
-        <div className="topbar-actions"><span className="admin-entry-label"><ShieldCheck size={13} /> Accès sécurisé</span></div>
       </header>
       <main className="page-content dashboard-page"><AdminDashboard onConnectionChanged={handleConnectionChanged} onRequestCreate={(agentsOnly) => { setAgentsOnlyCreation(agentsOnly); setView("create"); }} /></main>
     </div>

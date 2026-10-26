@@ -37,7 +37,8 @@ const shortcutLabels: Array<{ role: ShortcutRole; label: string; short: string }
 
 export default function SimulationBar({ masterUser, effectiveUser, users, onSelectUser, onExit }: SimulationBarProps) {
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [collapsed, setCollapsed] = useState(false);
+  // Repliée par défaut sur téléphone : la barre reste fixe et ne doit pas manger l'écran.
+  const [collapsed, setCollapsed] = useState(() => typeof window !== "undefined" && Boolean(window.matchMedia?.("(max-width: 680px)").matches));
   const [query, setQuery] = useState("");
   const sortedUsers = useMemo(() => sortUsersForSimulation(users), [users]);
   const filteredUsers = useMemo(() => {
@@ -64,7 +65,7 @@ export default function SimulationBar({ masterUser, effectiveUser, users, onSele
       <div className="simulation-picker" onPointerDown={(event) => event.stopPropagation()}>
         <div className="simulation-picker-header">
           <div className="simulation-picker-icon"><UserRound size={16} /></div>
-          <div><span className="simulation-kicker">Simulation superadmin</span><strong>{effectiveUser.full_name}</strong></div>
+          <div><span className="simulation-kicker">Voir en tant que</span><strong>{effectiveUser.full_name}</strong></div>
           <button type="button" className="simulation-close" onClick={closePicker} aria-label="Fermer"><X size={16} /></button>
         </div>
         <div className="simulation-search"><Search size={14} /><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Rechercher un utilisateur…" aria-label="Rechercher un utilisateur à simuler" />{query && <button type="button" onClick={() => setQuery("")} aria-label="Effacer"><X size={13} /></button>}</div>
@@ -79,7 +80,7 @@ export default function SimulationBar({ masterUser, effectiveUser, users, onSele
 
   return <>
     <div className={`simulation-bar ${isSimulating ? "is-active" : ""} ${collapsed ? "is-collapsed" : ""}`}>
-      <div className="simulation-brand"><div className="simulation-brand-icon"><ShieldCheck size={15} /></div>{!collapsed && <div><span>Simulation superadmin</span><small>Compte réel · {masterUser.full_name}</small></div>}</div>
+      <div className="simulation-brand"><div className="simulation-brand-icon"><ShieldCheck size={15} /></div>{!collapsed && <div><span>Voir en tant que</span></div>}</div>
       {!collapsed && <>
         <button type="button" className="simulation-user-select" onClick={() => setPickerOpen(true)} aria-label="Choisir l’utilisateur à simuler" aria-expanded={pickerOpen}><span className="avatar small">{effectiveUser.full_name.slice(0, 1).toUpperCase()}</span><span><strong>{effectiveUser.full_name}</strong><small>{ROLE_LABELS[effectiveUser.role]}</small></span><ChevronDown size={15} /></button>
         <div className="simulation-shortcuts" aria-label="Raccourcis de simulation">{shortcutLabels.map(({ role, label, short }) => { const target = findShortcutUser(users, role); const active = target?.id === effectiveUser.id; return <button type="button" className={`simulation-shortcut ${active ? "is-active" : ""}`} disabled={!target} onClick={() => target && onSelectUser(target)} title={target ? `Simuler ${target.full_name}` : `Compte ${label} indisponible`} aria-label={target ? `Simuler ${target.full_name}` : `Compte ${label} indisponible`}>{short}</button>; })}</div>
