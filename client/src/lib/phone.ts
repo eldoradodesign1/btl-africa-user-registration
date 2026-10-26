@@ -15,6 +15,11 @@ export function isValidMsisdn(value: string | null | undefined): boolean {
   return /^(08|09)\d{8}$/.test(phone);
 }
 
+/** Numéro M-Pesa : uniquement un MSISDN en 08 (ou +2438…). */
+export function isValidMpesa(value: string | null | undefined): boolean {
+  return /^08\d{8}$/.test(normalizePhone(value));
+}
+
 export function phoneValidationMessage(value: string): string {
   if (!value.trim()) return "Le numéro de téléphone est obligatoire.";
   if (!isValidMsisdn(value)) {

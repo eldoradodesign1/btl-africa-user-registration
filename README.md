@@ -129,6 +129,14 @@ pnpm exec vitest run client/src/lib/phone.test.ts client/src/lib/supabase.test.t
 pnpm build
 ```
 
+Pour publier une version sur GitHub Pages, fixer `PAGES_BUNDLE_VERSION` au moment du build : le bundle d’entrée sort directement sous `assets/index-registration-<version>.js` et `.css`, et les chunks chargés à la demande (export Excel) l’importent sous ce nom. Copier ensuite le contenu de `dist/public/` dans `docs/` sans renommer de fichier à la main, et incrémenter `CACHE_NAME` dans `client/public/sw.js`. Sans la variable, les noms restent hachés (`index-<hash>.js`).
+
+```bash
+PAGES_BUNDLE_VERSION=20261022-a11y pnpm build
+```
+
+Sous PowerShell : `$env:PAGES_BUNDLE_VERSION = "20261022-a11y"; pnpm build`.
+
 Le bouton **Créer l’utilisateur** est désactivé tant que le nom, le MSISDN ou le contrôle anti-doublon n’est pas valide. L’accès au formulaire est en plus réservé au profil `super_admin`. Le formulaire reste utilisable au clavier et sur mobile.
 
 Toutes les occurrences de téléphone rendues dans l’interface utilisent maintenant le bouton `CopyablePhone`; un clic copie le numéro brut dans le presse-papier, avec un fallback compatible lorsque l’API Clipboard n’est pas disponible. Les modales du dashboard sont rendues dans `document.body` via un portal, avec une hauteur indépendante du contenu de la page et un scroll interne uniquement lorsque nécessaire.

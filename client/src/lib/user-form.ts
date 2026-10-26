@@ -30,6 +30,7 @@ export function buildUserPayload(input: {
   phone: string;
   whatsappPhone: string | null;
   whatsappSameAsPhone: boolean;
+  mpesaPhone?: string | null;
   dateOfBirth: string | null;
   address: string | null;
   addressProvince: string | null;
@@ -52,6 +53,7 @@ export function buildUserPayload(input: {
     phone: input.phone,
     whatsapp_phone: input.whatsappPhone,
     whatsapp_same_as_phone: input.whatsappSameAsPhone,
+    mpesa_phone: input.mpesaPhone || null,
     date_of_birth: input.dateOfBirth,
     address: input.address,
     address_province: input.addressProvince,
