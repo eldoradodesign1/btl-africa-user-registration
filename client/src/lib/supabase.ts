@@ -466,7 +466,7 @@ export async function signInAdmin(phone: string, password: string): Promise<Admi
     lastError = error;
   }
   if (lastError) throw lastError;
-  throw new Error("MSISDN ou mot de passe incorrect.");
+  throw new Error("Numéro ou mot de passe incorrect.");
 }
 
 export async function signOutAdmin(): Promise<void> { activeProfile = null; localStorage.removeItem(profileKey); }
@@ -794,7 +794,7 @@ export async function reviewCampaignAssignmentRequest(requestId: string, approve
 export async function updateMyProfile(input: { fullName: string; phone: string; currentPassword: string; password?: string; avatarUrl?: string | null; avatarChanged?: boolean; address?: string | null; addressProvince?: string | null; addressCommune?: string | null; addressQuartier?: string | null; addressAvenue?: string | null; addressNumber?: string | null; addressLatitude?: number | null; addressLongitude?: number | null; shirtSize?: string | null; jacketSize?: string | null; skirtSize?: string | null; dressSize?: string | null; heelSize?: string | null; sneakerSize?: string | null; ballerinaSize?: string | null; currentOccupation?: string | null; acceptsNightWork?: boolean; acceptsOvernightStay?: boolean; acceptsLateWork?: boolean; mpesaPhone?: string | null }): Promise<UserRecord> {
   if (!activeProfile || !supabaseClient) throw new Error("Connexion requise avant de modifier votre profil.");
   const normalizedPhone = normalizePhone(input.phone);
-  if (!isValidMsisdn(normalizedPhone)) throw new Error("Le MSISDN fourni est invalide.");
+  if (!isValidMsisdn(normalizedPhone)) throw new Error("Le numéro est invalide.");
   const normalizedMpesa = input.mpesaPhone?.trim() ? normalizePhone(input.mpesaPhone) : "";
   if (normalizedMpesa && !isValidMpesa(normalizedMpesa)) throw new Error("Le numéro M-Pesa doit commencer par 08.");
   if (input.password && !input.currentPassword) throw new Error("Le mot de passe actuel est requis pour changer le mot de passe.");
@@ -875,7 +875,7 @@ export async function insertUser(payload: UserInsert): Promise<UserRecord> {
 export async function createRegistrationRequest(input: { fullName: string; phone: string; whatsappPhone: string | null; whatsappSameAsPhone: boolean; dateOfBirth: string | null; address: string | null; addressProvince: string | null; addressCommune: string | null; addressQuartier: string | null; addressAvenue: string | null; addressNumber: string | null; addressLatitude: number | null; addressLongitude: number | null; avatarUrl: string | null; password: string; category: UserCategory; mpesaPhone: string | null }): Promise<RegistrationRequest> {
   if (!supabaseClient) throw new Error("Configurez Supabase avant de créer une demande.");
   const normalizedPhone = normalizePhone(input.phone);
-  if (!isValidMsisdn(normalizedPhone)) throw new Error("Le MSISDN fourni est invalide.");
+  if (!isValidMsisdn(normalizedPhone)) throw new Error("Le numéro est invalide.");
   const id = crypto.randomUUID();
   const { data, error } = await supabaseClient.rpc("create_registration_request", {
     p_request_id: id,

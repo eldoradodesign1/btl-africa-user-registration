@@ -409,7 +409,7 @@ function Home({ onUserCreated, onNavigateDashboard, agentsOnly = false }: { onUs
         const latestExistingUser = await findExistingUser(normalizedPhone).catch(() => null);
         setExistingUser(latestExistingUser);
         setPhoneState("duplicate");
-        setToast({ kind: "error", title: "Numéro déjà utilisé", message: "Une autre création vient d’utiliser ce MSISDN. Aucun utilisateur n’a été écrasé." });
+        setToast({ kind: "error", title: "Numéro déjà utilisé", message: "Ce numéro vient d’être utilisé pour un autre compte. Aucun utilisateur n’a été écrasé." });
       } else {
         setToast({ kind: "error", title: "Création impossible", message: creationErrorMessage(error), action: () => void handleSubmit() });
       }

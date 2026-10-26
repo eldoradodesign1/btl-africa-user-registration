@@ -252,6 +252,7 @@ html, body { background: var(--bg); }
 .dashboard-notice.success { color: var(--ok) !important; border-color: rgba(120, 240, 180, .4) !important; background: rgba(60, 220, 150, .1) !important; }
 .dashboard-notice.error { color: var(--danger) !important; border-color: rgba(255, 140, 165, .45) !important; background: var(--danger-bg) !important; }
 .users-table th { background: rgba(8, 20, 58, .9) !important; letter-spacing: .06em; }
+.export-choice small { overflow: visible !important; text-overflow: clip !important; white-space: normal !important; } /* description lisible en entier */
 .users-table tbody tr:hover td { background: rgba(60, 130, 255, .1) !important; }
 
 /* ---------------------------------------------------------------------

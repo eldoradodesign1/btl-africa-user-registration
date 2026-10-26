@@ -23,7 +23,7 @@ export function isValidMpesa(value: string | null | undefined): boolean {
 export function phoneValidationMessage(value: string): string {
   if (!value.trim()) return "Le numéro de téléphone est obligatoire.";
   if (!isValidMsisdn(value)) {
-    return "Numéro invalide. Utilisez un MSISDN local à 10 chiffres (08/09) ou son format +243.";
+    return "Numéro invalide : 10 chiffres commençant par 08 ou 09, ou au format +243.";
   }
   return "";
 }
