@@ -227,6 +227,8 @@ input:focus-visible + .toggle-visual { box-shadow: var(--ring); }
 }
 .password-toggle:hover,
 .signup-whatsapp-toggle:hover { border-color: var(--line-strong); background: rgba(29, 58, 96, .6); }
+.signup-whatsapp-toggle.is-disabled { cursor: not-allowed; }
+.signup-whatsapp-toggle.is-disabled .toggle-visual, .signup-whatsapp-toggle.is-disabled strong { opacity: .45; }
 .password-toggle strong,
 .signup-whatsapp-toggle strong { display: block; color: var(--ink-1) !important; font-size: 11px; font-weight: 700; }
 .password-toggle small,

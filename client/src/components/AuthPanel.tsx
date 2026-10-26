@@ -1,16 +1,16 @@
 import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
-import { AlertCircle, CheckCircle2, Clock3, Eye, EyeOff, ImagePlus, LoaderCircle, LogIn, UserCheck, X } from "lucide-react";
+import { AlertCircle, Check, CheckCircle2, Clock3, Eye, EyeOff, ImagePlus, LoaderCircle, LogIn, UserCheck, X } from "lucide-react";
 import AddressFields, { EMPTY_ADDRESS_DRAFT, type AddressDraft } from "@/components/AddressFields";
-import { DatePickerField } from "@/components/DateTimeFields";
-import { isValidMsisdn, normalizePhone } from "@/lib/phone";
-import { CATEGORY_LABELS } from "@/lib/user-form";
+import { BirthDateField } from "@/components/DateTimeFields";
+import { isValidMpesa, isValidMsisdn, normalizePhone } from "@/lib/phone";
 import type { UserCategory } from "@/lib/supabase";
 
+/** Le numéro principal (phone) est le numéro WhatsApp : c'est lui qui sert à se connecter. */
 export type SignupForm = {
   fullName: string;
   phone: string;
-  whatsappPhone: string;
-  whatsappSameAsPhone: boolean;
+  mpesaSameAsPhone: boolean;
+  mpesaPhone: string;
   dateOfBirth: string;
   addressDetails: AddressDraft;
   avatarUrl: string | null;
@@ -20,14 +20,18 @@ export type SignupForm = {
   category: UserCategory;
 };
 
-export const INITIAL_SIGNUP: SignupForm = { fullName: "", phone: "", whatsappPhone: "", whatsappSameAsPhone: true, dateOfBirth: "", addressDetails: { ...EMPTY_ADDRESS_DRAFT }, avatarUrl: null, useDefaultPassword: true, password: "", confirmPassword: "", category: "hostess" };
+export const INITIAL_SIGNUP: SignupForm = { fullName: "", phone: "", mpesaSameAsPhone: true, mpesaPhone: "", dateOfBirth: "", addressDetails: { ...EMPTY_ADDRESS_DRAFT }, avatarUrl: null, useDefaultPassword: true, password: "", confirmPassword: "", category: "hostess" };
 
-/** Catégories proposées à l'inscription : uniquement les catégories agent (« operations » est technique). */
-const SIGNUP_CATEGORIES: UserCategory[] = ["hostess", "hostess_polyvalent", "brand_ambassador"];
+/** « Même numéro pour M-Pesa » n'est possible que si le WhatsApp est un numéro en 08. */
+export function signupMpesaPhone(form: SignupForm): string | null {
+  if (form.mpesaSameAsPhone && isValidMpesa(form.phone)) return normalizePhone(form.phone);
+  return form.mpesaPhone.trim() ? normalizePhone(form.mpesaPhone) : null;
+}
 
 type Mode = "signin" | "signup";
 type Notice = { kind: "error" | "success"; message: string } | null;
-type Errors = Partial<Record<"loginPhone" | "loginPassword" | "fullName" | "phone" | "whatsappPhone" | "dateOfBirth" | "photo" | "password" | "confirmPassword", string>>;
+type ErrorKey = "loginPhone" | "loginPassword" | "fullName" | "phone" | "mpesaPhone" | "dateOfBirth" | "photo" | "password" | "confirmPassword";
+type Errors = Partial<Record<ErrorKey, string>>;
 
 type Props = {
   loading: boolean;
@@ -37,7 +41,7 @@ type Props = {
   onSignup: (form: SignupForm) => Promise<boolean>;
 };
 
-const PHONE_HINT = "10 chiffres commençant par 08 ou 09, ou au format +243.";
+const PHONE_PLACEHOLDER = "081 234 5678";
 
 /** Réduit la photo côté appareil (max 640 px, JPEG) : les photos de téléphone passent sans limite de poids. */
 async function resizeImage(file: File, max = 640): Promise<string> {
@@ -64,21 +68,44 @@ function describedBy(id: string, hint?: string, error?: string): string | undefi
   return [hint ? `${id}-hint` : "", error ? `${id}-error` : ""].filter(Boolean).join(" ") || undefined;
 }
 
-function Field({ id, label, required, hint, error, children }: { id: string; label: string; required?: boolean; hint?: string; error?: string; children: ReactNode }) {
+function Field({ id, label, optional, hint, error, children }: { id: string; label: string; optional?: boolean; hint?: string; error?: string; children: ReactNode }) {
   return <div className={`auth-field${error ? " has-error" : ""}`}>
-    <label htmlFor={id}>{label}{required ? <span className="auth-req" aria-hidden="true"> *</span> : <span className="auth-opt"> (facultatif)</span>}</label>
+    <label htmlFor={id}>{label}{optional && <span className="auth-opt"> (facultatif)</span>}</label>
     {children}
-    {hint && <p id={`${id}-hint`} className="auth-hint">{hint}</p>}
+    {hint && !error && <p id={`${id}-hint`} className="auth-hint">{hint}</p>}
     {error && <p id={`${id}-error`} className="auth-error"><AlertCircle size={14} aria-hidden="true" />{error}</p>}
   </div>;
 }
 
-function PasswordInput({ id, value, onChange, autoComplete, error, hint, required = true }: { id: string; value: string; onChange: (value: string) => void; autoComplete: string; error?: string; hint?: string; required?: boolean }) {
+function PasswordInput({ id, value, onChange, autoComplete, error }: { id: string; value: string; onChange: (value: string) => void; autoComplete: string; error?: string }) {
   const [visible, setVisible] = useState(false);
   return <div className="auth-input-wrap">
-    <input id={id} type={visible ? "text" : "password"} value={value} onChange={(event) => onChange(event.target.value)} autoComplete={autoComplete} required={required} aria-required={required} aria-invalid={Boolean(error)} aria-describedby={describedBy(id, hint, error)} />
+    <input id={id} type={visible ? "text" : "password"} value={value} onChange={(event) => onChange(event.target.value)} autoComplete={autoComplete} required aria-invalid={Boolean(error)} aria-describedby={describedBy(id, undefined, error)} />
     <button type="button" className="auth-eye" onClick={() => setVisible((state) => !state)} aria-pressed={visible} aria-label={visible ? "Masquer le mot de passe" : "Afficher le mot de passe"}>{visible ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}</button>
   </div>;
+}
+
+/** Catégorie : Hôtesse (+ case « Polyv. ») ou Brand Ambassador, comme le formulaire de création admin. */
+function CategoryPicker({ name, value, onChange }: { name: string; value: UserCategory; onChange: (value: UserCategory) => void }) {
+  const isHostess = value === "hostess" || value === "hostess_polyvalent";
+  const isPolyvalent = value === "hostess_polyvalent";
+  return <fieldset className="auth-cat">
+    <legend className="auth-label">Catégorie</legend>
+    <div className="auth-cat-row">
+      <label className="auth-cat-opt">
+        <input type="radio" name={name} checked={isHostess} onChange={() => onChange(isPolyvalent ? "hostess_polyvalent" : "hostess")} />
+        <span className="auth-cat-dot" aria-hidden="true" />Hôtesse
+      </label>
+      <label className="auth-cat-poly" title="Hôtesse polyvalente : campagnes Hôtesses, BA et Events">
+        <input type="checkbox" checked={isPolyvalent} onChange={(event) => onChange(event.target.checked ? "hostess_polyvalent" : "hostess")} />
+        <span className="auth-cat-box" aria-hidden="true"><Check size={13} strokeWidth={3} /></span>Polyv.<span className="sr-only"> (hôtesse polyvalente)</span>
+      </label>
+    </div>
+    <label className="auth-cat-opt">
+      <input type="radio" name={name} checked={value === "brand_ambassador"} onChange={() => onChange("brand_ambassador")} />
+      <span className="auth-cat-dot" aria-hidden="true" />Brand Ambassador
+    </label>
+  </fieldset>;
 }
 
 export default function AuthPanel({ loading, notice, onDismissNotice, onLogin, onSignup }: Props) {
@@ -113,10 +140,20 @@ export default function AuthPanel({ loading, notice, onDismissNotice, onLogin, o
     }
   }
 
+  function clearError(key: ErrorKey) {
+    setErrors((current) => {
+      if (!(key in current)) return current;
+      const next = { ...current };
+      delete next[key];
+      return next;
+    });
+  }
+
   function update<K extends keyof SignupForm>(key: K, value: SignupForm[K]) {
     setForm((current) => ({ ...current, [key]: value }));
-    const errorKey = key === "useDefaultPassword" ? "password" : key === "whatsappSameAsPhone" ? "whatsappPhone" : key;
-    if (errorKey in errors) setErrors((current) => { const next = { ...current }; delete next[errorKey as keyof Errors]; return next; });
+    if (key === "useDefaultPassword") { clearError("password"); clearError("confirmPassword"); }
+    else if (key === "mpesaSameAsPhone") clearError("mpesaPhone");
+    else if (key in errors) clearError(key as ErrorKey);
   }
 
   function focusFirstError(root: HTMLFormElement | null, next: Errors) {
@@ -129,7 +166,7 @@ export default function AuthPanel({ loading, notice, onDismissNotice, onLogin, o
     event.preventDefault();
     if (loading) return;
     const next: Errors = {};
-    if (!isValidMsisdn(normalizePhone(loginPhone))) next.loginPhone = loginPhone.trim() ? "Ce numéro n’est pas valide." : "Saisissez votre numéro de téléphone.";
+    if (!isValidMsisdn(normalizePhone(loginPhone))) next.loginPhone = loginPhone.trim() ? "Ce numéro n’est pas valide." : "Saisissez votre numéro WhatsApp.";
     if (!loginPassword) next.loginPassword = "Saisissez votre mot de passe.";
     setErrors(next);
     if (Object.keys(next).length) { focusFirstError(loginRef.current, next); return; }
@@ -137,15 +174,20 @@ export default function AuthPanel({ loading, notice, onDismissNotice, onLogin, o
     await onLogin(loginPhone, loginPassword);
   }
 
+  const phoneValid = isValidMsisdn(normalizePhone(form.phone));
+  const mpesaEligible = isValidMpesa(form.phone);
+  const mpesaSame = form.mpesaSameAsPhone && mpesaEligible;
+  const showMpesaField = phoneValid && !mpesaSame;
+
   async function submitSignup(event: FormEvent) {
     event.preventDefault();
     if (loading || photoBusy) return;
     const next: Errors = {};
     if (form.fullName.trim().length < 2) next.fullName = "Saisissez votre nom complet.";
-    if (!isValidMsisdn(normalizePhone(form.phone))) next.phone = form.phone.trim() ? "Ce numéro n’est pas valide." : "Saisissez votre numéro M-Pesa.";
-    if (!form.whatsappSameAsPhone && !isValidMsisdn(normalizePhone(form.whatsappPhone))) next.whatsappPhone = form.whatsappPhone.trim() ? "Ce numéro WhatsApp n’est pas valide." : "Saisissez votre numéro WhatsApp.";
+    if (!phoneValid) next.phone = form.phone.trim() ? "Ce numéro n’est pas valide." : "Saisissez votre numéro WhatsApp.";
+    if (showMpesaField && form.mpesaPhone.trim() && !isValidMpesa(form.mpesaPhone)) next.mpesaPhone = "Un numéro M-Pesa commence par 08.";
     const dob = formRef.current?.querySelector<HTMLInputElement>(`#${CSS.escape(`${uid}-dateOfBirth`)}`);
-    if (dob && dob.value.trim() && !dob.validity.valid) next.dateOfBirth = "Saisissez une date valide au format JJ/MM/AAAA.";
+    if (dob && dob.value.trim() && !dob.validity.valid) next.dateOfBirth = "Date invalide (JJ/MM/AAAA).";
     if (!form.useDefaultPassword) {
       if (form.password.length < 6) next.password = "Au moins 6 caractères.";
       else if (form.password !== form.confirmPassword) next.confirmPassword = "Les deux mots de passe ne correspondent pas.";
@@ -158,13 +200,13 @@ export default function AuthPanel({ loading, notice, onDismissNotice, onLogin, o
 
   async function pickPhoto(file: File | undefined) {
     if (!file) return;
-    if (!file.type.startsWith("image/")) { setErrors((current) => ({ ...current, photo: "Choisissez une image (JPEG, PNG ou WebP)." })); return; }
+    if (!file.type.startsWith("image/")) { setErrors((current) => ({ ...current, photo: "Choisissez une image." })); return; }
     setPhotoBusy(true);
     try {
       update("avatarUrl", await resizeImage(file));
-      setErrors((current) => { const next = { ...current }; delete next.photo; return next; });
+      clearError("photo");
     } catch {
-      setErrors((current) => ({ ...current, photo: "Cette image n’a pas pu être lue. Essayez une autre photo." }));
+      setErrors((current) => ({ ...current, photo: "Image illisible, essayez une autre photo." }));
     } finally {
       setPhotoBusy(false);
     }
@@ -180,8 +222,8 @@ export default function AuthPanel({ loading, notice, onDismissNotice, onLogin, o
       <div className="auth-card">
         <header className="auth-head">
           <p className="auth-eyebrow">Beyond The Line · BTL Africa</p>
-          <h1 id={id("title")}>{mode === "signin" ? "Connexion" : "Créer un compte agent"}</h1>
-          <p className="auth-sub">{mode === "signin" ? "Connectez-vous avec votre numéro et votre mot de passe." : "Votre demande sera validée par l’équipe avant l’accès."}</p>
+          <h1 id={id("title")}>{mode === "signin" ? "Connexion" : "Créer un compte"}</h1>
+          <p className="auth-sub">{mode === "signin" ? "Avec votre numéro WhatsApp." : "Activé après validation par l’équipe."}</p>
         </header>
 
         <div className="auth-seg" role="tablist" aria-label="Connexion ou création de compte">
@@ -191,11 +233,11 @@ export default function AuthPanel({ loading, notice, onDismissNotice, onLogin, o
         <div aria-live="polite" className="auth-live">{notice && <div className={`auth-notice is-${notice.kind}`} role={notice.kind === "error" ? "alert" : "status"}>{notice.kind === "error" ? <AlertCircle size={18} aria-hidden="true" /> : <CheckCircle2 size={18} aria-hidden="true" />}<span>{notice.message}</span><button type="button" onClick={onDismissNotice} aria-label="Fermer le message"><X size={16} aria-hidden="true" /></button></div>}</div>
 
         {mode === "signin" ? <div id={id("panel-signin")} role="tabpanel" aria-labelledby={id("tab-signin")}><form ref={loginRef} className="auth-form" noValidate onSubmit={submitLogin}>
-          <div data-field="loginPhone"><Field id={id("loginPhone")} label="Numéro de téléphone" required hint={PHONE_HINT} error={errors.loginPhone}>
-            <input id={id("loginPhone")} type="tel" inputMode="tel" autoComplete="username" placeholder="081 234 5678" value={loginPhone} onChange={(event) => { setLoginPhone(event.target.value); if (errors.loginPhone) setErrors((current) => ({ ...current, loginPhone: undefined })); }} required aria-required="true" aria-invalid={Boolean(errors.loginPhone)} aria-describedby={describedBy(id("loginPhone"), PHONE_HINT, errors.loginPhone)} />
+          <div data-field="loginPhone"><Field id={id("loginPhone")} label="Numéro WhatsApp" error={errors.loginPhone}>
+            <input id={id("loginPhone")} type="tel" inputMode="tel" autoComplete="username" placeholder={PHONE_PLACEHOLDER} value={loginPhone} onChange={(event) => { setLoginPhone(event.target.value); clearError("loginPhone"); }} required aria-invalid={Boolean(errors.loginPhone)} aria-describedby={describedBy(id("loginPhone"), undefined, errors.loginPhone)} />
           </Field></div>
-          <div data-field="loginPassword"><Field id={id("loginPassword")} label="Mot de passe" required error={errors.loginPassword}>
-            <PasswordInput id={id("loginPassword")} value={loginPassword} onChange={(value) => { setLoginPassword(value); if (errors.loginPassword) setErrors((current) => ({ ...current, loginPassword: undefined })); }} autoComplete="current-password" error={errors.loginPassword} />
+          <div data-field="loginPassword"><Field id={id("loginPassword")} label="Mot de passe" error={errors.loginPassword}>
+            <PasswordInput id={id("loginPassword")} value={loginPassword} onChange={(value) => { setLoginPassword(value); clearError("loginPassword"); }} autoComplete="current-password" error={errors.loginPassword} />
           </Field></div>
           <button className="auth-cta" type="submit" aria-busy={loading} aria-disabled={loading}>{loading ? <LoaderCircle className="spin" size={18} aria-hidden="true" /> : <LogIn size={18} aria-hidden="true" />}{loading ? "Connexion…" : "Se connecter"}</button>
           <p className="auth-switch-line">Pas encore de compte ? <button type="button" className="auth-link" onClick={() => switchMode("signup", true)}>Créer un compte</button></p>
@@ -203,57 +245,46 @@ export default function AuthPanel({ loading, notice, onDismissNotice, onLogin, o
           {success ? <div ref={successRef} tabIndex={-1} className="auth-success" role="status">
             <span className="auth-success-icon" aria-hidden="true"><Clock3 size={24} /></span>
             <h2>Demande envoyée</h2>
-            <p>Un responsable doit valider votre compte. Vous pourrez ensuite vous connecter avec votre numéro.</p>
+            <p>Vous pourrez vous connecter dès que l’équipe aura validé votre compte.</p>
             <button type="button" className="auth-cta" onClick={() => switchMode("signin", true)}>Retour à la connexion</button>
           </div> : <>
-            <p className="auth-note">Les champs marqués <span aria-hidden="true">*</span><span className="sr-only">d’un astérisque</span> sont obligatoires.</p>
-
             <fieldset className="auth-group">
               <legend>Identité</legend>
-              <div data-field="fullName"><Field id={id("fullName")} label="Nom complet" required error={errors.fullName}>
-                <input id={id("fullName")} value={form.fullName} onChange={(event) => update("fullName", event.target.value)} placeholder="Ex. Grâce Mbuyi" autoComplete="name" autoCapitalize="words" required aria-required="true" aria-invalid={Boolean(errors.fullName)} aria-describedby={describedBy(id("fullName"), undefined, errors.fullName)} />
+              <div data-field="fullName"><Field id={id("fullName")} label="Nom complet" error={errors.fullName}>
+                <input id={id("fullName")} value={form.fullName} onChange={(event) => update("fullName", event.target.value)} placeholder="Ex. Grâce Mbuyi" autoComplete="name" autoCapitalize="words" required aria-invalid={Boolean(errors.fullName)} aria-describedby={describedBy(id("fullName"), undefined, errors.fullName)} />
               </Field></div>
-              <div data-field="dateOfBirth"><Field id={id("dateOfBirth")} label="Date de naissance" hint="Format JJ/MM/AAAA." error={errors.dateOfBirth}>
-                <DatePickerField id={id("dateOfBirth")} ariaLabel="Date de naissance, format JJ/MM/AAAA" value={form.dateOfBirth} max={new Date().toISOString().slice(0, 10)} onChange={(value) => update("dateOfBirth", value)} />
-              </Field></div>
-              <div className={`auth-field${errors.photo ? " has-error" : ""}`} data-field="photo">
-                <span className="auth-label" id={id("photo-label")}>Photo de profil<span className="auth-opt"> (facultatif)</span></span>
-                <div className="auth-photo">
-                  {form.avatarUrl ? <img src={form.avatarUrl} alt="Aperçu de votre photo de profil" /> : <span className="auth-photo-empty" aria-hidden="true"><ImagePlus size={22} /></span>}
-                  <div className="auth-photo-actions">
-                    <input id={id("photo")} className="auth-file-input" type="file" accept="image/*" aria-labelledby={`${id("photo-label")} ${id("photo-btn")}`} aria-describedby={errors.photo ? `${id("photo")}-error` : undefined} onChange={(event) => { void pickPhoto(event.target.files?.[0]); event.target.value = ""; }} />
-                    <label htmlFor={id("photo")} id={id("photo-btn")} className="auth-file-btn">{photoBusy ? <LoaderCircle className="spin" size={16} aria-hidden="true" /> : <ImagePlus size={16} aria-hidden="true" />}{photoBusy ? "Préparation…" : form.avatarUrl ? "Changer la photo" : "Choisir une photo"}</label>
-                    {form.avatarUrl && <button type="button" className="auth-link" onClick={() => update("avatarUrl", null)}>Retirer</button>}
+              <div className="auth-profile-row">
+                <div className={`auth-photo-field${errors.photo ? " has-error" : ""}`} data-field="photo">
+                  <span className="auth-label" id={id("photo-label")}>Photo</span>
+                  <div className="auth-photo-box">
+                    <input id={id("photo")} className="auth-file-input" type="file" accept="image/*" aria-labelledby={id("photo-label")} aria-describedby={errors.photo ? `${id("photo")}-error` : undefined} onChange={(event) => { void pickPhoto(event.target.files?.[0]); event.target.value = ""; }} />
+                    <label htmlFor={id("photo")} className={`auth-photo-tile${form.avatarUrl ? " has-photo" : ""}`}>
+                      {form.avatarUrl ? <img src={form.avatarUrl} alt="Votre photo" /> : <>{photoBusy ? <LoaderCircle className="spin" size={24} aria-hidden="true" /> : <ImagePlus size={24} aria-hidden="true" />}<span>{photoBusy ? "Préparation…" : "Choisir une photo"}</span></>}
+                    </label>
+                    {form.avatarUrl && <button type="button" className="auth-photo-remove" onClick={() => update("avatarUrl", null)} aria-label="Retirer la photo"><X size={14} aria-hidden="true" /></button>}
                   </div>
+                  {errors.photo && <p id={`${id("photo")}-error`} className="auth-error"><AlertCircle size={14} aria-hidden="true" />{errors.photo}</p>}
                 </div>
-                {errors.photo && <p id={`${id("photo")}-error`} className="auth-error"><AlertCircle size={14} aria-hidden="true" />{errors.photo}</p>}
+                <CategoryPicker name={id("category")} value={form.category} onChange={(category) => update("category", category)} />
               </div>
+              <div data-field="dateOfBirth"><Field id={id("dateOfBirth")} label="Date de naissance" optional error={errors.dateOfBirth}>
+                <BirthDateField id={id("dateOfBirth")} ariaLabel="Date de naissance" value={form.dateOfBirth} invalid={Boolean(errors.dateOfBirth)} describedBy={describedBy(id("dateOfBirth"), undefined, errors.dateOfBirth)} onChange={(value) => update("dateOfBirth", value)} />
+              </Field></div>
             </fieldset>
 
             <fieldset className="auth-group">
               <legend>Contact</legend>
-              <div data-field="phone"><Field id={id("phone")} label="Numéro M-Pesa" required hint={PHONE_HINT} error={errors.phone}>
-                <input id={id("phone")} type="tel" inputMode="tel" autoComplete="tel" placeholder="081 234 5678" value={form.phone} onChange={(event) => update("phone", event.target.value)} required aria-required="true" aria-invalid={Boolean(errors.phone)} aria-describedby={describedBy(id("phone"), PHONE_HINT, errors.phone)} />
+              <div data-field="phone"><Field id={id("phone")} label="Numéro WhatsApp" hint="Il vous servira à vous connecter." error={errors.phone}>
+                <input id={id("phone")} type="tel" inputMode="tel" autoComplete="tel" placeholder={PHONE_PLACEHOLDER} value={form.phone} onChange={(event) => update("phone", event.target.value)} required aria-invalid={Boolean(errors.phone)} aria-describedby={describedBy(id("phone"), errors.phone ? undefined : "hint", errors.phone)} />
               </Field></div>
               <label className="auth-toggle">
-                <input type="checkbox" role="switch" checked={form.whatsappSameAsPhone} onChange={(event) => { update("whatsappSameAsPhone", event.target.checked); if (event.target.checked) update("whatsappPhone", ""); }} />
+                <input type="checkbox" role="switch" checked={mpesaSame} disabled={!mpesaEligible} aria-describedby={phoneValid && !mpesaEligible ? id("mpesa-why") : undefined} onChange={(event) => update("mpesaSameAsPhone", event.target.checked)} />
                 <span className="auth-toggle-track" aria-hidden="true" />
-                <span className="auth-toggle-text"><strong>Même numéro pour WhatsApp</strong><small>Désactivez si votre WhatsApp utilise un autre numéro.</small></span>
+                <span className="auth-toggle-text"><strong>Même numéro pour M-Pesa</strong>{phoneValid && !mpesaEligible && <small id={id("mpesa-why")}>M-Pesa : numéro en 08 uniquement.</small>}</span>
               </label>
-              {!form.whatsappSameAsPhone && <div data-field="whatsappPhone"><Field id={id("whatsappPhone")} label="Numéro WhatsApp" required hint={PHONE_HINT} error={errors.whatsappPhone}>
-                <input id={id("whatsappPhone")} type="tel" inputMode="tel" autoComplete="tel" placeholder="081 234 5678" value={form.whatsappPhone} onChange={(event) => update("whatsappPhone", event.target.value)} required aria-required="true" aria-invalid={Boolean(errors.whatsappPhone)} aria-describedby={describedBy(id("whatsappPhone"), PHONE_HINT, errors.whatsappPhone)} />
+              {showMpesaField && <div data-field="mpesaPhone"><Field id={id("mpesaPhone")} label="Numéro M-Pesa" optional error={errors.mpesaPhone}>
+                <input id={id("mpesaPhone")} type="tel" inputMode="tel" autoComplete="off" placeholder={PHONE_PLACEHOLDER} value={form.mpesaPhone} onChange={(event) => update("mpesaPhone", event.target.value)} aria-invalid={Boolean(errors.mpesaPhone)} aria-describedby={describedBy(id("mpesaPhone"), undefined, errors.mpesaPhone)} />
               </Field></div>}
-            </fieldset>
-
-            <fieldset className="auth-group">
-              <legend>Catégorie<span className="auth-req" aria-hidden="true"> *</span></legend>
-              <div className="auth-choices">
-                {SIGNUP_CATEGORIES.map((category) => { const [title, detail] = CATEGORY_LABELS[category].split(" — "); return <label key={category} className="auth-choice">
-                  <input type="radio" name={id("category")} value={category} checked={form.category === category} onChange={() => update("category", category)} />
-                  <span className="auth-choice-body"><strong>{title}</strong>{detail && <small>{detail}</small>}</span>
-                  <CheckCircle2 className="auth-choice-check" size={18} aria-hidden="true" />
-                </label>; })}
-              </div>
             </fieldset>
 
             <fieldset className="auth-group auth-group-address">
@@ -266,13 +297,13 @@ export default function AuthPanel({ loading, notice, onDismissNotice, onLogin, o
               <label className="auth-toggle">
                 <input type="checkbox" role="switch" checked={form.useDefaultPassword} onChange={(event) => { update("useDefaultPassword", event.target.checked); setForm((current) => ({ ...current, password: "", confirmPassword: "" })); }} />
                 <span className="auth-toggle-track" aria-hidden="true" />
-                <span className="auth-toggle-text"><strong>Utiliser le mot de passe par défaut</strong><small>Mot de passe : <code>password</code>. Vous pourrez le changer depuis votre profil.</small></span>
+                <span className="auth-toggle-text"><strong>Mot de passe par défaut</strong><small><code>password</code>, modifiable dans votre profil</small></span>
               </label>
               {!form.useDefaultPassword && <>
-                <div data-field="password"><Field id={id("password")} label="Mot de passe" required hint="Au moins 6 caractères." error={errors.password}>
-                  <PasswordInput id={id("password")} value={form.password} onChange={(value) => update("password", value)} autoComplete="new-password" hint="Au moins 6 caractères." error={errors.password} />
+                <div data-field="password"><Field id={id("password")} label="Mot de passe" hint="6 caractères minimum." error={errors.password}>
+                  <PasswordInput id={id("password")} value={form.password} onChange={(value) => update("password", value)} autoComplete="new-password" error={errors.password} />
                 </Field></div>
-                <div data-field="confirmPassword"><Field id={id("confirmPassword")} label="Confirmer le mot de passe" required error={errors.confirmPassword}>
+                <div data-field="confirmPassword"><Field id={id("confirmPassword")} label="Confirmer" error={errors.confirmPassword}>
                   <PasswordInput id={id("confirmPassword")} value={form.confirmPassword} onChange={(value) => update("confirmPassword", value)} autoComplete="new-password" error={errors.confirmPassword} />
                 </Field></div>
               </>}

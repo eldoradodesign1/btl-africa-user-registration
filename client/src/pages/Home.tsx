@@ -32,7 +32,7 @@ import {
   defaultPasswordForRole,
   shouldShowShop,
 } from "@/lib/user-form";
-import { formatPhoneForDisplay, isValidMsisdn, normalizePhone, phoneValidationMessage } from "@/lib/phone";
+import { formatPhoneForDisplay, isValidMpesa, isValidMsisdn, normalizePhone, phoneValidationMessage } from "@/lib/phone";
 import {
   findExistingUser,
   insertUser,
@@ -62,8 +62,8 @@ function creationErrorMessage(error: unknown): string {
 type FormState = {
   fullName: string;
   phone: string;
-  whatsappPhone: string;
-  whatsappSameAsPhone: boolean;
+  mpesaPhone: string;
+  mpesaSameAsPhone: boolean;
   dateOfBirth: string;
   addressDetails: AddressDraft;
   avatarUrl: string | null;
@@ -78,8 +78,8 @@ type FormState = {
 const INITIAL_FORM: FormState = {
   fullName: "",
   phone: "",
-  whatsappPhone: "",
-  whatsappSameAsPhone: true,
+  mpesaPhone: "",
+  mpesaSameAsPhone: true,
   dateOfBirth: "",
   addressDetails: { ...EMPTY_ADDRESS_DRAFT },
   avatarUrl: null,
@@ -224,6 +224,9 @@ function Home({ onUserCreated, onNavigateDashboard, agentsOnly = false }: { onUs
   const fullNameError = form.fullName.length > 0 && form.fullName.trim().length < 2 ? "Saisissez au moins 2 caractères." : "";
   const phoneError = phoneValidationMessage(form.phone);
   const isPhoneValid = isValidMsisdn(form.phone);
+  // Le numéro de connexion est le WhatsApp ; « même numéro pour M-Pesa » exige un numéro en 08.
+  const mpesaEligible = isValidMpesa(form.phone);
+  const mpesaSame = form.mpesaSameAsPhone && mpesaEligible;
   const showShop = shouldShowShop(form.role, form.category);
 
   const supervisorOptions = useMemo(
@@ -338,7 +341,7 @@ function Home({ onUserCreated, onNavigateDashboard, agentsOnly = false }: { onUs
   async function handleSubmit(event?: React.FormEvent) {
     event?.preventDefault();
     const trimmedName = form.fullName.trim();
-    const normalizedWhatsappPhone = form.whatsappSameAsPhone ? normalizedPhone : normalizePhone(form.whatsappPhone);
+    const normalizedMpesaPhone = mpesaSame ? normalizedPhone : form.mpesaPhone.trim() ? normalizePhone(form.mpesaPhone) : null;
     if (!trimmedName) {
       setToast({ kind: "error", title: "Nom requis", message: "Le nom complet est obligatoire." });
       return;
@@ -347,8 +350,8 @@ function Home({ onUserCreated, onNavigateDashboard, agentsOnly = false }: { onUs
       setToast({ kind: "error", title: "Vérifiez les champs", message: "Corrigez les champs signalés avant de continuer." });
       return;
     }
-    if (!form.whatsappSameAsPhone && !isValidMsisdn(normalizedWhatsappPhone)) {
-      setToast({ kind: "error", title: "WhatsApp invalide", message: "Renseignez un numéro WhatsApp valide ou cochez l’option d’utilisation du numéro M-Pesa." });
+    if (normalizedMpesaPhone && !isValidMpesa(normalizedMpesaPhone)) {
+      setToast({ kind: "error", title: "M-Pesa invalide", message: "Un numéro M-Pesa commence par 08. Laissez le champ vide s’il n’est pas connu." });
       return;
     }
     if (phoneState === "checking") {
@@ -375,8 +378,9 @@ function Home({ onUserCreated, onNavigateDashboard, agentsOnly = false }: { onUs
         id: crypto.randomUUID(),
         fullName: trimmedName,
         phone: normalizedPhone,
-        whatsappPhone: normalizedWhatsappPhone,
-        whatsappSameAsPhone: form.whatsappSameAsPhone,
+        whatsappPhone: normalizedPhone,
+        whatsappSameAsPhone: true,
+        mpesaPhone: normalizedMpesaPhone,
         dateOfBirth: form.dateOfBirth || null,
         address: addressLabel(form.addressDetails),
         addressProvince: form.addressDetails.provinceName || null,
@@ -480,7 +484,7 @@ function Home({ onUserCreated, onNavigateDashboard, agentsOnly = false }: { onUs
                   {!fullNameError && <span className="field-hint">Les accents sont conservés.</span>}
                 </div>
                 <div className="field phone-field">
-                  <div className="field-label-row"><label htmlFor="phone">Téléphone / MSISDN <b>*</b></label><span className="field-helper">10 chiffres local</span></div>
+                  <div className="field-label-row"><label htmlFor="phone">Numéro WhatsApp <b>*</b></label><span className="field-helper">Sert à se connecter</span></div>
                   <div className={`input-wrap phone-input ${phoneState === "valid" ? "is-valid" : phoneState === "duplicate" || phoneState === "invalid" || phoneState === "error" ? "has-error" : ""}`}>
                     <Phone size={17} />
                     <input id="phone" value={form.phone} onChange={(event) => updateForm("phone", event.target.value)} placeholder="081 234 5678" inputMode="tel" autoComplete="tel" />
@@ -495,8 +499,8 @@ function Home({ onUserCreated, onNavigateDashboard, agentsOnly = false }: { onUs
                   {phoneState === "idle" && <span className="field-hint">Formats acceptés : 081…, +24381… ou 24381…</span>}
                 </div>
               </div>
-              <label className="password-toggle signup-whatsapp-toggle"><input type="checkbox" checked={form.whatsappSameAsPhone} onChange={(event) => updateForm("whatsappSameAsPhone", event.target.checked)} /><span className="toggle-visual"><Check size={13} /></span><span><strong>WhatsApp</strong><small>Utiliser le numéro M-Pesa</small></span></label>
-              {!form.whatsappSameAsPhone && <div className="field-grid two-columns"><div className="field"><label htmlFor="whatsappPhone">Numéro WhatsApp <b>*</b></label><input id="whatsappPhone" value={form.whatsappPhone} onChange={(event) => updateForm("whatsappPhone", event.target.value)} placeholder="081 234 5678" type="tel" inputMode="tel" autoComplete="tel" /></div></div>}
+              <label className={`password-toggle signup-whatsapp-toggle${mpesaEligible ? "" : " is-disabled"}`}><input type="checkbox" checked={mpesaSame} disabled={!mpesaEligible} onChange={(event) => updateForm("mpesaSameAsPhone", event.target.checked)} /><span className="toggle-visual"><Check size={13} /></span><span><strong>Même numéro pour M-Pesa</strong><small>{isPhoneValid && !mpesaEligible ? "M-Pesa : numéro en 08 uniquement" : "Le WhatsApp sert aussi au M-Pesa"}</small></span></label>
+              {isPhoneValid && !mpesaSame && <div className="field-grid two-columns"><div className="field"><label htmlFor="mpesaPhone">Numéro M-Pesa <span className="optional-label">facultatif</span></label><input id="mpesaPhone" value={form.mpesaPhone} onChange={(event) => updateForm("mpesaPhone", event.target.value)} placeholder="081 234 5678" type="tel" inputMode="tel" autoComplete="off" /></div></div>}
               <div className="field-grid two-columns profile-extra-fields"><div className="field"><label htmlFor="dateOfBirth">Date de naissance <span className="optional-label">facultatif</span></label><DatePickerField native id="dateOfBirth" ariaLabel="Date de naissance, facultatif" value={form.dateOfBirth} onChange={(value) => updateForm("dateOfBirth", value)} /><span className="field-hint">Le calendrier de votre téléphone s’ouvrira automatiquement.</span></div></div>
               <AddressFields value={form.addressDetails} onChange={(addressDetails) => updateForm("addressDetails", addressDetails)} />
               <div className="profile-photo-category-row">
