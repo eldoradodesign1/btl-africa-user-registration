@@ -225,7 +225,7 @@ export default function AuthPanel({ loading, notice, onDismissNotice, onLogin, o
                 <input id={id("phone")} type="tel" inputMode="tel" autoComplete="tel" placeholder={PHONE_PLACEHOLDER} value={form.phone} onChange={(event) => update("phone", event.target.value)} required aria-invalid={Boolean(errors.phone)} aria-describedby={describedBy(id("phone"), errors.phone ? undefined : "hint", errors.phone)} />
               </Field></div>
               <Switch checked={mpesaSame} disabled={!mpesaEligible} onChange={(checked) => update("mpesaSameAsPhone", checked)} title="Même numéro pour M-Pesa" detail={phoneValid && !mpesaEligible ? "M-Pesa : numéro en 08 uniquement." : undefined} detailId={id("mpesa-why")} />
-              {showMpesaField && <div data-field="mpesaPhone"><Field id={id("mpesaPhone")} label="Numéro M-Pesa" optional error={errors.mpesaPhone}>
+              {showMpesaField && <div data-field="mpesaPhone"><Field id={id("mpesaPhone")} label="M-Pesa" optional error={errors.mpesaPhone}>
                 <input id={id("mpesaPhone")} type="tel" inputMode="tel" autoComplete="off" placeholder={PHONE_PLACEHOLDER} value={form.mpesaPhone} onChange={(event) => update("mpesaPhone", event.target.value)} aria-invalid={Boolean(errors.mpesaPhone)} aria-describedby={describedBy(id("mpesaPhone"), undefined, errors.mpesaPhone)} />
               </Field></div>}
             </fieldset>
