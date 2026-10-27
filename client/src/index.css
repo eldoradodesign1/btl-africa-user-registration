@@ -1236,17 +1236,25 @@ html { scrollbar-width: thin; scrollbar-color: rgba(158,188,233,.35) rgba(3,7,14
 
 
 /* Export M-Pesa : seules les lignes défilent, les actions restent accessibles. */
-.mpesa-export-modal { max-height: min(850px, calc(100dvh - 32px)); overflow: hidden; }
+.mpesa-export-modal {
+  height: min(850px, calc(100dvh - 32px));
+  max-height: min(850px, calc(100dvh - 32px));
+  overflow: hidden;
+}
 .mpesa-export-modal .mpesa-export-list {
   flex: 1 1 auto;
-  min-height: 0;
-  max-height: none;
+  min-height: 84px;
+  max-height: min(440px, calc(100dvh - 270px));
   overflow-y: auto;
   overflow-x: hidden;
   overscroll-behavior: contain;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(125, 178, 255, .65) transparent;
+  scrollbar-width: auto;
+  scrollbar-color: rgba(125, 178, 255, .78) rgba(5, 16, 34, .72);
 }
+.mpesa-export-modal .mpesa-export-list::-webkit-scrollbar { width: 9px; }
+.mpesa-export-modal .mpesa-export-list::-webkit-scrollbar-track { border-radius: 9px; background: rgba(5, 16, 34, .72); }
+.mpesa-export-modal .mpesa-export-list::-webkit-scrollbar-thumb { border: 2px solid rgba(5, 16, 34, .72); border-radius: 9px; background: rgba(125, 178, 255, .78); }
+.mpesa-export-modal .mpesa-export-list::-webkit-scrollbar-thumb:hover { background: #a8caff; }
 .mpesa-export-modal .mpesa-export-list .export-preview-head {
   position: sticky;
   top: 0;
@@ -1256,5 +1264,9 @@ html { scrollbar-width: thin; scrollbar-color: rgba(158,188,233,.35) rgba(3,7,14
 .mpesa-export-modal .export-selection-toolbar,
 .mpesa-export-modal .export-choice-grid { flex-shrink: 0; }
 @media (max-width: 680px) {
-  .mpesa-export-modal { max-height: calc(100dvh - 20px); }
+  .mpesa-export-modal {
+    height: calc(100dvh - 20px);
+    max-height: calc(100dvh - 20px);
+  }
+  .mpesa-export-modal .mpesa-export-list { max-height: calc(100dvh - 270px); }
 }
