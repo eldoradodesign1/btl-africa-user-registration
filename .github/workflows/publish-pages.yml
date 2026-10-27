@@ -1,0 +1,46 @@
+name: Build and publish GitHub Pages
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'client/**'
+      - 'shared/**'
+      - 'patches/**'
+      - 'vite.config.ts'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/publish-pages.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: btl-registration-pages
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build static site
+        run: pnpm exec vite build
+        env:
+          PAGES_BUNDLE_VERSION: 20261027-mpesa
+      - name: Publish docs on main
+        run: |
+          mkdir -p docs
+          cp -a dist/public/. docs/
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs
+          if ! git diff --cached --quiet; then
+            git commit -m "build: publish M-Pesa exports to GitHub Pages"
+            git push
+          fi
