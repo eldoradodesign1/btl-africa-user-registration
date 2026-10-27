@@ -1,6 +1,7 @@
 /**
- * Réduit une photo côté appareil (max 640 px, JPEG) et la renvoie en data URL :
- * les photos de téléphone passent sans limite de poids et restent légères en base.
+ * Réduit une photo côté appareil (max 640 px, JPEG) et la renvoie en data URL
+ * pour l'aperçu : à l'enregistrement, storeAvatar (lib/supabase) l'envoie dans
+ * le bucket Storage « avatars » et seule son URL va en base.
  */
 export async function resizeImage(file: File, max = 640): Promise<string> {
   const url = URL.createObjectURL(file);
