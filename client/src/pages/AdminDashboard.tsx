@@ -398,13 +398,13 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
     const fallbackRefreshTimer = window.setInterval(() => {
       if (document.visibilityState === "visible") {
         const currentProfile = profileRef.current;
-        if (currentProfile) void refreshUsers(currentProfile, false, new Set(["campaigns", "user_campaign_assignments", "agent_campaign_supervisor_assignments"]));
+        if (currentProfile) void refreshUsers(currentProfile, false, new Set(["users", "campaigns", "user_campaign_assignments", "agent_campaign_supervisor_assignments"]));
       }
     }, 60000);
     const refreshWhenVisible = () => {
       if (document.visibilityState === "visible") {
         const currentProfile = profileRef.current;
-        if (currentProfile) void refreshUsers(currentProfile, false, new Set(["campaigns", "user_campaign_assignments", "agent_campaign_supervisor_assignments"]));
+        if (currentProfile) void refreshUsers(currentProfile, false, new Set(["users", "campaigns", "user_campaign_assignments", "agent_campaign_supervisor_assignments"]));
       }
     };
     document.addEventListener("visibilitychange", refreshWhenVisible);
