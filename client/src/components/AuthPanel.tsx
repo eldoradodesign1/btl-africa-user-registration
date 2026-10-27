@@ -1,7 +1,8 @@
 import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
-import { AlertCircle, Check, CheckCircle2, Clock3, Eye, EyeOff, ImagePlus, LoaderCircle, LogIn, UserCheck, X } from "lucide-react";
+import { AlertCircle, CheckCircle2, Clock3, Eye, EyeOff, LoaderCircle, LogIn, UserCheck, X } from "lucide-react";
 import AddressFields, { EMPTY_ADDRESS_DRAFT, type AddressDraft } from "@/components/AddressFields";
 import { BirthDateField } from "@/components/DateTimeFields";
+import { CategoryPicker, PhotoPicker, Switch } from "@/components/FormControls";
 import { resizeImage } from "@/lib/image";
 import { isValidMpesa, isValidMsisdn, normalizePhone } from "@/lib/phone";
 import type { UserCategory } from "@/lib/supabase";
@@ -63,29 +64,6 @@ function PasswordInput({ id, value, onChange, autoComplete, error }: { id: strin
     <input id={id} type={visible ? "text" : "password"} value={value} onChange={(event) => onChange(event.target.value)} autoComplete={autoComplete} required aria-invalid={Boolean(error)} aria-describedby={describedBy(id, undefined, error)} />
     <button type="button" className="auth-eye" onClick={() => setVisible((state) => !state)} aria-pressed={visible} aria-label={visible ? "Masquer le mot de passe" : "Afficher le mot de passe"}>{visible ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}</button>
   </div>;
-}
-
-/** Catégorie : Hôtesse (+ case « Polyv. ») ou Brand Ambassador, comme le formulaire de création admin. */
-function CategoryPicker({ name, value, onChange }: { name: string; value: UserCategory; onChange: (value: UserCategory) => void }) {
-  const isHostess = value === "hostess" || value === "hostess_polyvalent";
-  const isPolyvalent = value === "hostess_polyvalent";
-  return <fieldset className="auth-cat">
-    <legend className="auth-label">Catégorie</legend>
-    <div className="auth-cat-row">
-      <label className="auth-cat-opt">
-        <input type="radio" name={name} checked={isHostess} onChange={() => onChange(isPolyvalent ? "hostess_polyvalent" : "hostess")} />
-        <span className="auth-cat-dot" aria-hidden="true" />Hôtesse
-      </label>
-      <label className="auth-cat-poly" title="Hôtesse polyvalente : campagnes Hôtesses, BA et Events">
-        <input type="checkbox" checked={isPolyvalent} onChange={(event) => onChange(event.target.checked ? "hostess_polyvalent" : "hostess")} />
-        <span className="auth-cat-box" aria-hidden="true"><Check size={13} strokeWidth={3} /></span>Polyv.<span className="sr-only"> (hôtesse polyvalente)</span>
-      </label>
-    </div>
-    <label className="auth-cat-opt">
-      <input type="radio" name={name} checked={value === "brand_ambassador"} onChange={() => onChange("brand_ambassador")} />
-      <span className="auth-cat-dot" aria-hidden="true" />Brand Ambassador
-    </label>
-  </fieldset>;
 }
 
 export default function AuthPanel({ loading, notice, onDismissNotice, onLogin, onSignup }: Props) {
@@ -178,8 +156,7 @@ export default function AuthPanel({ loading, notice, onDismissNotice, onLogin, o
     if (await onSignup(form)) { setForm(INITIAL_SIGNUP); setSuccess(true); }
   }
 
-  async function pickPhoto(file: File | undefined) {
-    if (!file) return;
+  async function pickPhoto(file: File) {
     if (!file.type.startsWith("image/")) { setErrors((current) => ({ ...current, photo: "Choisissez une image." })); return; }
     setPhotoBusy(true);
     try {
@@ -234,17 +211,7 @@ export default function AuthPanel({ loading, notice, onDismissNotice, onLogin, o
                 <input id={id("fullName")} value={form.fullName} onChange={(event) => update("fullName", event.target.value)} placeholder="Ex. Grâce Mbuyi" autoComplete="name" autoCapitalize="words" required aria-invalid={Boolean(errors.fullName)} aria-describedby={describedBy(id("fullName"), undefined, errors.fullName)} />
               </Field></div>
               <div className="auth-profile-row">
-                <div className={`auth-photo-field${errors.photo ? " has-error" : ""}`} data-field="photo">
-                  <span className="auth-label" id={id("photo-label")}>Photo</span>
-                  <div className="auth-photo-box">
-                    <input id={id("photo")} className="auth-file-input" type="file" accept="image/*" aria-labelledby={id("photo-label")} aria-describedby={errors.photo ? `${id("photo")}-error` : undefined} onChange={(event) => { void pickPhoto(event.target.files?.[0]); event.target.value = ""; }} />
-                    <label htmlFor={id("photo")} className={`auth-photo-tile${form.avatarUrl ? " has-photo" : ""}`}>
-                      {form.avatarUrl ? <img src={form.avatarUrl} alt="Votre photo" /> : <>{photoBusy ? <LoaderCircle className="spin" size={24} aria-hidden="true" /> : <ImagePlus size={24} aria-hidden="true" />}<span>{photoBusy ? "Préparation…" : "Choisir une photo"}</span></>}
-                    </label>
-                    {form.avatarUrl && <button type="button" className="auth-photo-remove" onClick={() => update("avatarUrl", null)} aria-label="Retirer la photo"><X size={14} aria-hidden="true" /></button>}
-                  </div>
-                  {errors.photo && <p id={`${id("photo")}-error`} className="auth-error"><AlertCircle size={14} aria-hidden="true" />{errors.photo}</p>}
-                </div>
+                <PhotoPicker id={id("photo")} value={form.avatarUrl} busy={photoBusy} error={errors.photo} onPick={(file) => void pickPhoto(file)} onRemove={() => update("avatarUrl", null)} />
                 <CategoryPicker name={id("category")} value={form.category} onChange={(category) => update("category", category)} />
               </div>
               <div data-field="dateOfBirth"><Field id={id("dateOfBirth")} label="Date de naissance" optional error={errors.dateOfBirth}>
@@ -257,11 +224,7 @@ export default function AuthPanel({ loading, notice, onDismissNotice, onLogin, o
               <div data-field="phone"><Field id={id("phone")} label="Numéro WhatsApp" hint="Il vous servira à vous connecter." error={errors.phone}>
                 <input id={id("phone")} type="tel" inputMode="tel" autoComplete="tel" placeholder={PHONE_PLACEHOLDER} value={form.phone} onChange={(event) => update("phone", event.target.value)} required aria-invalid={Boolean(errors.phone)} aria-describedby={describedBy(id("phone"), errors.phone ? undefined : "hint", errors.phone)} />
               </Field></div>
-              <label className="auth-toggle">
-                <input type="checkbox" role="switch" checked={mpesaSame} disabled={!mpesaEligible} aria-describedby={phoneValid && !mpesaEligible ? id("mpesa-why") : undefined} onChange={(event) => update("mpesaSameAsPhone", event.target.checked)} />
-                <span className="auth-toggle-track" aria-hidden="true" />
-                <span className="auth-toggle-text"><strong>Même numéro pour M-Pesa</strong>{phoneValid && !mpesaEligible && <small id={id("mpesa-why")}>M-Pesa : numéro en 08 uniquement.</small>}</span>
-              </label>
+              <Switch checked={mpesaSame} disabled={!mpesaEligible} onChange={(checked) => update("mpesaSameAsPhone", checked)} title="Même numéro pour M-Pesa" detail={phoneValid && !mpesaEligible ? "M-Pesa : numéro en 08 uniquement." : undefined} detailId={id("mpesa-why")} />
               {showMpesaField && <div data-field="mpesaPhone"><Field id={id("mpesaPhone")} label="Numéro M-Pesa" optional error={errors.mpesaPhone}>
                 <input id={id("mpesaPhone")} type="tel" inputMode="tel" autoComplete="off" placeholder={PHONE_PLACEHOLDER} value={form.mpesaPhone} onChange={(event) => update("mpesaPhone", event.target.value)} aria-invalid={Boolean(errors.mpesaPhone)} aria-describedby={describedBy(id("mpesaPhone"), undefined, errors.mpesaPhone)} />
               </Field></div>}
@@ -274,11 +237,7 @@ export default function AuthPanel({ loading, notice, onDismissNotice, onLogin, o
 
             <fieldset className="auth-group">
               <legend>Mot de passe</legend>
-              <label className="auth-toggle">
-                <input type="checkbox" role="switch" checked={form.useDefaultPassword} onChange={(event) => { update("useDefaultPassword", event.target.checked); setForm((current) => ({ ...current, password: "", confirmPassword: "" })); }} />
-                <span className="auth-toggle-track" aria-hidden="true" />
-                <span className="auth-toggle-text"><strong>Mot de passe par défaut</strong><small><code>password</code>, modifiable dans votre profil</small></span>
-              </label>
+              <Switch checked={form.useDefaultPassword} onChange={(checked) => { update("useDefaultPassword", checked); setForm((current) => ({ ...current, password: "", confirmPassword: "" })); }} title="Mot de passe par défaut" detail={<><code>password</code>, modifiable dans votre profil</>} />
               {!form.useDefaultPassword && <>
                 <div data-field="password"><Field id={id("password")} label="Mot de passe" hint="6 caractères minimum." error={errors.password}>
                   <PasswordInput id={id("password")} value={form.password} onChange={(value) => update("password", value)} autoComplete="new-password" error={errors.password} />

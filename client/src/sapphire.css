@@ -185,10 +185,10 @@ html, body { background: var(--bg); }
 }
 .custom-date-picker-popover { padding: 10px !important; border-radius: 20px !important; }
 .custom-date-picker-popover .custom-date-calendar { color: var(--ink-1); background: transparent !important; }
-:is(.select-menu .select-option, .custom-select-menu button) {
-  min-height: 40px; border-radius: 10px !important; color: var(--ink-1) !important;
+:is(.select-menu .select-option, .custom-select-menu button, .agent-campaign-picker-menu button) {
+  min-height: 40px; border: 0 !important; border-radius: 10px !important; color: var(--ink-1) !important; background: transparent !important; box-shadow: none !important;
 }
-:is(.select-menu .select-option, .custom-select-menu button):is(:hover, :focus-visible, .is-selected) { color: #fff !important; background: rgba(60, 130, 255, .22) !important; }
+:is(.select-menu .select-option, .custom-select-menu button, .agent-campaign-picker-menu button):is(:hover, :focus-visible, .is-selected) { color: #fff !important; background: rgba(60, 130, 255, .22) !important; }
 :is(.select-menu, .custom-select-menu) svg { color: var(--a-accent); }
 @keyframes s-materialize { from { opacity: 0; transform: translateY(-4px) scale(.97); filter: blur(3px); } to { opacity: 1; transform: none; filter: none; } }
 
@@ -234,6 +234,14 @@ html, body { background: var(--bg); }
   color: #fff !important; background: rgba(60, 130, 255, .26) !important;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .18), 0 0 0 1px var(--a-line-strong) !important;
 }
+/* Onglets des fiches : lisibles (14 px), répartis sur toute la largeur, sur deux lignes si besoin */
+:is(.profile-section-tabs, .agent-section-tabs) { display: flex !important; flex-wrap: wrap; gap: 4px !important; overflow: visible !important; }
+:is(.profile-section-tabs, .agent-section-tabs) button { flex: 1 1 auto; justify-content: center; padding: 0 12px !important; font-size: 14px !important; font-weight: 700; white-space: nowrap; }
+.view-toggle button { border-radius: 10px !important; }
+/* Choix du type d'export : même contrôle segmenté que la navigation */
+.export-mode-switch { padding: 5px !important; border: 1px solid var(--a-line) !important; border-radius: 16px !important; background: var(--a-surface) !important; }
+.export-mode-switch button { min-height: 40px; border-radius: 12px !important; color: var(--ink-2) !important; font-size: 14px !important; font-weight: 700; }
+.export-mode-switch button.is-active { color: #fff !important; background: rgba(60, 130, 255, .26) !important; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .18), 0 0 0 1px var(--a-line-strong) !important; }
 :is(.compact-filter-button.is-active, .view-toggle button.is-active) { background: rgba(60, 130, 255, .32) !important; box-shadow: 0 0 0 1px var(--a-line-strong) !important; }
 
 /* ---------------------------------------------------------------------
@@ -317,6 +325,99 @@ html, body { background: var(--bg); }
 @media (forced-colors: active) {
   .glass-card, .side-card, .form-card, .modal-card, .button, :is(.workspace-card, .detail-section, .pending-item) { border: 1px solid CanvasText !important; }
 }
+
+/* ---------------------------------------------------------------------
+   12 bis. Formulaires hérités : une seule recette de champ, de bloc, de menu
+   --------------------------------------------------------------------- */
+/* Champ : fond saphir profond, filet bleu, coins 12 px, partout */
+:is(.app-shell:not(:has(.auth-screen)), .modal-layer) :is(.input-wrap, .select-trigger, .address-select-trigger, .supervisor-shell, .shop-row select, .field > .custom-select, .modal-card label > .custom-select, .signup-category > .custom-select, .bdf-control input,
+  :is(.field, .modal-card, .address-fields) :is(input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=range]), select, textarea):not(.input-wrap *):not(.bdf-control input)) {
+  border: 1px solid var(--field-line) !important;
+  border-radius: 12px !important;
+  color: var(--ink-1) !important;
+  background: var(--field-bg) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .04) !important;
+}
+@media (hover: hover) {
+  :is(.app-shell:not(:has(.auth-screen)), .modal-layer) :is(.input-wrap, .select-trigger, .address-select-trigger, .field > .custom-select, .modal-card label > .custom-select):hover:not(:focus-within):not(:disabled) { border-color: var(--field-line-hover) !important; }
+}
+:is(.app-shell:not(:has(.auth-screen)), .modal-layer) :is(.input-wrap:focus-within, .select-trigger.is-open, .address-select.is-open .address-select-trigger, .custom-select.is-open) { border-color: var(--a-focus) !important; box-shadow: var(--ring) !important; }
+:is(.app-shell:not(:has(.auth-screen)), .modal-layer) .input-wrap.has-error { border-color: rgba(255, 140, 165, .65) !important; }
+:is(.app-shell:not(:has(.auth-screen)), .modal-layer) .input-wrap :is(input, textarea) { border: 0 !important; background: transparent !important; box-shadow: none !important; }
+:is(.app-shell:not(:has(.auth-screen)), .modal-layer) :is(.select-trigger, .address-select-trigger) svg { color: var(--ink-3) !important; }
+:is(.app-shell:not(:has(.auth-screen)), .modal-layer) :is(.field, .field-label-row) > label, :is(.app-shell:not(:has(.auth-screen)), .modal-layer) :is(.auth-label, .auth-cat > legend) { color: var(--ink-1) !important; font-size: 14px !important; font-weight: 700; }
+
+/* Blocs internes (adresse, shop) : même matière que les autres blocs */
+:is(.app-shell:not(:has(.auth-screen)), .modal-layer) :is(.address-fields, .shop-row) {
+  border: 1px solid var(--line-soft) !important; border-radius: 18px !important;
+  background: var(--s-inner) !important; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .05) !important;
+}
+:is(.app-shell:not(:has(.auth-screen)), .modal-layer) .section-block { border-bottom-color: var(--line-soft) !important; }
+:is(.app-shell:not(:has(.auth-screen)), .modal-layer) .shop-row { padding: 12px 14px; }
+:is(.app-shell:not(:has(.auth-screen)), .modal-layer) .shop-row .shop-copy strong { color: var(--ink-1); font-size: 14px; }
+:is(.app-shell:not(:has(.auth-screen)), .modal-layer) .shop-row .field { flex: 0 1 240px; min-width: 0; }
+
+/* Photo + catégorie dans l'administration : champs de 46 px comme le reste du formulaire */
+:is(.app-shell:not(:has(.auth-screen)), .modal-layer) .auth-profile-row { margin-top: 18px; }
+:is(.app-shell:not(:has(.auth-screen)), .modal-layer) .auth-profile-row + .profile-extra-fields { margin-top: 18px !important; }
+/* « facultatif » : même mention discrète partout, sans capitales */
+.optional-label { margin-left: 6px !important; color: var(--ink-3) !important; font-size: 13px !important; font-weight: 500 !important; letter-spacing: 0 !important; text-transform: none !important; }
+:is(.app-shell:not(:has(.auth-screen)), .modal-layer) .auth-profile-row { max-width: 460px; } /* options de catégorie à taille de bouton, pas étirées */
+:is(.app-shell:not(:has(.auth-screen)), .modal-layer) .auth-profile-row.is-photo-only { grid-template-columns: minmax(112px, 148px); }
+:is(.app-shell:not(:has(.auth-screen)), .modal-layer) .auth-photo-box { min-height: 104px; }
+:is(.app-shell:not(:has(.auth-screen)), .modal-layer) .auth-cat-opt { min-height: 46px; font-size: 14.5px; }
+:is(.app-shell:not(:has(.auth-screen)), .modal-layer) .auth-toggle { margin-top: 16px; }
+:is(.app-shell:not(:has(.auth-screen)), .modal-layer) .section-block > .auth-toggle:first-of-type { margin-top: 18px; }
+
+/* Un menu ouvert passe au-dessus du reste du formulaire, et au-dessus de son propre fond de fermeture */
+:is(.select-menu, .custom-select-menu, .agent-campaign-picker-menu) { z-index: 60 !important; }
+:is(.app-shell:not(:has(.auth-screen)), .modal-layer) :is(.section-block, .address-fields, .address-select-grid, .address-street-grid, .field-grid, .field-grid > *, .field, .shop-row, .address-select, .custom-select, .filter-control, .agent-campaign-picker):has(:is(.select-menu, .custom-select-menu, .agent-campaign-picker-menu, .custom-date-picker-popover, .bdf-panel)) {
+  position: relative; z-index: 70 !important;
+}
+
+/* Galerie : compte sans photo = initiale centrée sur un dégradé saphir, pas un aplat */
+:is(.user-gallery-photo, .user-card-photo) > .avatar:not(.small) {
+  display: grid !important; place-items: center; padding-bottom: 22%;
+  color: rgba(242, 247, 255, .92) !important; font-size: clamp(56px, 22vw, 96px) !important; font-weight: 800; line-height: 1; letter-spacing: -.04em;
+  background: radial-gradient(80% 60% at 30% 18%, rgba(111, 212, 255, .32), transparent 70%), linear-gradient(160deg, #2a62d8, #0b1d5c) !important;
+}
+
+/* Cases à cocher (sélection d'export) : même case que « Polyv. » */
+.toggle-visual {
+  width: 20px !important; height: 20px !important; border: 0 !important; border-radius: 6px !important; color: #fff !important;
+  background: linear-gradient(135deg, var(--a-accent), var(--a-accent-2)) !important; box-shadow: 0 0 10px rgba(60, 140, 255, .6) !important;
+}
+input:not(:checked) + .toggle-visual { color: transparent !important; background: transparent !important; box-shadow: inset 0 0 0 2px var(--a-line-strong) !important; }
+label:hover > input + .toggle-visual { transform: none !important; }
+
+/* Interrupteur d'affectation (fiche agent) : même interrupteur que partout */
+.detail-assignment-switch { width: 50px !important; height: 34px !important; }
+.detail-assignment-switch-track { width: 42px !important; height: 26px !important; padding: 3px !important; border: 0 !important; background: rgba(140, 170, 220, .25) !important; box-shadow: inset 0 0 0 1px var(--a-line-strong) !important; }
+.detail-assignment-switch-track > span { width: 20px !important; height: 20px !important; background: #dfe9fb !important; box-shadow: 0 2px 6px rgba(0, 0, 0, .35) !important; }
+.detail-assignment-switch.is-on .detail-assignment-switch-track { background: linear-gradient(90deg, var(--a-accent-2), var(--a-accent)) !important; box-shadow: 0 0 14px rgba(60, 140, 255, .6) !important; }
+.detail-assignment-switch.is-on .detail-assignment-switch-track > span { background: #fff !important; transform: translateX(16px) !important; }
+
+/* Responsables (vue agent) : les campagnes passent à la ligne au lieu de sortir de la carte */
+.superior-row > div:not(.avatar) { flex: 1 1 auto; min-width: 0; }
+.superior-campaigns { white-space: normal !important; }
+
+/* Filtres : le sélecteur se resserre (texte tronqué) au lieu de déborder de son champ */
+.filter-control { min-width: 0; }
+.filter-control .custom-select { flex: 1 1 auto; min-width: 0 !important; }
+
+/* Barres de défilement discrètes, dans la teinte des filets */
+* { scrollbar-color: rgba(130, 175, 255, .3) transparent; }
+*::-webkit-scrollbar-thumb { background: rgba(130, 175, 255, .3) !important; background-clip: content-box !important; }
+*::-webkit-scrollbar-thumb:hover { background: rgba(150, 195, 255, .55) !important; background-clip: content-box !important; }
+
+/* Derniers comptes créés : compteur en pastille, état vide explicite */
+.activity-heading { display: flex; align-items: center !important; justify-content: space-between; gap: 12px; }
+.activity-heading h2 { margin: 0 !important; }
+.activity-count {
+  display: inline-grid; place-items: center; min-width: 28px; height: 26px; padding: 0 9px; border: 1px solid var(--a-line) !important;
+  border-radius: 999px !important; color: var(--a-accent) !important; background: rgba(60, 130, 255, .16) !important; font-size: 13px; font-weight: 800; line-height: 1;
+}
+.activity-empty { margin: 10px 0 0; color: var(--ink-3); font-size: 14px; }
 
 /* ---------------------------------------------------------------------
    12. « Voir comme » (simulation superadmin) : capsule flottante

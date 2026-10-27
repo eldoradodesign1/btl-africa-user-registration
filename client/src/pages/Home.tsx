@@ -7,7 +7,6 @@ import {
   CheckCircle2,
   ChevronDown,
   Info,
-  ImagePlus,
   KeyRound,
   LoaderCircle,
   MapPin,
@@ -45,6 +44,7 @@ import { CopyablePhone } from "@/components/CopyablePhone";
 import BrandLogo from "@/components/BrandLogo";
 import AddressFields, { addressLabel, EMPTY_ADDRESS_DRAFT, type AddressDraft } from "@/components/AddressFields";
 import { BirthDateField } from "@/components/DateTimeFields";
+import { CategoryPicker, PhotoPicker, Switch, useDismiss } from "@/components/FormControls";
 
 type PhoneState = "idle" | "checking" | "valid" | "invalid" | "duplicate" | "error";
 type ToastState = { kind: "success" | "error" | "info"; title: string; message: string; action?: () => void } | null;
@@ -103,8 +103,9 @@ function CustomSelect<T extends string>({
   helper?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const ref = useDismiss<HTMLDivElement>(open, () => setOpen(false));
   return (
-    <div className="field select-field">
+    <div ref={ref} className="field select-field">
       <div className="field-label-row">
         <label>{label}</label>
         {helper && <span className="field-helper">{helper}</span>}
@@ -147,54 +148,11 @@ function UserRoleBadge({ role }: { role: UserRole }) {
   return <span className={`role-badge role-${role}`}>{ROLE_LABELS[role]}</span>;
 }
 
-function CategoryChoice({ value, onChange }: { value: UserCategory; onChange: (value: UserCategory) => void }) {
-  const isHostess = value === "hostess" || value === "hostess_polyvalent";
-  const isPolyvalent = value === "hostess_polyvalent";
-  const isAmbassador = value === "brand_ambassador";
-
-  return (
-    <fieldset className="category-choice category-choice--compact">
-      <legend>Catégorie utilisateur <span aria-hidden="true">*</span></legend>
-      <div className="category-choice-grid" role="group" aria-label="Catégorie de l’agent">
-        <div className="category-choice-top-row">
-          <button
-            type="button"
-            aria-pressed={isHostess}
-            className={`category-choice-option ${isHostess ? "is-selected" : ""}`}
-            onClick={() => onChange("hostess")}
-          >
-            <span className="category-choice-mark category-choice-mark--round" aria-hidden="true">{isHostess ? <Check size={12} /> : null}</span>
-            <span className="category-choice-copy"><strong>Hôtesse</strong></span>
-          </button>
-          <label className="category-choice-polyvalent" title="Hôtesse polyvalente : campagnes Hôtesses, BA et Events">
-            <input
-              type="checkbox"
-              checked={isPolyvalent}
-              onChange={(event) => onChange(event.target.checked ? "hostess_polyvalent" : "hostess")}
-              aria-label="Hôtesse polyvalente"
-            />
-            <span className="category-choice-polyvalent-check" aria-hidden="true">{isPolyvalent && <Check size={12} />}</span>
-            <span>Polyv.</span>
-          </label>
-        </div>
-        <button
-          type="button"
-          aria-pressed={isAmbassador}
-          className={`category-choice-option ${isAmbassador ? "is-selected" : ""}`}
-          onClick={() => onChange("brand_ambassador")}
-        >
-          <span className="category-choice-mark category-choice-mark--round" aria-hidden="true">{isAmbassador ? <Check size={12} /> : null}</span>
-          <span className="category-choice-copy"><strong>Brand Ambassador</strong></span>
-        </button>
-      </div>
-    </fieldset>
-  );
-}
-
 function CustomOptionSelect({ label, value, options, onChange, helper, disabled = false, ariaLabel }: { label?: string; value: string; options: Array<{ value: string; label: string }>; onChange: (value: string) => void; helper?: string; disabled?: boolean; ariaLabel?: string }) {
   const [open, setOpen] = useState(false);
   const current = options.find((option) => option.value === value)?.label || options[0]?.label || "Sélectionner";
-  return <div className="field select-field">
+  const ref = useDismiss<HTMLDivElement>(open, () => setOpen(false));
+  return <div ref={ref} className="field select-field">
     {(label || helper) && <div className="field-label-row">{label && <label>{label}</label>}{helper && <span className="field-helper">{helper}</span>}</div>}
     <button type="button" className={`select-trigger ${open ? "is-open" : ""}`} aria-label={ariaLabel || label} aria-haspopup="listbox" aria-expanded={open} disabled={disabled} onClick={() => setOpen((state) => !state)}><span>{current}</span><ChevronDown size={16} strokeWidth={2.5} /></button>
     {open && <div className="select-menu" role="listbox">{options.map((option) => <button type="button" role="option" aria-selected={option.value === value} className={`select-option ${option.value === value ? "is-selected" : ""}`} key={option.value} onClick={() => { onChange(option.value); setOpen(false); }}><span>{option.label}</span>{option.value === value && <Check size={15} />}</button>)}</div>}
@@ -213,6 +171,7 @@ function Home({ onUserCreated, onNavigateDashboard, agentsOnly = false }: { onUs
   const [supervisorError, setSupervisorError] = useState(false);
   const [toast, setToast] = useState<ToastState>(null);
   const [successSummary, setSuccessSummary] = useState<UserRecord | null>(null);
+  const [photoBusy, setPhotoBusy] = useState(false);
   const lookupSequence = useRef(0);
 
   const normalizedPhone = normalizePhone(form.phone);
@@ -323,6 +282,18 @@ function Home({ onUserCreated, onNavigateDashboard, agentsOnly = false }: { onUs
       category: role === "agent" ? current.category || "hostess" : "hostess",
       permanentShopId: role === "agent" && current.category === "hostess" ? current.permanentShopId : "",
     }));
+  }
+
+  async function pickPhoto(file: File) {
+    if (!file.type.startsWith("image/")) { setToast({ kind: "error", title: "Photo invalide", message: "Choisissez une image." }); return; }
+    setPhotoBusy(true);
+    try {
+      updateForm("avatarUrl", await resizeImage(file));
+    } catch {
+      setToast({ kind: "error", title: "Photo invalide", message: "Cette image n’a pas pu être lue." });
+    } finally {
+      setPhotoBusy(false);
+    }
   }
 
   function resetForm() {
@@ -474,20 +445,14 @@ function Home({ onUserCreated, onNavigateDashboard, agentsOnly = false }: { onUs
                   {(phoneState === "invalid" || phoneState === "error") && <span className="field-error"><AlertCircle size={13} />{phoneError || "Vérification indisponible. Réessayez."}</span>}
                 </div>
               </div>
-              <label className={`password-toggle signup-whatsapp-toggle${mpesaEligible ? "" : " is-disabled"}`}><input type="checkbox" checked={mpesaSame} disabled={!mpesaEligible} onChange={(event) => updateForm("mpesaSameAsPhone", event.target.checked)} /><span className="toggle-visual"><Check size={13} /></span><span><strong>Même numéro pour M-Pesa</strong><small>{isPhoneValid && !mpesaEligible ? "M-Pesa : numéro en 08 uniquement" : "Le WhatsApp sert aussi au M-Pesa"}</small></span></label>
+              <Switch checked={mpesaSame} disabled={!mpesaEligible} onChange={(checked) => updateForm("mpesaSameAsPhone", checked)} title="Même numéro pour M-Pesa" detail={isPhoneValid && !mpesaEligible ? "M-Pesa : numéro en 08 uniquement." : undefined} detailId="mpesa-why" />
               {isPhoneValid && !mpesaSame && <div className="field-grid two-columns"><div className="field"><label htmlFor="mpesaPhone">Numéro M-Pesa <span className="optional-label">facultatif</span></label><input id="mpesaPhone" value={form.mpesaPhone} onChange={(event) => updateForm("mpesaPhone", event.target.value)} placeholder="081 234 5678" type="tel" inputMode="tel" autoComplete="off" /></div></div>}
+              <div className={`auth-profile-row${form.role === "agent" ? "" : " is-photo-only"}`}>
+                <PhotoPicker id="profilePhoto" value={form.avatarUrl} busy={photoBusy} onPick={(file) => void pickPhoto(file)} onRemove={() => updateForm("avatarUrl", null)} />
+                {form.role === "agent" && <CategoryPicker name="userCategory" value={form.category} onChange={(value) => setForm((current) => ({ ...current, category: value, permanentShopId: value === "hostess" ? current.permanentShopId : "" }))} />}
+              </div>
               <div className="field-grid two-columns profile-extra-fields"><div className="field"><label htmlFor="dateOfBirth">Date de naissance <span className="optional-label">facultatif</span></label><BirthDateField id="dateOfBirth" ariaLabel="Date de naissance" value={form.dateOfBirth} onChange={(value) => updateForm("dateOfBirth", value)} /></div></div>
               <AddressFields value={form.addressDetails} onChange={(addressDetails) => updateForm("addressDetails", addressDetails)} />
-              <div className="profile-photo-category-row">
-                <div className="field profile-photo-field">
-                  <label htmlFor="profilePhoto" className="profile-photo-caption">Photo de profil</label>
-                  <label className={`file-input-control profile-photo-tile ${form.avatarUrl ? "has-photo" : ""}`}>
-                    {form.avatarUrl ? <img src={form.avatarUrl} alt="Aperçu de la photo sélectionnée" className="profile-photo-preview" /> : <><ImagePlus size={16} /><span>Choisir une photo</span></>}
-                    <input id="profilePhoto" type="file" accept="image/*" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (!file) return; if (!file.type.startsWith("image/")) { setToast({ kind: "error", title: "Photo invalide", message: "Choisissez une image." }); return; } void resizeImage(file).then((url) => updateForm("avatarUrl", url)).catch(() => setToast({ kind: "error", title: "Photo invalide", message: "Cette image n’a pas pu être lue." })); }} />
-                  </label>
-                </div>
-                {form.role === "agent" && <CategoryChoice value={form.category} onChange={(value) => setForm((current) => ({ ...current, category: value, permanentShopId: value === "hostess" ? current.permanentShopId : "" }))} />}
-              </div>
             </div>
 
             <div className="section-block role-block">
@@ -509,11 +474,7 @@ function Home({ onUserCreated, onNavigateDashboard, agentsOnly = false }: { onUs
 
             <div className="section-block security-block">
               <div className="section-title"><span>03</span><div><h3>Mot de passe</h3></div></div>
-              <label className="password-toggle">
-                <input type="checkbox" checked={form.useDefaultPassword} onChange={(event) => updateForm("useDefaultPassword", event.target.checked)} />
-                <span className="toggle-visual"><Check size={13} /></span>
-                <span><strong>Mot de passe par défaut</strong><small><code>{defaultPasswordForRole(form.role)}</code>, modifiable ensuite</small></span>
-              </label>
+              <Switch checked={form.useDefaultPassword} onChange={(checked) => updateForm("useDefaultPassword", checked)} title="Mot de passe par défaut" detail={<><code>{defaultPasswordForRole(form.role)}</code>, modifiable ensuite</>} />
               {!form.useDefaultPassword && (
                 <div className="field password-field">
                   <label htmlFor="password">Mot de passe initial <b>*</b></label>
@@ -558,8 +519,9 @@ function Home({ onUserCreated, onNavigateDashboard, agentsOnly = false }: { onUs
             )}
 
             <section className="side-card activity-card">
-              <div className="activity-heading"><div><h2>Derniers comptes créés</h2></div><span className="activity-count">{recentUsers.length}</span></div>
+              <div className="activity-heading"><h2>Derniers comptes créés</h2>{recentUsers.length > 0 && <span className="activity-count">{recentUsers.length}</span>}</div>
               <div className="activity-list">
+                {recentUsers.length === 0 && <p className="activity-empty">Aucun pour l’instant.</p>}
                 {recentUsers.slice(0, 3).map((user) => <div className="activity-item" key={user.id}><div className="avatar small">{user.full_name.slice(0, 1).toUpperCase()}</div><div><strong>{user.full_name}</strong><CopyablePhone value={user.phone}>{user.phone}</CopyablePhone></div><UserRoleBadge role={user.role} /></div>)}
               </div>
             </section>
