@@ -1,4 +1,4 @@
-const CACHE_NAME = "btl-africa-user-registration-v13";
+const CACHE_NAME = "btl-africa-user-registration-v14";
 const APP_SHELL = ["./", "./index.html", "./manifest.webmanifest", "./btl-beyond-the-line-icon-v2.webp", "./btl-beyond-the-line-v2.webp"];
 
 self.addEventListener("install", (event) => {
