@@ -317,3 +317,109 @@ html, body { background: var(--bg); }
 @media (forced-colors: active) {
   .glass-card, .side-card, .form-card, .modal-card, .button, :is(.workspace-card, .detail-section, .pending-item) { border: 1px solid CanvasText !important; }
 }
+
+/* ---------------------------------------------------------------------
+   12. « Voir comme » (simulation superadmin) : capsule flottante
+   Au repos : petite capsule saphir en bas d'écran, dans la zone du pouce.
+   En simulation : capsule ambrée avec le visage du compte simulé, liseré
+   ambré autour de l'écran (rappel de mode permanent, sans rien masquer),
+   « Revenir » toujours à un geste.
+   --------------------------------------------------------------------- */
+body.has-sim-capsule .page-content { padding-bottom: 104px; }
+.sim-capsule {
+  position: fixed; z-index: 900; left: 50%; bottom: calc(14px + env(safe-area-inset-bottom)); translate: -50% 0;
+  display: flex; align-items: center; gap: 6px; max-width: calc(100vw - 24px); padding: 5px;
+  border-radius: 999px; color: var(--a-text); font-family: "Manrope", system-ui, sans-serif;
+  background: linear-gradient(160deg, rgba(20, 52, 132, .88), rgba(5, 12, 44, .92));
+  -webkit-backdrop-filter: blur(18px) saturate(150%); backdrop-filter: blur(18px) saturate(150%);
+  box-shadow: 0 0 0 1px var(--a-line-strong), 0 0 28px rgba(35, 110, 255, .35), 0 14px 34px rgba(0, 0, 0, .5), inset 0 1px 0 rgba(255, 255, 255, .25);
+  animation: s-materialize-up .26s var(--ease-out);
+  transition: background .25s ease, box-shadow .25s ease;
+}
+.sim-capsule button { font: inherit; color: inherit; cursor: pointer; transition: transform .1s ease-out, background .15s ease; }
+.sim-capsule-main { display: flex; align-items: center; gap: 10px; min-width: 0; min-height: 44px; padding: 0 14px 0 8px; border: 0; border-radius: 999px; background: transparent; }
+.sim-capsule-main > svg { flex: none; color: var(--a-accent); }
+.sim-capsule-text { display: grid; min-width: 0; text-align: left; line-height: 1.2; }
+.sim-capsule-text strong { overflow: hidden; font-size: 15px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.sim-capsule-text small { color: var(--a-muted); font-size: 12px; white-space: nowrap; }
+.sim-capsule-exit {
+  display: inline-flex; align-items: center; gap: 6px; flex: none; min-height: 44px; padding: 0 16px;
+  border: 1px solid rgba(255, 225, 170, .7); border-radius: 999px; color: #2a1600 !important;
+  background: linear-gradient(180deg, #ffd58a, #f0a43a); font-weight: 800;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .6), 0 4px 14px rgba(240, 164, 58, .35);
+}
+.sim-capsule.is-active {
+  background: linear-gradient(160deg, rgba(96, 60, 12, .92), rgba(30, 17, 6, .94));
+  box-shadow: 0 0 0 1px rgba(255, 200, 120, .65), 0 0 30px rgba(255, 170, 60, .4), 0 14px 34px rgba(0, 0, 0, .5), inset 0 1px 0 rgba(255, 255, 255, .25);
+}
+.sim-capsule.is-active .sim-capsule-main > svg { color: #ffd58a; }
+.sim-capsule.is-active .sim-capsule-text small { color: #ffd9a0; }
+:is(.sim-capsule, .sim-sheet) :is(.profile-avatar, .avatar) { flex: none; width: 32px; height: 32px; border-radius: 50%; }
+.sim-ring { position: fixed; z-index: 1100; inset: 0; pointer-events: none; box-shadow: inset 0 0 0 3px rgba(255, 190, 90, .85), inset 0 0 26px rgba(255, 170, 60, .3); }
+
+/* Sélecteur : panneau qui monte de la capsule */
+.sim-layer { position: fixed; z-index: 950; inset: 0; background: rgba(2, 6, 22, .45); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); animation: s-fade .2s ease; }
+.sim-sheet {
+  position: fixed; left: 50%; bottom: calc(74px + env(safe-area-inset-bottom)); translate: -50% 0;
+  display: flex; flex-direction: column; width: min(440px, calc(100vw - 24px)); max-height: min(70dvh, 640px); padding: 14px;
+  border: 1px solid transparent; border-radius: 26px; color: var(--a-text); font-family: "Manrope", system-ui, sans-serif;
+  background:
+    linear-gradient(160deg, rgba(20, 52, 132, .97), rgba(5, 12, 40, .98)) padding-box,
+    linear-gradient(150deg, var(--s-rim), var(--s-rim-soft) 45%, var(--s-rim)) border-box;
+  box-shadow: 0 0 44px rgba(35, 110, 255, .32), 0 40px 100px rgba(0, 0, 0, .6), inset 0 1px 0 rgba(255, 255, 255, .24);
+  transform-origin: bottom center; animation: s-materialize-up .24s var(--ease-out);
+}
+.sim-sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 2px 4px 12px; }
+.sim-sheet-head > div { display: grid; gap: 2px; min-width: 0; }
+.sim-kicker { color: var(--a-accent); font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+.sim-sheet-head strong { overflow: hidden; font-size: 19px; font-weight: 800; letter-spacing: -.015em; text-overflow: ellipsis; white-space: nowrap; }
+.sim-close { display: grid; place-items: center; flex: none; width: 40px; height: 40px; border: 1px solid var(--a-line); border-radius: 12px; color: var(--a-text); background: var(--a-surface); cursor: pointer; }
+.sim-search { display: flex; align-items: center; gap: 8px; min-height: 46px; margin-bottom: 4px; padding: 0 8px 0 12px; border: 1px solid var(--a-line); border-radius: 14px; color: var(--a-muted); background: var(--a-surface-strong); }
+.sim-search:focus-within { border-color: var(--a-focus); box-shadow: var(--ring); }
+.sim-search input { flex: 1; min-width: 0; height: 44px; padding: 0; border: 0 !important; outline: 0; color: var(--a-text) !important; background: transparent !important; box-shadow: none !important; font: inherit; font-size: 16px; }
+.sim-search input::placeholder { color: #8fa6cc; }
+.sim-search button { display: grid; place-items: center; width: 32px; height: 32px; border: 0; border-radius: 10px; color: var(--a-muted); background: transparent; cursor: pointer; }
+.sim-scroll { overflow-y: auto; overscroll-behavior: contain; margin: 0 -6px; padding: 6px 6px 2px; scrollbar-width: thin; }
+.sim-section { margin-top: 10px; }
+.sim-section h4 { display: flex; align-items: baseline; justify-content: space-between; margin: 4px 6px 6px; color: var(--a-muted); font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+.sim-section h4 small { font-size: 12px; letter-spacing: 0; font-variant-numeric: tabular-nums; }
+.sim-chips { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.sim-chips .sim-chip { flex-direction: column; gap: 6px; padding: 10px 6px; text-align: center; }
+.sim-chips .sim-chip > span { justify-items: center; }
+.sim-chips .sim-chip :is(.profile-avatar, .avatar) { width: 36px; height: 36px; }
+.sim-chip, .sim-row {
+  display: flex; align-items: center; gap: 10px; width: 100%; min-height: 52px; padding: 8px 10px;
+  border: 1px solid transparent; border-radius: 14px; color: var(--a-text); background: transparent;
+  font: inherit; text-align: left; cursor: pointer; transition: background .15s ease, border-color .15s ease, transform .1s ease-out;
+}
+.sim-chip { border-color: var(--a-line); background: var(--a-surface); }
+:is(.sim-chip, .sim-row) > span { display: grid; flex: 1; min-width: 0; line-height: 1.25; }
+:is(.sim-chip, .sim-row) strong { overflow: hidden; font-size: 15px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+:is(.sim-chip, .sim-row) small { overflow: hidden; color: var(--a-muted); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.sim-row em { color: var(--a-accent); font-style: normal; font-weight: 600; }
+:is(.sim-row, .sim-chip).is-current { border-color: var(--a-line-strong); background: rgba(60, 130, 255, .2); }
+.sim-row.is-current > svg { flex: none; color: var(--a-accent); }
+.sim-row.is-self { margin-bottom: 2px; border-color: rgba(255, 200, 120, .5); background: rgba(255, 170, 60, .12); }
+.sim-row.is-self > svg { flex: none; color: #ffd58a; }
+.sim-empty { margin: 18px 0; color: var(--a-muted); text-align: center; }
+@media (hover: hover) {
+  .sim-capsule-main:hover { background: rgba(255, 255, 255, .08); }
+  :is(.sim-chip, .sim-row):not(.is-current):hover { background: rgba(80, 140, 255, .12); }
+}
+:is(.sim-capsule button, .sim-chip, .sim-row, .sim-close):active { transform: scale(.97); }
+:is(.sim-capsule, .sim-sheet) :is(button, input):focus-visible { outline: 3px solid var(--a-focus); outline-offset: 2px; }
+@keyframes s-materialize-up { from { opacity: 0; transform: translateY(8px) scale(.97); filter: blur(3px); } to { opacity: 1; transform: none; filter: none; } }
+@keyframes s-fade { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .sim-capsule, .sim-sheet, .sim-layer { animation: s-fade .15s ease both; }
+  :is(.sim-capsule button, .sim-chip, .sim-row, .sim-close):active { transform: none; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .sim-capsule, .sim-sheet, .sim-layer { -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .sim-capsule { background: #0b1a45; }
+  .sim-capsule.is-active { background: #3a2408; }
+}
+@media (forced-colors: active) {
+  .sim-capsule, .sim-sheet { border: 1px solid CanvasText; }
+  .sim-ring { box-shadow: none; outline: 3px solid Highlight; outline-offset: -3px; }
+}

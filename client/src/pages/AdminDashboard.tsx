@@ -553,7 +553,7 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
     setCampaignDraft(null);
     setProfileOpen(false);
     setSimulatedUser(user.id === profile.id ? null : user);
-    setNotice({ kind: "success", message: user.id === profile.id ? "Compte superadmin restauré." : `Simulation active : ${user.full_name}.` });
+    setNotice(null); // la capsule « Voir comme » signale elle-même le changement
   }
 
   function handleSimulationExit() {
@@ -563,7 +563,7 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
     setCampaignDraft(null);
     setProfileOpen(false);
     setSimulatedUser(null);
-    setNotice({ kind: "success", message: "Vous êtes revenu au compte superadmin réel." });
+    setNotice(null);
   }
 
   function handleProfileSaved(updated: UserRecord) {
