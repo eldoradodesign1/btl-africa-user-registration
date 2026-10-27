@@ -1233,3 +1233,28 @@ html { scrollbar-width: thin; scrollbar-color: rgba(158,188,233,.35) rgba(3,7,14
 
 .settings-menu-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 @media (max-width: 680px) { .settings-menu-actions { width: 100%; justify-content: flex-start; } }
+
+
+/* Export M-Pesa : seules les lignes défilent, les actions restent accessibles. */
+.mpesa-export-modal { max-height: min(850px, calc(100dvh - 32px)); overflow: hidden; }
+.mpesa-export-modal .mpesa-export-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(125, 178, 255, .65) transparent;
+}
+.mpesa-export-modal .mpesa-export-list .export-preview-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+.mpesa-export-modal .modal-header,
+.mpesa-export-modal .export-selection-toolbar,
+.mpesa-export-modal .export-choice-grid { flex-shrink: 0; }
+@media (max-width: 680px) {
+  .mpesa-export-modal { max-height: calc(100dvh - 20px); }
+}
