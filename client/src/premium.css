@@ -646,3 +646,47 @@ button.calendar-day:hover:not(:disabled) { transform: translateY(-1px); filter: 
 .modal-header-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .modal-header-actions .button { white-space: nowrap; }
 .modal-header > div:first-child > span { color: var(--ink-3) !important; font-size: 14px; }
+
+
+/* Home identity: the M-Pesa number is visible, compact and copyable. */
+.workspace-identity-copy,
+.admin-profile-copy { min-width: 0; }
+.workspace-mpesa,
+.admin-profile-mpesa {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  margin-top: 8px;
+  color: var(--btl-sky) !important;
+}
+.workspace-mpesa > svg,
+.admin-profile-mpesa > svg { flex: none; opacity: .9; }
+.workspace-mpesa > span,
+.admin-profile-mpesa > span { display: inline-flex; align-items: baseline; flex-wrap: wrap; gap: 7px; min-width: 0; }
+.workspace-mpesa small,
+.admin-profile-mpesa small {
+  color: var(--ink-3) !important;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .02em;
+}
+.workspace-mpesa .copyable-phone,
+.admin-profile-mpesa .copyable-phone {
+  color: var(--ink-1) !important;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: .02em;
+}
+.workspace-mpesa .copyable-phone:hover,
+.admin-profile-mpesa .copyable-phone:hover { color: #fff !important; }
+.workspace-mpesa strong,
+.admin-profile-mpesa strong { color: var(--ink-3) !important; font-size: 12px; font-weight: 600; }
+.workspace-mpesa.is-missing,
+.admin-profile-mpesa.is-missing { color: var(--ink-3) !important; }
+@media (max-width: 680px) {
+  .workspace-mpesa,
+  .admin-profile-mpesa { margin-top: 7px; }
+  .workspace-mpesa > span,
+  .admin-profile-mpesa > span { gap: 5px; }
+}
