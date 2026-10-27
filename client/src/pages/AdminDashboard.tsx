@@ -677,14 +677,14 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
 
   // Les affectations sont celles effectivement actives, pas les filtres de la liste générale.
   const mpesaExportAgents = mpesaExportCampaign
-    ? users.filter((user) => user.role === "agent" && activeUserIdsByCampaign.get(mpesaExportCampaign.id)?.has(user.id))
+    ? users.filter((user) => activeUserIdsByCampaign.get(mpesaExportCampaign.id)?.has(user.id))
         .sort((a, b) => a.full_name.localeCompare(b.full_name, "fr"))
     : [];
   const selectedMpesaAgents = mpesaExportAgents.filter((user) => mpesaExportSelection.includes(user.id));
   const mpesaFilename = () => `btl-mpesa-${(mpesaExportCampaign?.name || "campagne").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}-${new Date().toISOString().slice(0, 10)}`;
   function openMpesaExport(campaign: CampaignRecord) {
     const ids = activeUserIdsByCampaign.get(campaign.id) || new Set<string>();
-    setMpesaExportSelection(users.filter((user) => user.role === "agent" && ids.has(user.id)).map((user) => user.id));
+    setMpesaExportSelection(users.filter((user) => ids.has(user.id)).map((user) => user.id));
     setMpesaExportCampaign(campaign);
   }
   function downloadMpesaCsv() {
