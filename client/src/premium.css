@@ -690,3 +690,31 @@ button.calendar-day:hover:not(:disabled) { transform: translateY(-1px); filter: 
   .workspace-mpesa > span,
   .admin-profile-mpesa > span { gap: 5px; }
 }
+
+
+/* Inline M-Pesa editing: the number remains a copy action, the pencil edits the profile. */
+.home-mpesa-edit {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin-left: 1px;
+  padding: 0;
+  border: 1px solid rgba(125, 178, 255, .38);
+  border-radius: 6px;
+  color: var(--btl-sky);
+  background: rgba(40, 97, 212, .18);
+  cursor: pointer;
+  transition: transform .16s var(--ease-out), border-color .16s ease, color .16s ease, background .16s ease;
+}
+.home-mpesa-edit:hover,
+.home-mpesa-edit:focus-visible {
+  border-color: rgba(168, 202, 255, .82);
+  color: #fff;
+  background: rgba(40, 97, 212, .42);
+  outline: none;
+  transform: translateY(-1px);
+}
+.home-mpesa-edit:active { transform: scale(.94); }
+.home-mpesa-edit svg { width: 11px; height: 11px; }
