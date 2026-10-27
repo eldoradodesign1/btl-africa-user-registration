@@ -287,15 +287,22 @@ export async function testSupabaseConnection(url: string, publishableKey: string
 }
 
 const safeUserColumns = "id, full_name, phone, whatsapp_phone, whatsapp_same_as_phone, mpesa_phone, date_of_birth, address, address_province, address_commune, address_quartier, address_avenue, address_number, address_latitude, address_longitude, role, user_category, is_active, supervisor_id, permanent_shop_id, avatar_url, profile_updated_at, shirt_size, jacket_size, skirt_size, dress_size, heel_size, sneaker_size, ballerina_size, current_occupation, accepts_night_work, accepts_overnight_stay, accepts_late_work";
-/** Liste des utilisateurs sans avatar_url : les photos (data URL, jusqu'à ~650 Ko) sont chargées à part. */
-const listUserColumns = safeUserColumns.replace(" avatar_url,", "");
+const AVATAR_BUCKET = "avatars";
 
-/** Photos déjà téléchargées, invalidées quand profile_updated_at change. */
-const avatarCache = new Map<string, { updatedAt: string | null; url: string | null }>();
-const avatarsInFlight = new Set<string>();
-
-function rememberAvatar(user: { id: string; avatar_url: string | null; profile_updated_at: string | null }) {
-  avatarCache.set(user.id, { updatedAt: user.profile_updated_at, url: user.avatar_url });
+/**
+ * Envoie la photo réduite (data URL de resizeImage) dans le bucket avatars et
+ * renvoie son URL publique ; une URL déjà enregistrée ou null passe telle quelle.
+ * Chaque envoi crée un nouveau fichier <ownerId>/<horodatage>-<aléa>.jpg :
+ * aucune photo existante n'est remplacée, et l'URL peut rester en cache.
+ */
+async function storeAvatar(value: string | null | undefined, ownerId: string): Promise<string | null> {
+  if (!value?.startsWith("data:")) return value || null;
+  if (!supabaseClient) throw new Error("Configurez Supabase avant d’envoyer une photo.");
+  const photo = await (await fetch(value)).blob();
+  const path = `${ownerId}/${Date.now()}-${crypto.randomUUID().slice(0, 8)}.jpg`;
+  const { error } = await supabaseClient.storage.from(AVATAR_BUCKET).upload(path, photo, { contentType: "image/jpeg", cacheControl: "31536000", upsert: false });
+  if (error) throw error;
+  return supabaseClient.storage.from(AVATAR_BUCKET).getPublicUrl(path).data.publicUrl;
 }
 
 const safeCampaignColumns = "id, code, name, campaign_type, status, starts_on, ends_on, event_mode, event_arrival_time, event_departure_time, event_supervisor_id, event_perimeter";
@@ -415,7 +422,6 @@ export async function refreshActiveProfile(): Promise<UserRecord | null> {
     return null;
   }
   activeProfile = { ...data, password_hash: null } as UserRecord;
-  rememberAvatar(activeProfile);
   localStorage.setItem(profileKey, JSON.stringify(activeProfile));
   return activeProfile;
 }
@@ -459,7 +465,6 @@ export async function signInAdmin(phone: string, password: string): Promise<Admi
       if (data.role !== "super_admin" && data.is_active === false) throw new Error("Ce compte est inactif. Contactez un administrateur.");
       const profile = { ...data, password_hash: null } as UserRecord;
       activeProfile = profile;
-      rememberAvatar(profile);
       localStorage.setItem(profileKey, JSON.stringify(profile));
       return { profile };
     }
@@ -473,44 +478,10 @@ export async function signOutAdmin(): Promise<void> { activeProfile = null; loca
 
 export async function loadUsers(): Promise<UserRecord[]> {
   if (!supabaseClient) return [];
-  const { data, error } = await supabaseClient.from("users").select(listUserColumns).order("full_name");
+  // avatar_url est une URL Storage courte : les images se chargent ensuite à l'affichage.
+  const { data, error } = await supabaseClient.from("users").select(safeUserColumns).order("full_name");
   if (error) throw error;
-  return ((data || []) as unknown as Array<Omit<UserRecord, "avatar_url" | "password_hash">>).map((user) => {
-    const cached = avatarCache.get(user.id);
-    return { ...user, avatar_url: cached && cached.updatedAt === user.profile_updated_at ? cached.url : null, password_hash: null };
-  }) as UserRecord[];
-}
-
-/**
- * Télécharge en arrière-plan, par lots de 4, les photos absentes du cache.
- * onBatch reçoit chaque lot (id → data URL) pour l'afficher sans attendre les autres.
- */
-export async function loadUserAvatars(users: UserRecord[], onBatch: (avatars: Map<string, string | null>) => void): Promise<void> {
-  if (!supabaseClient) return;
-  const stale = users.filter((user) => {
-    const cached = avatarCache.get(user.id);
-    return !avatarsInFlight.has(user.id) && (!cached || cached.updatedAt !== user.profile_updated_at);
-  });
-  if (!stale.length) return;
-  const { data: withPhoto, error } = await supabaseClient.from("users").select("id").not("avatar_url", "is", null);
-  if (error) return;
-  const photoIds = new Set((withPhoto || []).map((row) => String(row.id)));
-  stale.filter((user) => !photoIds.has(user.id)).forEach((user) => rememberAvatar({ ...user, avatar_url: null }));
-  const toFetch = stale.filter((user) => photoIds.has(user.id));
-  toFetch.forEach((user) => avatarsInFlight.add(user.id));
-  try {
-    for (let index = 0; index < toFetch.length; index += 4) {
-      const ids = toFetch.slice(index, index + 4).map((user) => user.id);
-      const { data } = await supabaseClient.from("users").select("id, avatar_url, profile_updated_at").in("id", ids);
-      ids.forEach((id) => avatarsInFlight.delete(id));
-      if (!data?.length) continue;
-      const batch = new Map<string, string | null>();
-      data.forEach((row) => { rememberAvatar(row as { id: string; avatar_url: string | null; profile_updated_at: string | null }); batch.set(String(row.id), row.avatar_url as string | null); });
-      onBatch(batch);
-    }
-  } finally {
-    toFetch.forEach((user) => avatarsInFlight.delete(user.id));
-  }
+  return (data || []).map((user) => ({ ...user, password_hash: null })) as UserRecord[];
 }
 
 /**
@@ -798,12 +769,12 @@ export async function updateMyProfile(input: { fullName: string; phone: string; 
   const normalizedMpesa = input.mpesaPhone?.trim() ? normalizePhone(input.mpesaPhone) : "";
   if (normalizedMpesa && !isValidMpesa(normalizedMpesa)) throw new Error("Le numéro M-Pesa doit commencer par 08.");
   if (input.password && !input.currentPassword) throw new Error("Le mot de passe actuel est requis pour changer le mot de passe.");
-  const { data, error } = await supabaseClient.rpc("update_my_profile", { p_user_id: activeProfile.id, p_full_name: input.fullName.trim(), p_phone: normalizedPhone, p_password: input.password || null, p_avatar_url: input.avatarChanged ? input.avatarUrl ?? null : activeProfile.avatar_url, p_current_password: input.currentPassword || null, p_address: input.address ?? activeProfile.address, p_address_province: input.addressProvince ?? activeProfile.address_province, p_address_commune: input.addressCommune ?? activeProfile.address_commune, p_address_quartier: input.addressQuartier ?? activeProfile.address_quartier, p_address_avenue: input.addressAvenue ?? activeProfile.address_avenue, p_address_number: input.addressNumber ?? activeProfile.address_number, p_address_latitude: input.addressLatitude ?? activeProfile.address_latitude, p_address_longitude: input.addressLongitude ?? activeProfile.address_longitude, p_shirt_size: input.shirtSize ?? activeProfile.shirt_size, p_jacket_size: input.jacketSize ?? activeProfile.jacket_size, p_skirt_size: input.skirtSize ?? activeProfile.skirt_size, p_dress_size: input.dressSize ?? activeProfile.dress_size, p_heel_size: input.heelSize ?? activeProfile.heel_size, p_sneaker_size: input.sneakerSize ?? activeProfile.sneaker_size, p_ballerina_size: input.ballerinaSize ?? activeProfile.ballerina_size, p_current_occupation: input.currentOccupation ?? activeProfile.current_occupation, p_accepts_night_work: input.acceptsNightWork ?? activeProfile.accepts_night_work, p_accepts_overnight_stay: input.acceptsOvernightStay ?? activeProfile.accepts_overnight_stay, p_accepts_late_work: input.acceptsLateWork ?? activeProfile.accepts_late_work, p_mpesa_phone: input.mpesaPhone === undefined ? null : normalizedMpesa });
+  const avatarUrl = input.avatarChanged ? await storeAvatar(input.avatarUrl, activeProfile.id) : activeProfile.avatar_url;
+  const { data, error } = await supabaseClient.rpc("update_my_profile", { p_user_id: activeProfile.id, p_full_name: input.fullName.trim(), p_phone: normalizedPhone, p_password: input.password || null, p_avatar_url: avatarUrl, p_current_password: input.currentPassword || null, p_address: input.address ?? activeProfile.address, p_address_province: input.addressProvince ?? activeProfile.address_province, p_address_commune: input.addressCommune ?? activeProfile.address_commune, p_address_quartier: input.addressQuartier ?? activeProfile.address_quartier, p_address_avenue: input.addressAvenue ?? activeProfile.address_avenue, p_address_number: input.addressNumber ?? activeProfile.address_number, p_address_latitude: input.addressLatitude ?? activeProfile.address_latitude, p_address_longitude: input.addressLongitude ?? activeProfile.address_longitude, p_shirt_size: input.shirtSize ?? activeProfile.shirt_size, p_jacket_size: input.jacketSize ?? activeProfile.jacket_size, p_skirt_size: input.skirtSize ?? activeProfile.skirt_size, p_dress_size: input.dressSize ?? activeProfile.dress_size, p_heel_size: input.heelSize ?? activeProfile.heel_size, p_sneaker_size: input.sneakerSize ?? activeProfile.sneaker_size, p_ballerina_size: input.ballerinaSize ?? activeProfile.ballerina_size, p_current_occupation: input.currentOccupation ?? activeProfile.current_occupation, p_accepts_night_work: input.acceptsNightWork ?? activeProfile.accepts_night_work, p_accepts_overnight_stay: input.acceptsOvernightStay ?? activeProfile.accepts_overnight_stay, p_accepts_late_work: input.acceptsLateWork ?? activeProfile.accepts_late_work, p_mpesa_phone: input.mpesaPhone === undefined ? null : normalizedMpesa });
   if (error) throw error;
   const row = Array.isArray(data) ? data[0] : data;
   if (!row) throw new Error("Le profil n’a pas pu être mis à jour.");
   activeProfile = { ...activeProfile, ...row, password_hash: null } as UserRecord;
-  rememberAvatar(activeProfile);
   localStorage.setItem(profileKey, JSON.stringify(activeProfile));
   return activeProfile;
 }
@@ -842,6 +813,7 @@ export async function insertUser(payload: UserInsert): Promise<UserRecord> {
   if (!activeProfile) throw new Error("Connexion administrateur requise avant la création.");
   if (!["admin", "super_admin", "supervisor", "sub_admin"].includes(activeProfile.role)) throw new Error("Seuls les administratifs peuvent créer un utilisateur.");
   if (["supervisor", "sub_admin"].includes(activeProfile.role) && payload.role !== "agent") throw new Error("Les superviseurs et la coordination peuvent uniquement créer des agents.");
+  const avatarUrl = await storeAvatar(payload.avatar_url, payload.id);
   const { data, error } = await supabaseClient.rpc("create_user_by_super_admin", {
     p_id: payload.id,
     p_creator_id: activeProfile.id,
@@ -863,7 +835,7 @@ export async function insertUser(payload: UserInsert): Promise<UserRecord> {
     p_address_number: payload.address_number,
     p_address_latitude: payload.address_latitude,
     p_address_longitude: payload.address_longitude,
-    p_avatar_url: payload.avatar_url,
+    p_avatar_url: avatarUrl,
     p_mpesa_phone: payload.mpesa_phone ?? null,
   });
   if (error) throw error;
@@ -877,6 +849,8 @@ export async function createRegistrationRequest(input: { fullName: string; phone
   const normalizedPhone = normalizePhone(input.phone);
   if (!isValidMsisdn(normalizedPhone)) throw new Error("Le MSISDN fourni est invalide.");
   const id = crypto.randomUUID();
+  // Même id pour la demande et le compte validé : la photo garde son dossier <id>/.
+  const avatarUrl = await storeAvatar(input.avatarUrl, id);
   const { data, error } = await supabaseClient.rpc("create_registration_request", {
     p_request_id: id,
     p_full_name: input.fullName.trim(),
@@ -892,14 +866,14 @@ export async function createRegistrationRequest(input: { fullName: string; phone
     p_address_number: input.addressNumber,
     p_address_latitude: input.addressLatitude,
     p_address_longitude: input.addressLongitude,
-    p_avatar_url: input.avatarUrl,
+    p_avatar_url: avatarUrl,
     p_password_hash: input.password,
     p_user_category: input.category,
     p_mpesa_phone: input.mpesaPhone,
   });
   if (error) throw error;
   const request = Array.isArray(data) ? data[0] : data;
-  return request ? mapRequest(request) : { id, full_name: input.fullName.trim(), phone: normalizedPhone, whatsapp_phone: input.whatsappPhone, whatsapp_same_as_phone: input.whatsappSameAsPhone, mpesa_phone: input.mpesaPhone, date_of_birth: input.dateOfBirth, address: input.address, address_province: input.addressProvince, address_commune: input.addressCommune, address_quartier: input.addressQuartier, address_avenue: input.addressAvenue, address_number: input.addressNumber, address_latitude: input.addressLatitude, address_longitude: input.addressLongitude, avatar_url: input.avatarUrl, role: "agent", user_category: input.category, status: "pending", created_at: new Date().toISOString(), reviewed_at: null, reviewed_by: null, review_note: null };
+  return request ? mapRequest(request) : { id, full_name: input.fullName.trim(), phone: normalizedPhone, whatsapp_phone: input.whatsappPhone, whatsapp_same_as_phone: input.whatsappSameAsPhone, mpesa_phone: input.mpesaPhone, date_of_birth: input.dateOfBirth, address: input.address, address_province: input.addressProvince, address_commune: input.addressCommune, address_quartier: input.addressQuartier, address_avenue: input.addressAvenue, address_number: input.addressNumber, address_latitude: input.addressLatitude, address_longitude: input.addressLongitude, avatar_url: avatarUrl, role: "agent", user_category: input.category, status: "pending", created_at: new Date().toISOString(), reviewed_at: null, reviewed_by: null, review_note: null };
 }
 
 export async function loadPendingRegistrationRequests(): Promise<RegistrationRequest[]> {

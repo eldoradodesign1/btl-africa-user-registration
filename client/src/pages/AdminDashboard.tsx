@@ -36,7 +36,6 @@ import {
   loadPendingRegistrationRequests,
   loadSuperAdminPasswords,
   loadSupervisors,
-  loadUserAvatars,
   loadUsers,
   rejectRegistrationRequest,
   reviewCampaignAssignmentRequest,
@@ -335,13 +334,6 @@ function AdminDashboard({ onConnectionChanged, onRequestCreate }: Props) {
           }
           setUsers(nextUsers);
           setSuperiors(nextSuperiors);
-          // Les photos arrivent ensuite, par lots, sans bloquer l'affichage de la liste.
-          void loadUserAvatars(nextUsers, (avatars) => {
-            const withAvatar = (user: UserRecord) => avatars.has(user.id) ? { ...user, avatar_url: avatars.get(user.id) ?? null } : user;
-            setUsers((current) => current.map(withAvatar));
-            setSuperiors((current) => current.map(withAvatar));
-            setProfile((current) => current && avatars.has(current.id) ? withAvatar(current) : current);
-          });
         }
         if (nextCampaigns) setCampaigns(nextCampaigns);
         if (nextShops) setShops(nextShops as ShopRecord[]);
