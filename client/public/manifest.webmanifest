@@ -1,4 +1,5 @@
 {
+  "id": "./",
   "name": "BTL - User management",
   "short_name": "BTL - User management",
   "description": "Création sécurisée d’utilisateurs pour BTL Africa Privilege Tracker.",
@@ -16,6 +17,16 @@
       "sizes": "512x512",
       "type": "image/webp",
       "purpose": "any maskable"
+    }
+  ],
+  "launch_handler": {
+    "client_mode": "navigate-existing"
+  },
+  "handle_links": "preferred",
+  "related_applications": [
+    {
+      "platform": "webapp",
+      "url": "https://eldoradodesign1.github.io/btl-africa-user-registration/manifest.webmanifest"
     }
   ]
 }
